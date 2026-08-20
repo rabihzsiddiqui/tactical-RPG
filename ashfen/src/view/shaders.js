@@ -27,13 +27,13 @@ export const TILE_FRAG = `
 
 export const RING_FRAG = `
   precision mediump float;
-  uniform float uTime; varying vec2 vUv;
+  uniform float uTime; uniform vec3 uColor; varying vec2 vUv;
   void main(){
     float d=length(vUv-0.5)*2.0;
     float r=0.74+sin(uTime*4.5)*0.06;
     float ring=smoothstep(0.10,0.0,abs(d-r));
     float glow=smoothstep(1.0,0.15,d)*0.16;
-    gl_FragColor=vec4(vec3(1.0,0.88,0.45), ring*0.95+glow);
+    gl_FragColor=vec4(uColor, ring*0.95+glow);
   }`;
 
 export const WATER_VERT = `

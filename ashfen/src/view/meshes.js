@@ -242,3 +242,31 @@ export function buildBridge() {
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
 }
+
+/* a small ground-flat health bar: a dark backing plate plus a team-colored
+   fill that scales from the left edge. Unlit (MeshBasicMaterial) so it
+   reads consistently regardless of scene lighting. */
+export const HP_BAR_W = 0.62;
+const HP_BAR_H = 0.11;
+
+export function buildHealthBar(fillHex) {
+  const group = new THREE.Group();
+
+  const back = new THREE.Mesh(
+    new THREE.PlaneGeometry(HP_BAR_W, HP_BAR_H),
+    new THREE.MeshBasicMaterial({ color: 0x1c1c1c, transparent: true, depthWrite: false, depthTest: false })
+  );
+  back.rotation.x = -Math.PI / 2;
+  back.renderOrder = 10;
+  group.add(back);
+
+  const fillGeo = new THREE.PlaneGeometry(1, HP_BAR_H * 0.72);
+  fillGeo.translate(0.5, 0, 0.001); // pivot at the left edge, nudged up to avoid z-fighting with `back`
+  const fill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: fillHex, transparent: true, depthWrite: false, depthTest: false }));
+  fill.renderOrder = 11;
+  fill.rotation.x = -Math.PI / 2;
+  fill.position.x = -HP_BAR_W / 2;
+  group.add(fill);
+
+  return { group, fill };
+}

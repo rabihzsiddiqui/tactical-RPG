@@ -1,22 +1,24 @@
 /* SECTION 8: scene, loop, game flow
 
-   Kept as one module on purpose: the flow functions below (commitMove,
-   runCombat, doAttack, startEnemyPhase, ...) are async and awaiting
-   three.js animation calls (walkPath, lunge, flash, die, tween) inline.
-   Splitting a three.js-free "phase machine" out of this would mean
-   designing a view-callback interface that doesn't exist yet, which is a
-   design change, not a refactor. Deferred until the combat core has
-   tests and the flow is rewritten to emit events instead of awaiting
-   animation directly. See CLAUDE.md. */
+   M3: the rules (turn state, combat resolution, enemy AI orchestration)
+   now live in ../core/game.js as synchronous functions that return
+   { state, events }. This module is the *player* of those events — it
+   applies the returned state to `g` and animates each event against the
+   live three.js scene. See applyResolve/playEvents below, and
+   PROJECT_PLAN.md's M3 section / CLAUDE.md for the design. */
 
 import * as THREE from "three";
 import { MW, MH, CX, CZ, cell, lvlH, walkable } from "../core/map.js";
-import { WEAPONS, ROSTER, makeUnit } from "../core/data.js";
+import { ROSTER, makeUnit } from "../core/data.js";
 import { moveField, tracePath, reachTiles } from "../core/path.js";
-import { wep, simulateCombat, expFor, levelUp } from "../core/combat.js";
-import { planFor, threatSet } from "../core/ai.js";
+import { wep } from "../core/combat.js";
+import { threatSet } from "../core/ai.js";
 import { K, man, clamp, sleep } from "../core/util.js";
-import { buildTerrain, buildUnitMesh, buildTree, buildKeep, buildBridge } from "./meshes.js";
+import {
+  resolveMove, resolveAttack, resolveHeal, resolveItem, resolveWait,
+  endPlayerPhase, runEnemyPhase,
+} from "../core/game.js";
+import { buildTerrain, buildUnitMesh, buildTree, buildKeep, buildBridge, buildHealthBar, HP_BAR_W } from "./meshes.js";
 import {
   POST_VERT, POST_FRAG, TILE_VERT, TILE_FRAG, RING_FRAG, WATER_VERT, WATER_FRAG,
 } from "./shaders.js";
@@ -60,8 +62,8 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
   scene.fog = new THREE.Fog(0x9fc3d8, 16, 40);
   const camera = new THREE.PerspectiveCamera(30, 1.6, 0.5, 120);
 
-  scene.add(new THREE.AmbientLight(0x93a9c6, 0.66));
-  const sun = new THREE.DirectionalLight(0xfff0d4, 1.0);
+  scene.add(new THREE.AmbientLight(0x93a9c6, 0.85));
+  const sun = new THREE.DirectionalLight(0xfff0d4, 1.15);
   sun.position.set(7, 12, 6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
@@ -70,7 +72,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
   sun.shadow.normalBias = 0.02;
   sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun, sun.target);
-  const bounce = new THREE.DirectionalLight(0x86a4d8, 0.25);
+  const bounce = new THREE.DirectionalLight(0x86a4d8, 0.4);
   bounce.position.set(-6, 3, -7);
   scene.add(bounce);
 
@@ -160,12 +162,24 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
 
   const ringMat = new THREE.ShaderMaterial({
     vertexShader: TILE_VERT, fragmentShader: RING_FRAG,
-    uniforms: { uTime: { value: 0 } }, transparent: true, depthWrite: false,
+    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(0xffe073) } }, transparent: true, depthWrite: false,
   });
   const ring = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 1.25), ringMat);
   ring.rotation.x = -Math.PI / 2;
   ring.visible = false;
   scene.add(ring);
+
+  /* blue "hasn't acted yet" ring — one per unit, shown/hidden by
+     syncUnitVisuals, distinct from the single reused gold selection ring */
+  const readyRingMat = new THREE.ShaderMaterial({
+    vertexShader: TILE_VERT, fragmentShader: RING_FRAG,
+    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(0x5ea8ff) } }, transparent: true, depthWrite: false,
+  });
+
+  /* a small self-illumination so units read distinctly against the terrain
+     regardless of light angle — the map stays unlit-by-this, only characters
+     get it. flash() restores to this instead of black. */
+  const POP_EMISSIVE = 0x1c1a16;
 
   /* ---- unit views ---- */
   for (const u of g.units) {
@@ -175,7 +189,21 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
     scene.add(v.root);
     u.view = v;
     u.anim = { state: "idle", phase: Math.random() * 6.28, targetYaw: v.root.rotation.y, walk: null, offset: new THREE.Vector3() };
-    v.mats.forEach((m) => (m.userData.baseEmissive = m.emissive ? m.emissive.getHex() : 0));
+    v.mats.forEach((m) => {
+      if (!m.emissive) return;
+      m.emissive.setHex(POP_EMISSIVE);
+      m.userData.baseEmissive = POP_EMISSIVE;
+    });
+
+    const hpBar = buildHealthBar(0x5fc25a);
+    scene.add(hpBar.group);
+    u.view.hpBar = hpBar;
+
+    const readyRing = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 1.05), readyRingMat);
+    readyRing.rotation.x = -Math.PI / 2;
+    readyRing.visible = false;
+    scene.add(readyRing);
+    u.view.readyRing = readyRing;
   }
 
   /* ---- post ---- */
@@ -187,7 +215,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
   const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const postMat = new THREE.ShaderMaterial({
     vertexShader: POST_VERT, fragmentShader: POST_FRAG,
-    uniforms: { tDiffuse: { value: rt.texture }, uLevels: { value: 32 }, uVignette: { value: 0.3 } },
+    uniforms: { tDiffuse: { value: rt.texture }, uLevels: { value: 32 }, uVignette: { value: 0.16 } },
     depthTest: false,
   });
   postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat));
@@ -233,7 +261,11 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
   /* ---- unit animation ---- */
   function animUnit(u, dt) {
     const a = u.anim, p = u.view.parts, root = u.view.root;
-    if (u.hp <= 0) return;
+    if (u.hp <= 0) {
+      u.view.hpBar.group.visible = false;
+      u.view.readyRing.visible = false;
+      return;
+    }
 
     if (a.state === "walk" && a.walk) {
       a.phase += dt * 9.5;
@@ -299,6 +331,11 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
     while (d > Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
     root.rotation.y += d * Math.min(1, dt * 12);
+
+    u.view.hpBar.group.visible = true;
+    u.view.hpBar.group.position.set(root.position.x, lvlH(u.x, u.y) + 0.12, root.position.z + 0.62);
+    u.view.hpBar.fill.scale.x = Math.max(0.001, HP_BAR_W * (u.hp / u.maxHp));
+    u.view.readyRing.position.set(root.position.x, lvlH(u.x, u.y) + 0.05, root.position.z);
   }
 
   function faceToward(u, t) {
@@ -308,10 +345,10 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
       : (dy > 0 ? 0 : Math.PI);
   }
 
-  function walkPath(u, path) {
+  function walkPath(u, path, from = { x: u.x, y: u.y }) {
     return new Promise((res) => {
       u.anim.state = "walk";
-      u.anim.walk = { path: path.slice(), from: { x: u.x, y: u.y }, to: path[0], t: 0, done: res };
+      u.anim.walk = { path: path.slice(), from, to: path[0], t: 0, done: res };
     });
   }
 
@@ -328,7 +365,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
   function flash(u, crit) {
     const hex = crit ? 0xffd45a : 0xff5a5a;
     u.view.mats.forEach((m) => m.emissive && m.emissive.setHex(hex));
-    setTimeout(() => u.view.mats.forEach((m) => m.emissive && m.emissive.setHex(0x000000)), crit ? 260 : 160);
+    setTimeout(() => u.view.mats.forEach((m) => m.emissive && m.emissive.setHex(m.userData.baseEmissive ?? 0)), crit ? 260 : 160);
   }
 
   async function die(u) {
@@ -387,7 +424,103 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
   }
 
   const alive = (t) => g.units.filter((u) => u.team === t && u.hp > 0);
-  const say = (s) => { g.log = [s, ...g.log].slice(0, 40); };
+
+  /* reconstructs the exact core-owned state slice from `g` on every call,
+     so core/game.js never sees sel/inspect/forecast/danger/banner/levelUp */
+  const coreState = () => ({ units: g.units, turn: g.turn, phase: g.phase, status: g.status, log: g.log });
+
+  /* replaces the per-unit dim (acted) / restore (fresh turn) and the blue
+     "hasn't acted yet" ring, both driven off the same acted flag */
+  function syncUnitVisuals() {
+    for (const u of g.units) {
+      if (u.hp <= 0) continue;
+      const dim = u.team === "player" && u.acted;
+      u.view.mats.forEach((m) => { m.transparent = dim; m.opacity = dim ? 0.55 : 1; });
+
+      const isSelected = g.sel && g.sel.id === u.id;
+      u.view.readyRing.visible = g.phase === "player" && g.status === "playing"
+        && u.team === "player" && !u.acted && !isSelected;
+    }
+  }
+
+  /* applies a { state, events } result from core/game.js. Every unit
+     field except hp lands immediately; hp is held back to its pre-resolve
+     value and written by whichever strike/heal event actually reveals it,
+     so the HP bar drains progressively instead of jumping to the end
+     state. `status` is held back until every event has finished playing,
+     so a win/lose overlay never covers a still-animating death. */
+  async function applyResolve({ state, events }) {
+    const prevHp = new Map(g.units.map((u) => [u.id, u.hp]));
+    g.units = state.units.map((u) => ({ ...u, hp: prevHp.has(u.id) ? prevHp.get(u.id) : u.hp }));
+    await playEvents(events);
+    g.turn = state.turn;
+    g.phase = state.phase;
+    g.status = state.status;
+    g.log = state.log;
+    syncUnitVisuals();
+    tick();
+  }
+
+  async function playEvents(events) {
+    for (const e of events) {
+      switch (e.type) {
+        case "move": {
+          const u = g.units.find((z) => z.id === e.unitId);
+          if (e.path.length) await walkPath(u, e.path, e.from);
+          break;
+        }
+        case "face": {
+          const u = g.units.find((z) => z.id === e.unitId);
+          u.anim.targetYaw = { e: Math.PI / 2, w: -Math.PI / 2, s: 0, n: Math.PI }[e.dir];
+          break;
+        }
+        case "strike": {
+          const src = g.units.find((z) => z.id === e.srcId);
+          const tgt = g.units.find((z) => z.id === e.tgtId);
+          await lunge(src, tgt);
+          if (!e.hit) {
+            floater(tgt, "miss", C.parchDim);
+          } else {
+            tgt.hp = e.hpAfter;
+            flash(tgt, e.crit);
+            floater(tgt, (e.crit ? "!" : "") + e.dmg, e.crit ? C.gold : C.redLite);
+          }
+          tick();
+          await sleep(e.crit ? 380 : 260);
+          break;
+        }
+        case "death": {
+          const u = g.units.find((z) => z.id === e.unitId);
+          await die(u);
+          break;
+        }
+        case "heal": {
+          const tgt = g.units.find((z) => z.id === e.tgtId);
+          tgt.hp += e.amount;
+          floater(tgt, "+" + e.amount, C.green);
+          tick();
+          if (!e.instant) await sleep(600);
+          break;
+        }
+        case "levelUp": {
+          const u = g.units.find((z) => z.id === e.unitId);
+          g.levelUp = { name: u.name, lvl: e.lvl, gains: e.gains };
+          tick();
+          await sleep(1700);
+          g.levelUp = null;
+          tick();
+          break;
+        }
+        case "banner": {
+          g.banner = { text: e.text, side: e.side, n: g.banner.n + 1 };
+          tick();
+          break;
+        }
+        case "end":
+          break; // status is applied by applyResolve once every event above has played
+      }
+    }
+  }
 
   function select(u) {
     const { stand, atk } = reachTiles(u, g.units);
@@ -396,6 +529,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
     g.forecast = null;
     u.anim.state = "ready";
     paintSel();
+    syncUnitVisuals();
     tick();
   }
 
@@ -407,222 +541,99 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
     g.sel = null;
     g.forecast = null;
     paintSel();
+    syncUnitVisuals();
     tick();
   }
 
   let busy = false;
 
+  function scheduleEnemyPhaseIfDone() {
+    if (g.status === "playing" && alive("player").every((p) => p.acted)) {
+      setTimeout(startEnemyPhase, 420);
+    }
+  }
+
   async function commitMove(u, tx, ty) {
+    const unitId = u.id;
     busy = true;
     const { prev } = moveField(u, g.units);
     const path = tracePath(prev, g.sel.ox, g.sel.oy, tx, ty);
     releaseAll();
     ring.visible = false;
     tick();
-    if (path.length) await walkPath(u, path);
-    u.anim.state = "ready";
+    await applyResolve(resolveMove(coreState(), unitId, path));
+    const nu = g.units.find((z) => z.id === unitId);
+    nu.anim.state = "ready";
     g.sel.mode = "action";
-    g.sel.targets = validTargets(u);
+    g.sel.targets = validTargets(nu);
     busy = false;
     paintSel();
     tick();
   }
 
-  function finishUnit(u) {
-    u.acted = true;
-    u.anim.state = "idle";
-    u.view.mats.forEach((m) => { m.transparent = true; m.opacity = 0.55; });
+  function finishGlue() {
     g.sel = null;
     g.forecast = null;
     paintSel();
     tick();
-    checkEnd();
-    if (g.status === "playing" && alive("player").every((p) => p.acted)) {
-      setTimeout(startEnemyPhase, 420);
-    }
-  }
-
-  async function runCombat(att, def) {
-    const sim = simulateCombat(att, def);
-    const queue = [];
-    for (const s of sim.strikes) {
-      const src = s.who === "a" ? att : def;
-      const tgt = s.who === "a" ? def : att;
-      await lunge(src, tgt);
-      if (!s.landed) {
-        floater(tgt, "miss", C.parchDim);
-      } else {
-        tgt.hp = s.hpAfter;
-        flash(tgt, s.crit);
-        floater(tgt, (s.crit ? "!" : "") + s.dmg, s.crit ? C.gold : C.redLite);
-      }
-      tick();
-      await sleep(s.crit ? 380 : 260);
-
-      const killed = s.landed && tgt.hp <= 0;
-      if (src.team === "player" && s.landed) {
-        src.exp += expFor(src, tgt, killed);
-        if (src.exp >= 100) {
-          src.exp -= 100;
-          queue.push({ u: src, gains: levelUp(src) });
-        }
-      }
-      if (killed) {
-        say(tgt.name + " was defeated.");
-        await die(tgt);
-        break;
-      }
-    }
-    for (const q of queue) {
-      g.levelUp = { name: q.u.name, lvl: q.u.lvl, gains: q.gains };
-      tick();
-      await sleep(1700);
-      g.levelUp = null;
-      tick();
-    }
+    scheduleEnemyPhaseIfDone();
   }
 
   /* ---- player actions ---- */
   async function doAttack(targetId) {
-    const u = g.units.find((z) => z.id === g.sel.id);
-    const t = g.units.find((z) => z.id === targetId);
+    const attackerId = g.sel.id;
     g.forecast = null;
     releaseAll();
     ring.visible = false;
     busy = true;
     tick();
-    await runCombat(u, t);
+    await applyResolve(resolveAttack(coreState(), attackerId, targetId, Math.random));
     busy = false;
-    if (u.hp <= 0) {
-      g.sel = null;
-      paintSel();
-      tick();
-      checkEnd();
-      if (g.status === "playing" && alive("player").every((p) => p.acted)) startEnemyPhase();
-      return;
-    }
-    finishUnit(u);
+    finishGlue();
   }
 
   async function doHeal(targetId) {
-    const u = g.units.find((z) => z.id === g.sel.id);
-    const t = g.units.find((z) => z.id === targetId);
-    const amt = Math.min(t.maxHp - t.hp, WEAPONS.heal.power + u.mag);
-    t.hp += amt;
-    faceToward(u, t);
-    floater(t, "+" + amt, C.green);
-    say(u.name + " healed " + t.name + " for " + amt + ".");
-    u.exp += 12;
+    const healerId = g.sel.id;
     busy = true;
     tick();
-    await sleep(600);
-    if (u.exp >= 100) {
-      u.exp -= 100;
-      const gains = levelUp(u);
-      g.levelUp = { name: u.name, lvl: u.lvl, gains };
-      tick();
-      await sleep(1700);
-      g.levelUp = null;
-    }
+    await applyResolve(resolveHeal(coreState(), healerId, targetId));
     busy = false;
-    finishUnit(u);
+    finishGlue();
   }
 
-  function doVulnerary() {
-    const u = g.units.find((z) => z.id === g.sel.id);
-    const amt = Math.min(u.maxHp - u.hp, 10);
-    u.hp += amt;
-    u.vulnerary -= 1;
-    floater(u, "+" + amt, C.green);
-    say(u.name + " used a vulnerary.");
-    finishUnit(u);
+  async function doVulnerary() {
+    const unitId = g.sel.id;
+    busy = true;
+    tick();
+    await applyResolve(resolveItem(coreState(), unitId));
+    busy = false;
+    finishGlue();
+  }
+
+  async function doWait() {
+    const unitId = g.sel.id;
+    busy = true;
+    tick();
+    await applyResolve(resolveWait(coreState(), unitId));
+    busy = false;
+    finishGlue();
   }
 
   /* ---- enemy phase ---- */
-  function startEnemyPhase() {
-    g.phase = "enemy";
-    g.banner = { text: "Enemy Phase", side: "enemy", n: g.banner.n + 1 };
-    for (const u of alive("enemy")) {
-      const t = cell(u.x, u.y);
-      if (t.heal && u.hp < u.maxHp) {
-        const a = Math.min(u.maxHp - u.hp, Math.ceil(u.maxHp * t.heal));
-        u.hp += a;
-        floater(u, "+" + a, C.green);
-      }
-    }
+  async function startEnemyPhase() {
+    await applyResolve(endPlayerPhase(coreState()));
     clearSel();
-    tick();
-    runEnemyPhase();
+    await playEnemyPhase();
   }
 
   let phaseToken = 0;
-  async function runEnemyPhase() {
+  async function playEnemyPhase() {
     const my = ++phaseToken;
     busy = true;
     await sleep(800);
-    for (const e of alive("enemy").slice()) {
-      if (my !== phaseToken || g.status !== "playing") break;
-      if (e.hp <= 0) continue;
-      const plan = planFor(e, g.units);
-      if (!plan) continue;
-      g.inspect = e.id;
-      tick();
-      await sleep(200);
-      if (plan.x !== e.x || plan.y !== e.y) {
-        const { prev } = moveField(e, g.units);
-        const path = tracePath(prev, e.x, e.y, plan.x, plan.y);
-        if (path.length) await walkPath(e, path);
-      }
-      if (plan.kind === "attack") {
-        const foe = g.units.find((u) => u.id === plan.foe);
-        if (foe && foe.hp > 0) {
-          await sleep(150);
-          await runCombat(e, foe);
-        }
-      }
-      checkEnd();
-      await sleep(160);
-    }
+    await applyResolve(runEnemyPhase(coreState(), Math.random));
     if (my !== phaseToken) return;
     busy = false;
-    if (g.status === "playing") endEnemyPhase();
-  }
-
-  function endEnemyPhase() {
-    g.turn += 1;
-    g.phase = "player";
-    g.units.forEach((u) => {
-      u.acted = false;
-      if (u.hp > 0) u.view.mats.forEach((m) => (m.opacity = 1));
-    });
-    for (const u of alive("player")) {
-      const t = cell(u.x, u.y);
-      if (t.heal && u.hp < u.maxHp) {
-        const a = Math.min(u.maxHp - u.hp, Math.ceil(u.maxHp * t.heal));
-        u.hp += a;
-        floater(u, "+" + a, C.green);
-      }
-    }
-    g.banner = { text: "Player Phase", side: "player", n: g.banner.n + 1 };
-    say("Turn " + g.turn + " begins.");
-    tick();
-  }
-
-  function checkEnd() {
-    if (g.status !== "playing") return;
-    if (!alive("enemy").length) {
-      g.status = "win";
-      g.banner = { text: "Victory", side: "player", n: g.banner.n + 1 };
-      say("All enemies routed.");
-    } else {
-      const lord = g.units.find((u) => u.lord);
-      if (!alive("player").length || (lord && lord.hp <= 0)) {
-        g.status = "lose";
-        g.banner = { text: "Defeat", side: "enemy", n: g.banner.n + 1 };
-        say(lord && lord.hp <= 0 ? "Kaelen has fallen." : "The company is lost.");
-      }
-    }
-    tick();
   }
 
   /* ---- input ---- */
@@ -712,7 +723,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
     chooseAttack: () => { g.sel.mode = "target"; paintSel(); tick(); },
     chooseHeal: () => { g.sel.mode = "targetHeal"; paintSel(); tick(); },
     vulnerary: doVulnerary,
-    wait: () => finishUnit(g.units.find((z) => z.id === g.sel.id)),
+    wait: doWait,
     back: () => {
       const u = g.units.find((z) => z.id === g.sel.id);
       u.x = g.sel.ox; u.y = g.sel.oy;
@@ -763,6 +774,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
     matAtk.uniforms.uTime.value = t;
     matThreat.uniforms.uTime.value = t;
     ringMat.uniforms.uTime.value = t;
+    readyRingMat.uniforms.uTime.value = t;
     waterMat.uniforms.uTime.value = t;
     postMat.uniforms.uLevels.value = o.levels;
 
@@ -790,6 +802,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
       renderer.render(scene, camera);
     }
   }
+  syncUnitVisuals();
   raf = requestAnimationFrame(frame);
 
   return () => {
