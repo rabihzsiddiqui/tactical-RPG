@@ -16,6 +16,7 @@ const ONBOARD_KEY = "ashfen-onboarded";
 export default function App() {
   const mountRef = useRef(null);
   const menuRef = useRef(null);
+  const forecastRef = useRef(null);
   const apiRef = useRef({});
   const gs = useRef(null);
   if (!gs.current) gs.current = newGame();
@@ -23,7 +24,9 @@ export default function App() {
 
   const [, tick] = useReducer((n) => n + 1, 0);
   const [floats, setFloats] = useState([]);
-  const [cam, setCam] = useState({ pitch: 48, yaw: 0, fov: 30, zoom: 12, res: 0, post: true, levels: 32 });
+  const [cam, setCam] = useState({
+    pitch: 48, yaw: 0, fov: 30, zoom: 12, res: RES.length - 1, post: true, levels: 32,
+  });
   const camRef = useRef(cam);
   camRef.current = cam;
   const [resetKey, setResetKey] = useState(0);
@@ -34,7 +37,7 @@ export default function App() {
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
-    return mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick, apiRef });
+    return mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, setFloats, tick, apiRef });
   }, [resetKey]);
 
   function restart() {
@@ -124,6 +127,13 @@ export default function App() {
 
             <ActionMenu menuRef={menuRef} sel={sel} selUnit={selUnit} api={api} />
 
+            {/* battle forecast — overlaid on the map itself, near the units involved,
+                so finishing an attack never requires looking away from the board */}
+            <div ref={forecastRef} className="absolute"
+              style={{ display: fc ? "block" : "none", width: 260, zIndex: 22 }}>
+              {fc && <Forecast fc={fc} onAttack={api.confirmAttack} onCancel={api.cancelForecast} />}
+            </div>
+
             {/* phase banner */}
             <div key={g.banner.n} className="absolute flex items-center justify-center"
               style={{
@@ -186,9 +196,7 @@ export default function App() {
 
           {/* ---- side panels ---- */}
           <div className="flex flex-col gap-3" style={{ flex: "0 0 268px", width: "100%", maxWidth: 300 }}>
-            {fc ? (
-              <Forecast fc={fc} onAttack={api.confirmAttack} onCancel={api.cancelForecast} />
-            ) : inspected ? (
+            {inspected ? (
               <UnitCard u={inspected} />
             ) : (
               <Card>

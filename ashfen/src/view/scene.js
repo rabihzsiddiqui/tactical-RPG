@@ -43,9 +43,9 @@ export function newGame() {
 }
 
 /* mounts the three.js scene into `mount`, wires input and the game flow,
-   and returns a cleanup function. `menuRef` and `apiRef` are React refs so
-   the frame loop and the api object stay live across renders. */
-export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick, apiRef }) {
+   and returns a cleanup function. `menuRef`, `forecastRef` and `apiRef` are
+   React refs so the frame loop and the api object stay live across renders. */
+export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, setFloats, tick, apiRef }) {
   /* ---- renderer ---- */
   const renderer = new THREE.WebGLRenderer({ antialias: false });
   renderer.setPixelRatio(1);
@@ -798,6 +798,19 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
         const p = project(u, 1.15);
         menuRef.current.style.left = clamp(p.x + 18, 4, VW - 116) + "px";
         menuRef.current.style.top = clamp(p.y - 20, 4, VH - 150) + "px";
+      }
+    }
+    if (forecastRef.current && g.forecast) {
+      const a = g.units.find((z) => z.id === g.forecast.attackerId);
+      const d = g.units.find((z) => z.id === g.forecast.targetId);
+      if (a && d) {
+        const pa = project(a, 1.15), pd = project(d, 1.15);
+        const cx = (pa.x + pd.x) / 2;
+        const topY = Math.min(pa.y, pd.y);
+        const w = forecastRef.current.offsetWidth || 260;
+        const h = forecastRef.current.offsetHeight || 210;
+        forecastRef.current.style.left = clamp(cx - w / 2, 4, VW - w - 4) + "px";
+        forecastRef.current.style.top = clamp(topY - h - 20, 4, VH - h - 4) + "px";
       }
     }
 
