@@ -38,6 +38,7 @@ export function newGame() {
     sel: null, danger: false, inspect: null, forecast: null,
     levelUp: null, banner: { text: "Player Phase", side: "player", n: 0 },
     log: ["Turn 1 begins."],
+    tutorial: true, // cleared on first selection (or turn 1 ending, whichever first) — see select()/startEnemyPhase()
   };
 }
 
@@ -336,6 +337,12 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
     u.view.hpBar.group.position.set(root.position.x, lvlH(u.x, u.y) + 0.12, root.position.z + 0.62);
     u.view.hpBar.fill.scale.x = Math.max(0.001, HP_BAR_W * (u.hp / u.maxHp));
     u.view.readyRing.position.set(root.position.x, lvlH(u.x, u.y) + 0.05, root.position.z);
+    if (g.tutorial && u.lord) {
+      const pulse = 1 + Math.sin(performance.now() / 260) * 0.22;
+      u.view.readyRing.scale.setScalar(pulse);
+    } else {
+      u.view.readyRing.scale.setScalar(1);
+    }
   }
 
   function faceToward(u, t) {
@@ -527,6 +534,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
     g.sel = { id: u.id, ox: u.x, oy: u.y, stand, atk, mode: "move", targets: null };
     g.inspect = u.id;
     g.forecast = null;
+    g.tutorial = false;
     u.anim.state = "ready";
     paintSel();
     syncUnitVisuals();
@@ -621,6 +629,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
 
   /* ---- enemy phase ---- */
   async function startEnemyPhase() {
+    g.tutorial = false; // safety net: stop the turn-1 nudge even if End Turn was hit with nobody ever selected
     await applyResolve(endPlayerPhase(coreState()));
     clearSel();
     await playEnemyPhase();

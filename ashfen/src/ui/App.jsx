@@ -8,6 +8,10 @@ import { Card, Eyebrow, Pill, Btn } from "./primitives.jsx";
 import UnitCard from "./UnitCard.jsx";
 import Forecast from "./Forecast.jsx";
 import ActionMenu from "./ActionMenu.jsx";
+import OnboardingCard from "./OnboardingCard.jsx";
+import { hintFor } from "./hint.js";
+
+const ONBOARD_KEY = "ashfen-onboarded";
 
 export default function App() {
   const mountRef = useRef(null);
@@ -22,12 +26,26 @@ export default function App() {
   const [cam, setCam] = useState({ pitch: 48, yaw: 0, fov: 30, zoom: 12, res: 0, post: true, levels: 32 });
   const camRef = useRef(cam);
   camRef.current = cam;
+  const [resetKey, setResetKey] = useState(0);
+  const [onboarded, setOnboarded] = useState(
+    () => typeof localStorage !== "undefined" && localStorage.getItem(ONBOARD_KEY) === "1"
+  );
 
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
     return mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick, apiRef });
-  }, []);
+  }, [resetKey]);
+
+  function restart() {
+    gs.current = newGame();
+    setFloats([]);
+    setResetKey((k) => k + 1);
+  }
+  function dismissOnboarding() {
+    localStorage.setItem(ONBOARD_KEY, "1");
+    setOnboarded(true);
+  }
 
   /* ------------------------------- UI layer ------------------------------ */
 
@@ -43,6 +61,8 @@ export default function App() {
       })()
     : null;
   const foesLeft = g.units.filter((u) => u.team === "enemy" && u.hp > 0).length;
+  const hint = hintFor(g);
+  const nudge = g.tutorial && g.phase === "player" && g.status === "playing";
 
   return (
     <div style={{ background: C.table, color: C.parch, fontFamily: SERIF }} className="w-full p-3">
@@ -52,6 +72,7 @@ export default function App() {
         @keyframes riseOut { 0%{transform:translate(-50%,0);opacity:0} 20%{transform:translate(-50%,-8px);opacity:1}
           100%{transform:translate(-50%,-34px);opacity:0} }
         @keyframes popIn { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
+        @keyframes hintPulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
       `}</style>
 
       <div className="mx-auto" style={{ maxWidth: 980 }}>
@@ -77,6 +98,17 @@ export default function App() {
               ref={mountRef}
               style={{ width: "100%", height: 430, border: "2px solid #2f3746", background: "#9fc3d8", overflow: "hidden" }}
             />
+
+            {/* hint line — always names the next action; HTML, never inside the render buffer */}
+            <div style={{
+              fontFamily: MONO, fontSize: 12, letterSpacing: "0.04em", textAlign: "center",
+              padding: "6px 4px", color: nudge ? C.gold : C.parchDim,
+              animation: nudge ? "hintPulse 1.1s ease-in-out infinite" : "none",
+            }}>
+              {hint}
+            </div>
+
+            {!onboarded && <OnboardingCard onDismiss={dismissOnboarding} />}
 
             {/* damage numbers */}
             {floats.map((f) => (
@@ -134,9 +166,7 @@ export default function App() {
                 <div style={{ fontSize: 32, color: g.status === "win" ? C.gold : C.redLite }}>
                   {g.status === "win" ? "Victory" : "Defeat"}
                 </div>
-                <div style={{ fontFamily: MONO, fontSize: 11, color: C.parchDim }}>
-                  reload the artifact to fight again
-                </div>
+                <Btn light strong on={restart}>Restart</Btn>
               </div>
             )}
 
