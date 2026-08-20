@@ -65,7 +65,7 @@ export default function App() {
   const nudge = g.tutorial && g.phase === "player" && g.status === "playing";
 
   return (
-    <div style={{ background: C.table, color: C.parch, fontFamily: SERIF }} className="w-full p-3">
+    <div style={{ background: C.table, color: C.parch, fontFamily: SERIF, overflowX: "hidden" }} className="w-full p-3">
       <style>{`
         @keyframes sweepIn { 0%{transform:translateX(-100%);opacity:0} 18%{transform:translateX(0);opacity:1}
           78%{transform:translateX(0);opacity:1} 100%{transform:translateX(100%);opacity:0} }
