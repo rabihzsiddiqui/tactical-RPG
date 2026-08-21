@@ -68,7 +68,7 @@ export function standable(dist, unit, units) {
 
 export function reachTiles(unit, units) {
   const w = WEAPONS[unit.weaponKey];
-  const { dist } = moveField(unit, units);
+  const { dist, prev } = moveField(unit, units);
   const stand = standable(dist, unit, units);
   const atk = new Set();
   for (const k of stand) {
@@ -81,7 +81,7 @@ export function reachTiles(unit, units) {
       }
     }
   }
-  return { dist, stand: new Set(stand), atk };
+  return { dist, prev, stand: new Set(stand), atk };
 }
 
 export function tracePath(prev, sx, sy, tx, ty) {

@@ -10,7 +10,7 @@
 import * as THREE from "three";
 import { MW, MH, CX, CZ, cell, lvlH, walkable } from "../core/map.js";
 import { ROSTER, makeUnit } from "../core/data.js";
-import { moveField, tracePath, reachTiles } from "../core/path.js";
+import { tracePath, reachTiles } from "../core/path.js";
 import { wep } from "../core/combat.js";
 import { threatSet } from "../core/ai.js";
 import { K, man, clamp, sleep } from "../core/util.js";
@@ -23,6 +23,7 @@ import {
   POST_VERT, POST_FRAG, TILE_VERT, TILE_FRAG, RING_FRAG, WATER_VERT, WATER_FRAG,
 } from "./shaders.js";
 import { C } from "../ui/theme.js";
+import { playSheath } from "./audio.js";
 
 export const RES = [
   { label: "400x240 (3DS)", h: 240 },
@@ -138,6 +139,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   });
   const matMove = mkTileMat(0x5ea8ff);
   const matAtk = mkTileMat(0xff6b60);
+  const matHeal = mkTileMat(0x5fc25a);
   const matThreat = mkTileMat(0xd8484f);
   const hlGeo = new THREE.PlaneGeometry(0.99, 0.99);
   const pool = [];
@@ -160,6 +162,70 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     pool.forEach((m) => (m.visible = false));
     poolUsed = 0;
   };
+
+  /* ---- movement path arrow ---- flat, unlit bars + a triangular head, all
+     lying in the XZ plane so a single mesh.rotation.y (derived from the
+     grid-aligned direction between two tile centers) points them correctly
+     with no per-direction geometry needed. */
+  const matPath = new THREE.MeshBasicMaterial({
+    color: 0xffe073, transparent: true, opacity: 0.92, depthWrite: false, depthTest: false,
+  });
+  function flatBarGeo(len, w) {
+    const h = w / 2, l = len / 2;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
+      -l, 0, -h, l, 0, -h, l, 0, h,
+      -l, 0, -h, l, 0, h, -l, 0, h,
+    ]), 3));
+    return geo;
+  }
+  function arrowHeadGeo(len, w) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
+      len / 2, 0, 0, -len / 2, 0, -w / 2, -len / 2, 0, w / 2,
+    ]), 3));
+    return geo;
+  }
+  const ARROW_MAX = 16;
+  const arrowSegs = [];
+  for (let i = 0; i < ARROW_MAX; i++) {
+    const m = new THREE.Mesh(flatBarGeo(1, 0.24), matPath);
+    m.visible = false;
+    m.renderOrder = 6;
+    scene.add(m);
+    arrowSegs.push(m);
+  }
+  const arrowHead = new THREE.Mesh(arrowHeadGeo(0.5, 0.4), matPath);
+  arrowHead.visible = false;
+  arrowHead.renderOrder = 6;
+  scene.add(arrowHead);
+
+  function hidePathArrow() {
+    arrowSegs.forEach((m) => (m.visible = false));
+    arrowHead.visible = false;
+  }
+  /* nodes = the full walked route including the start tile; path (as returned
+     by tracePath) excludes it, so callers pass the unit's origin separately. */
+  function showPathArrow(sx, sy, path) {
+    hidePathArrow();
+    if (!path || !path.length) return;
+    const nodes = [{ x: sx, y: sy }, ...path];
+    let used = 0;
+    for (let i = 0; i < nodes.length - 1 && used < ARROW_MAX; i++) {
+      const a = nodes[i], b = nodes[i + 1];
+      const ax = a.x - CX, az = a.y - CZ, bx = b.x - CX, bz = b.y - CZ;
+      const m = arrowSegs[used++];
+      m.visible = true;
+      m.position.set((ax + bx) / 2, Math.max(lvlH(a.x, a.y), lvlH(b.x, b.y)) + 0.06, (az + bz) / 2);
+      m.rotation.y = Math.atan2(-(bz - az), bx - ax);
+    }
+    const last = nodes[nodes.length - 1];
+    const prevNode = nodes[nodes.length - 2];
+    const lx = last.x - CX, lz = last.y - CZ, px = prevNode.x - CX, pz = prevNode.y - CZ;
+    arrowHead.visible = true;
+    arrowHead.position.set(lx, lvlH(last.x, last.y) + 0.06, lz);
+    arrowHead.rotation.y = Math.atan2(-(lz - pz), lx - px);
+  }
 
   const ringMat = new THREE.ShaderMaterial({
     vertexShader: TILE_VERT, fragmentShader: RING_FRAG,
@@ -387,6 +453,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   /* ---- selection helpers ---- */
   function paintSel() {
     releaseAll();
+    hidePathArrow();
     const s = g.sel;
     if (g.danger) {
       for (const k of threatSet(g.units)) {
@@ -396,11 +463,13 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     }
     if (!s) { ring.visible = false; return; }
     const u = g.units.find((z) => z.id === s.id);
+    const isHealer = wep(u).staff;
     if (s.mode === "move") {
+      const rangeMat = isHealer ? matHeal : matAtk;
       for (const k of s.atk) {
         if (s.stand.has(k)) continue;
         const [x, y] = k.split(",").map(Number);
-        claim(x, y, matAtk, 0.032);
+        claim(x, y, rangeMat, 0.032);
       }
       for (const k of s.stand) {
         const [x, y] = k.split(",").map(Number);
@@ -409,7 +478,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     } else if (s.mode === "target" || s.mode === "targetHeal") {
       for (const id of s.targets) {
         const t = g.units.find((z) => z.id === id);
-        if (t) claim(t.x, t.y, s.mode === "target" ? matAtk : matMove, 0.04);
+        if (t) claim(t.x, t.y, s.mode === "target" ? matAtk : matHeal, 0.04);
       }
     }
     ring.visible = true;
@@ -428,6 +497,30 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       } else if (o.team !== u.team) out.push(o.id);
     }
     return out;
+  }
+
+  /* the type check validTargets applies per-candidate, split out so the
+     click-to-engage bypass below can test a single unit before it moves */
+  function isValidTargetType(u, o) {
+    if (o.hp <= 0) return false;
+    const w = wep(u);
+    return w.staff ? o.team === u.team && o.id !== u.id && o.hp < o.maxHp : o.team !== u.team;
+  }
+
+  /* cheapest stand tile (by move cost) that's within weapon range of `target`,
+     so a direct click on an enemy/ally can move-then-engage in one step */
+  function findEngageTile(u, s, target) {
+    if (!isValidTargetType(u, target)) return null;
+    const w = wep(u);
+    let best = null;
+    for (const k of s.stand) {
+      const [sx, sy] = k.split(",").map(Number);
+      const d = man(sx, sy, target.x, target.y);
+      if (d < w.rmin || d > w.rmax) continue;
+      const cost = s.dist.get(k) ?? Infinity;
+      if (!best || cost < best.cost) best = { x: sx, y: sy, cost };
+    }
+    return best;
   }
 
   const alive = (t) => g.units.filter((u) => u.team === t && u.hp > 0);
@@ -520,6 +613,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         }
         case "banner": {
           g.banner = { text: e.text, side: e.side, n: g.banner.n + 1 };
+          playSheath();
           tick();
           break;
         }
@@ -530,8 +624,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
 
   function select(u) {
-    const { stand, atk } = reachTiles(u, g.units);
-    g.sel = { id: u.id, ox: u.x, oy: u.y, stand, atk, mode: "move", targets: null };
+    const { stand, atk, dist, prev } = reachTiles(u, g.units);
+    g.sel = { id: u.id, ox: u.x, oy: u.y, stand, atk, dist, prev, mode: "move", targets: null };
     g.inspect = u.id;
     g.forecast = null;
     g.tutorial = false;
@@ -561,22 +655,52 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     }
   }
 
-  async function commitMove(u, tx, ty) {
+  /* shared by commitMove and the click-to-engage bypasses below: walks the
+     unit to (tx,ty), showing the path arrow for the duration, and leaves
+     sel/mode/targets untouched for the caller to set afterward */
+  async function moveUnitTo(u, tx, ty) {
     const unitId = u.id;
     busy = true;
-    const { prev } = moveField(u, g.units);
-    const path = tracePath(prev, g.sel.ox, g.sel.oy, tx, ty);
+    const path = tracePath(g.sel.prev, g.sel.ox, g.sel.oy, tx, ty);
+    showPathArrow(g.sel.ox, g.sel.oy, path);
     releaseAll();
     ring.visible = false;
     tick();
     await applyResolve(resolveMove(coreState(), unitId, path));
-    const nu = g.units.find((z) => z.id === unitId);
+    hidePathArrow();
+    busy = false;
+    return g.units.find((z) => z.id === unitId);
+  }
+
+  async function commitMove(u, tx, ty) {
+    const nu = await moveUnitTo(u, tx, ty);
     nu.anim.state = "ready";
     g.sel.mode = "action";
     g.sel.targets = validTargets(nu);
-    busy = false;
     paintSel();
     tick();
+  }
+
+  /* click-to-engage bypass: select a character, click an enemy/ally already
+     in range, and skip straight past "move here, then choose Attack/Heal" */
+  async function engageAttack(u, tile, target) {
+    const nu = await moveUnitTo(u, tile.x, tile.y);
+    nu.anim.state = "ready";
+    g.sel.mode = "target";
+    g.sel.targets = validTargets(nu);
+    g.forecast = { attackerId: nu.id, targetId: target.id };
+    paintSel();
+    tick();
+  }
+
+  async function engageHeal(u, tile, target) {
+    const nu = await moveUnitTo(u, tile.x, tile.y);
+    nu.anim.state = "ready";
+    g.sel.mode = "targetHeal";
+    g.sel.targets = validTargets(nu);
+    paintSel();
+    tick();
+    await doHeal(target.id);
   }
 
   function finishGlue() {
@@ -657,17 +781,50 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     cv.style.cursor = "grabbing";
   }
   function onMove(e) {
-    if (!dragging) return;
-    const dx = e.clientX - lastX, dy = e.clientY - lastY;
-    lastX = e.clientX; lastY = e.clientY;
-    dragged += Math.abs(dx) + Math.abs(dy);
-    if (dragged > 6) {
-      setCam((c) => ({
-        ...c,
-        yaw: (c.yaw - dx * 0.4 + 360) % 360,
-        pitch: clamp(c.pitch + dy * 0.25, 20, 78),
-      }));
+    if (dragging) {
+      const dx = e.clientX - lastX, dy = e.clientY - lastY;
+      lastX = e.clientX; lastY = e.clientY;
+      dragged += Math.abs(dx) + Math.abs(dy);
+      if (dragged > 6) {
+        setCam((c) => ({
+          ...c,
+          yaw: (c.yaw - dx * 0.4 + 360) % 360,
+          pitch: clamp(c.pitch + dy * 0.25, 20, 78),
+        }));
+      }
+      return;
     }
+    /* mouse-only path preview — touch has no hover, and dragging (above)
+       already owns pointermove on a held touch */
+    if (e.pointerType === "mouse") hoverPreview(e);
+  }
+
+  /* desktop hover preview: while picking a destination, trace and show the
+     arrow for the tile under the cursor — either a move-range tile directly,
+     or (for the click-to-engage bypass) the cheapest tile that reaches an
+     enemy/ally under the cursor */
+  function hoverPreview(e) {
+    const s = g.sel;
+    if (!s || s.mode !== "move" || busy) { hidePathArrow(); return; }
+    const r = cv.getBoundingClientRect();
+    ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+    ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    ray.setFromCamera(ndc, camera);
+    const hit = ray.intersectObjects(pickables, false)[0];
+    if (!hit) { hidePathArrow(); return; }
+    const { x, y } = hit.object.userData.tile;
+    if (s.stand.has(K(x, y))) {
+      showPathArrow(s.ox, s.oy, tracePath(s.prev, s.ox, s.oy, x, y));
+      return;
+    }
+    const u = g.units.find((z) => z.id === s.id);
+    const here = g.units.find((z) => z.hp > 0 && z.x === x && z.y === y);
+    const eng = here && here.id !== u.id ? findEngageTile(u, s, here) : null;
+    if (eng) {
+      showPathArrow(s.ox, s.oy, tracePath(s.prev, s.ox, s.oy, eng.x, eng.y));
+      return;
+    }
+    hidePathArrow();
   }
   function onUp(e) {
     cv.style.cursor = "grab";
@@ -685,9 +842,11 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     e.preventDefault();
     setCam((c) => ({ ...c, zoom: clamp(c.zoom + Math.sign(e.deltaY) * 0.7, 6, 22) }));
   }
+  function onLeave() { hidePathArrow(); }
   cv.addEventListener("pointerdown", onDown);
   cv.addEventListener("pointermove", onMove);
   cv.addEventListener("pointerup", onUp);
+  cv.addEventListener("pointerleave", onLeave);
   cv.addEventListener("wheel", onWheel, { passive: false });
 
   function onTile(x, y) {
@@ -711,7 +870,13 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     if (s.mode === "move") {
       if ((here && here.id === u.id) || s.stand.has(K(x, y))) return void commitMove(u, x, y);
       if (here && here.team === "player" && !here.acted) return void select(here);
-      if (here) { g.inspect = here.id; tick(); return; }
+      if (here) {
+        const eng = findEngageTile(u, s, here);
+        if (eng) return void (wep(u).staff ? engageHeal(u, eng, here) : engageAttack(u, eng, here));
+        g.inspect = here.id;
+        tick();
+        return;
+      }
       clearSel();
       return;
     }
@@ -781,6 +946,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     const t = now / 1000;
     matMove.uniforms.uTime.value = t;
     matAtk.uniforms.uTime.value = t;
+    matHeal.uniforms.uTime.value = t;
     matThreat.uniforms.uTime.value = t;
     ringMat.uniforms.uTime.value = t;
     readyRingMat.uniforms.uTime.value = t;
@@ -834,6 +1000,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     cv.removeEventListener("pointerdown", onDown);
     cv.removeEventListener("pointermove", onMove);
     cv.removeEventListener("pointerup", onUp);
+    cv.removeEventListener("pointerleave", onLeave);
     cv.removeEventListener("wheel", onWheel);
     renderer.dispose();
     if (cv.parentNode) cv.parentNode.removeChild(cv);
