@@ -163,70 +163,6 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     poolUsed = 0;
   };
 
-  /* ---- movement path arrow ---- flat, unlit bars + a triangular head, all
-     lying in the XZ plane so a single mesh.rotation.y (derived from the
-     grid-aligned direction between two tile centers) points them correctly
-     with no per-direction geometry needed. */
-  const matPath = new THREE.MeshBasicMaterial({
-    color: 0xffe073, transparent: true, opacity: 0.92, depthWrite: false, depthTest: false,
-  });
-  function flatBarGeo(len, w) {
-    const h = w / 2, l = len / 2;
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
-      -l, 0, -h, l, 0, -h, l, 0, h,
-      -l, 0, -h, l, 0, h, -l, 0, h,
-    ]), 3));
-    return geo;
-  }
-  function arrowHeadGeo(len, w) {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
-      len / 2, 0, 0, -len / 2, 0, -w / 2, -len / 2, 0, w / 2,
-    ]), 3));
-    return geo;
-  }
-  const ARROW_MAX = 16;
-  const arrowSegs = [];
-  for (let i = 0; i < ARROW_MAX; i++) {
-    const m = new THREE.Mesh(flatBarGeo(1, 0.24), matPath);
-    m.visible = false;
-    m.renderOrder = 6;
-    scene.add(m);
-    arrowSegs.push(m);
-  }
-  const arrowHead = new THREE.Mesh(arrowHeadGeo(0.5, 0.4), matPath);
-  arrowHead.visible = false;
-  arrowHead.renderOrder = 6;
-  scene.add(arrowHead);
-
-  function hidePathArrow() {
-    arrowSegs.forEach((m) => (m.visible = false));
-    arrowHead.visible = false;
-  }
-  /* nodes = the full walked route including the start tile; path (as returned
-     by tracePath) excludes it, so callers pass the unit's origin separately. */
-  function showPathArrow(sx, sy, path) {
-    hidePathArrow();
-    if (!path || !path.length) return;
-    const nodes = [{ x: sx, y: sy }, ...path];
-    let used = 0;
-    for (let i = 0; i < nodes.length - 1 && used < ARROW_MAX; i++) {
-      const a = nodes[i], b = nodes[i + 1];
-      const ax = a.x - CX, az = a.y - CZ, bx = b.x - CX, bz = b.y - CZ;
-      const m = arrowSegs[used++];
-      m.visible = true;
-      m.position.set((ax + bx) / 2, Math.max(lvlH(a.x, a.y), lvlH(b.x, b.y)) + 0.06, (az + bz) / 2);
-      m.rotation.y = Math.atan2(-(bz - az), bx - ax);
-    }
-    const last = nodes[nodes.length - 1];
-    const prevNode = nodes[nodes.length - 2];
-    const lx = last.x - CX, lz = last.y - CZ, px = prevNode.x - CX, pz = prevNode.y - CZ;
-    arrowHead.visible = true;
-    arrowHead.position.set(lx, lvlH(last.x, last.y) + 0.06, lz);
-    arrowHead.rotation.y = Math.atan2(-(lz - pz), lx - px);
-  }
-
   const ringMat = new THREE.ShaderMaterial({
     vertexShader: TILE_VERT, fragmentShader: RING_FRAG,
     uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(0xffe073) } }, transparent: true, depthWrite: false,
@@ -453,7 +389,6 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   /* ---- selection helpers ---- */
   function paintSel() {
     releaseAll();
-    hidePathArrow();
     const s = g.sel;
     if (g.danger) {
       for (const k of threatSet(g.units)) {
@@ -662,12 +597,10 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     const unitId = u.id;
     busy = true;
     const path = tracePath(g.sel.prev, g.sel.ox, g.sel.oy, tx, ty);
-    showPathArrow(g.sel.ox, g.sel.oy, path);
     releaseAll();
     ring.visible = false;
     tick();
     await applyResolve(resolveMove(coreState(), unitId, path));
-    hidePathArrow();
     busy = false;
     return g.units.find((z) => z.id === unitId);
   }
@@ -781,50 +714,17 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     cv.style.cursor = "grabbing";
   }
   function onMove(e) {
-    if (dragging) {
-      const dx = e.clientX - lastX, dy = e.clientY - lastY;
-      lastX = e.clientX; lastY = e.clientY;
-      dragged += Math.abs(dx) + Math.abs(dy);
-      if (dragged > 6) {
-        setCam((c) => ({
-          ...c,
-          yaw: (c.yaw - dx * 0.4 + 360) % 360,
-          pitch: clamp(c.pitch + dy * 0.25, 20, 78),
-        }));
-      }
-      return;
+    if (!dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    dragged += Math.abs(dx) + Math.abs(dy);
+    if (dragged > 6) {
+      setCam((c) => ({
+        ...c,
+        yaw: (c.yaw - dx * 0.4 + 360) % 360,
+        pitch: clamp(c.pitch + dy * 0.25, 20, 78),
+      }));
     }
-    /* mouse-only path preview — touch has no hover, and dragging (above)
-       already owns pointermove on a held touch */
-    if (e.pointerType === "mouse") hoverPreview(e);
-  }
-
-  /* desktop hover preview: while picking a destination, trace and show the
-     arrow for the tile under the cursor — either a move-range tile directly,
-     or (for the click-to-engage bypass) the cheapest tile that reaches an
-     enemy/ally under the cursor */
-  function hoverPreview(e) {
-    const s = g.sel;
-    if (!s || s.mode !== "move" || busy) { hidePathArrow(); return; }
-    const r = cv.getBoundingClientRect();
-    ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
-    ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
-    ray.setFromCamera(ndc, camera);
-    const hit = ray.intersectObjects(pickables, false)[0];
-    if (!hit) { hidePathArrow(); return; }
-    const { x, y } = hit.object.userData.tile;
-    if (s.stand.has(K(x, y))) {
-      showPathArrow(s.ox, s.oy, tracePath(s.prev, s.ox, s.oy, x, y));
-      return;
-    }
-    const u = g.units.find((z) => z.id === s.id);
-    const here = g.units.find((z) => z.hp > 0 && z.x === x && z.y === y);
-    const eng = here && here.id !== u.id ? findEngageTile(u, s, here) : null;
-    if (eng) {
-      showPathArrow(s.ox, s.oy, tracePath(s.prev, s.ox, s.oy, eng.x, eng.y));
-      return;
-    }
-    hidePathArrow();
   }
   function onUp(e) {
     cv.style.cursor = "grab";
@@ -842,11 +742,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     e.preventDefault();
     setCam((c) => ({ ...c, zoom: clamp(c.zoom + Math.sign(e.deltaY) * 0.7, 6, 22) }));
   }
-  function onLeave() { hidePathArrow(); }
   cv.addEventListener("pointerdown", onDown);
   cv.addEventListener("pointermove", onMove);
   cv.addEventListener("pointerup", onUp);
-  cv.addEventListener("pointerleave", onLeave);
   cv.addEventListener("wheel", onWheel, { passive: false });
 
   function onTile(x, y) {
@@ -1000,7 +898,6 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     cv.removeEventListener("pointerdown", onDown);
     cv.removeEventListener("pointermove", onMove);
     cv.removeEventListener("pointerup", onUp);
-    cv.removeEventListener("pointerleave", onLeave);
     cv.removeEventListener("wheel", onWheel);
     renderer.dispose();
     if (cv.parentNode) cv.parentNode.removeChild(cv);
