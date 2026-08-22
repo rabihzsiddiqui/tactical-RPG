@@ -103,9 +103,13 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         wp.receiveShadow = true;
         scene.add(wp);
       }
-      if (t.bridge) {
-        const b = buildBridge();
-        b.position.set(x - CX, 0, y - CZ);
+      if (t.bridge && (x === 0 || !cell(x - 1, y).bridge)) {
+        // build one span covering the whole run of adjacent bridge tiles in
+        // this row, rather than one independently-railed deck per tile
+        let w = 1;
+        while (x + w < MW && cell(x + w, y).bridge) w++;
+        const b = buildBridge(w);
+        b.position.set(x - CX + (w - 1) / 2, 0, y - CZ);
         scene.add(b);
       }
       if (t.tree) {
@@ -478,15 +482,28 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     }
   }
 
-  /* applies a { state, events } result from core/game.js. Every unit
-     field except hp lands immediately; hp is held back to its pre-resolve
-     value and written by whichever strike/heal event actually reveals it,
-     so the HP bar drains progressively instead of jumping to the end
-     state. `status` is held back until every event has finished playing,
-     so a win/lose overlay never covers a still-animating death. */
+  /* applies a { state, events } result from core/game.js. Every unit field
+     except hp/x/y lands immediately; those are held back to their
+     pre-resolve values and written by whichever move/strike/heal event
+     actually reveals them, so the HP bar drains and units walk
+     progressively instead of jumping to the end state. `status` is held
+     back until every event has finished playing, so a win/lose overlay
+     never covers a still-animating death.
+
+     x/y needs the same treatment as hp for the same reason: runEnemyPhase
+     resolves the *entire* enemy phase in one synchronous pass, so
+     state.units already holds every acting enemy's final tile before
+     playEvents has animated so much as the first one's move. Without
+     holding position back, animUnit's idle-pose branch (which snaps
+     straight to u.x/u.y every frame) renders every later-acting enemy at
+     its destination for the frame(s) before its own "move" event reaches
+     walkPath — a visible teleport-then-walk-back. */
   async function applyResolve({ state, events }) {
-    const prevHp = new Map(g.units.map((u) => [u.id, u.hp]));
-    g.units = state.units.map((u) => ({ ...u, hp: prevHp.has(u.id) ? prevHp.get(u.id) : u.hp }));
+    const prev = new Map(g.units.map((u) => [u.id, { hp: u.hp, x: u.x, y: u.y }]));
+    g.units = state.units.map((u) => {
+      const p = prev.get(u.id);
+      return p ? { ...u, hp: p.hp, x: p.x, y: p.y } : u;
+    });
     await playEvents(events);
     g.turn = state.turn;
     g.phase = state.phase;
@@ -518,7 +535,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
           } else {
             tgt.hp = e.hpAfter;
             flash(tgt, e.crit);
-            floater(tgt, (e.crit ? "!" : "") + e.dmg, e.crit ? C.gold : C.redLite);
+            floater(tgt, e.dmg + (e.crit ? "!" : ""), e.crit ? C.gold : C.redLite);
           }
           tick();
           await sleep(e.crit ? 380 : 260);

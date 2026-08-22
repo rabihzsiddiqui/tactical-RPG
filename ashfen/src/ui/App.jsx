@@ -9,6 +9,7 @@ import UnitCard from "./UnitCard.jsx";
 import Forecast from "./Forecast.jsx";
 import ActionMenu from "./ActionMenu.jsx";
 import OnboardingCard from "./OnboardingCard.jsx";
+import TitleCard from "./TitleCard.jsx";
 import { hintFor } from "./hint.js";
 
 const ONBOARD_KEY = "ashfen-onboarded";
@@ -33,6 +34,7 @@ export default function App() {
   const [onboarded, setOnboarded] = useState(
     () => typeof localStorage !== "undefined" && localStorage.getItem(ONBOARD_KEY) === "1"
   );
+  const [began, setBegan] = useState(false);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -78,6 +80,8 @@ export default function App() {
         @keyframes hintPulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
       `}</style>
 
+      {!began && <TitleCard onBegin={() => setBegan(true)} />}
+
       <div className="mx-auto" style={{ maxWidth: 980 }}>
         <div className="flex items-end justify-between flex-wrap gap-2 mb-2">
           <div>
@@ -114,7 +118,7 @@ export default function App() {
               {hint}
             </div>
 
-            {!onboarded && <OnboardingCard onDismiss={dismissOnboarding} />}
+            {began && !onboarded && <OnboardingCard onDismiss={dismissOnboarding} />}
 
             {/* damage numbers */}
             {floats.map((f) => (

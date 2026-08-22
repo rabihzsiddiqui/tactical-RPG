@@ -201,41 +201,66 @@ export function buildTree() {
   return g;
 }
 
+/* a low rampart bordering three sides of the tile, open to the south (the
+   side players approach from) — a raised, walkable square with a "rook"
+   crenellated edge, not a solid tower that would hide whoever stands on it.
+   The keep tile is the same height as the ridge tiles flanking it on three
+   sides, so leaving the south face open (no wall, no implied stairs) reads
+   as "walk straight in" rather than "climb up to this monument." */
 export function buildKeep() {
   const g = new THREE.Group();
   const stone = new THREE.MeshLambertMaterial({ color: 0x9a9484, flatShading: true });
   const dark = new THREE.MeshLambertMaterial({ color: 0x6e6a5e });
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.46, 0.85, 8), stone);
-  base.position.y = 0.42;
-  g.add(base);
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.16, 0.13), stone);
-    m.position.set(Math.cos(a) * 0.38, 0.92, Math.sin(a) * 0.38);
-    m.rotation.y = -a;
+
+  const H = 0.16, R = 0.44, T = 0.07;
+  const wallSeg = (len, x, z, rotY) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(len, H, T), stone);
+    m.position.set(x, H / 2, z);
+    m.rotation.y = rotY;
     g.add(m);
-  }
-  const door = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.32, 0.06), dark);
-  door.position.set(0, 0.16, 0.44);
-  g.add(door);
+  };
+  wallSeg(0.88, 0, -R, 0);           // north
+  wallSeg(0.88, -R, 0, Math.PI / 2); // west
+  wallSeg(0.88, R, 0, Math.PI / 2);  // east
+  // south stays open
+
+  const merlon = (x, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.1), stone);
+    m.position.set(x, H + 0.07, z);
+    g.add(m);
+  };
+  merlon(-R, -R); merlon(R, -R); merlon(-R, R); merlon(R, R); merlon(0, -R);
+
+  const pole = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.4, 0.025), dark);
+  pole.position.set(0, H + 0.2, -R);
+  g.add(pole);
+  const flag = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.11, 0.02), new THREE.MeshLambertMaterial({ color: 0xc8a04a }));
+  flag.position.set(0.09, H + 0.32, -R);
+  g.add(flag);
+
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
 }
 
-export function buildBridge() {
+/* one continuous deck spanning `tiles` map cells (all in a row, water on the
+   near side of the outer two), with railings only on the two outer long
+   edges — the sides that actually face the river. The short north/south
+   ends are where a unit steps on and off onto the bank, so they stay open;
+   a rail there would fence the direction of travel instead of guarding it. */
+export function buildBridge(tiles = 1) {
   const g = new THREE.Group();
   const wood = new THREE.MeshLambertMaterial({ color: 0x8a6a42 });
   const dark = new THREE.MeshLambertMaterial({ color: 0x6b5133 });
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.09, 1.06), wood);
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(tiles + 0.02, 0.09, 1.06), wood);
   deck.position.y = -0.045;
   g.add(deck);
   for (const s of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.05, 0.05), dark);
-    rail.position.set(0, 0.2, s * 0.46);
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 1.02), dark);
+    rail.position.set(s * (tiles / 2), 0.2, 0);
     g.add(rail);
-    for (const x of [-0.42, 0.42]) {
+    for (const z of [-0.42, 0.42]) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.28, 0.06), dark);
-      post.position.set(x, 0.08, s * 0.46);
+      post.position.set(s * (tiles / 2), 0.08, z);
       g.add(post);
     }
   }
