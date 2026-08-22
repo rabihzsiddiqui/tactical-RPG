@@ -2,14 +2,16 @@
 
 import { useRef, useEffect, useReducer, useState } from "react";
 import { mountScene, newGame, RES } from "../view/scene.js";
+import { unlockAudio } from "../view/audio.js";
 import { forecastOf } from "../core/combat.js";
-import { C, MONO, SERIF } from "./theme.js";
+import { C, MONO, SERIF, PHASE_BANNER_MS } from "./theme.js";
 import { Card, Eyebrow, Pill, Btn } from "./primitives.jsx";
 import UnitCard from "./UnitCard.jsx";
 import Forecast from "./Forecast.jsx";
 import ActionMenu from "./ActionMenu.jsx";
 import OnboardingCard from "./OnboardingCard.jsx";
 import TitleCard from "./TitleCard.jsx";
+import PhaseBanner from "./PhaseBanner.jsx";
 import { hintFor } from "./hint.js";
 
 const ONBOARD_KEY = "ashfen-onboarded";
@@ -35,6 +37,7 @@ export default function App() {
     () => typeof localStorage !== "undefined" && localStorage.getItem(ONBOARD_KEY) === "1"
   );
   const [began, setBegan] = useState(false);
+  const [bannerCleared, setBannerCleared] = useState(false);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -50,6 +53,21 @@ export default function App() {
   function dismissOnboarding() {
     localStorage.setItem(ONBOARD_KEY, "1");
     setOnboarded(true);
+  }
+  /* g and tick are stable regardless of whether mountScene's effect has run
+     yet — unlike apiRef.current, which this click predates (it's the very
+     first interaction of the session, before any canvas tap has forced a
+     re-render), so this can't route through the api object the way the
+     in-game buttons do. */
+  function onBegin() {
+    g.banner = { text: "Player Phase", side: "player", n: g.banner.n + 1 };
+    tick();
+    unlockAudio();
+    setBegan(true);
+    // the onboarding card is a full opaque overlay above the banner
+    // (z-index 40 vs 25) — hold it off until the banner's actually cleared,
+    // or it would cover the very first thing this fix was meant to show
+    setTimeout(() => setBannerCleared(true), PHASE_BANNER_MS);
   }
 
   /* ------------------------------- UI layer ------------------------------ */
@@ -72,15 +90,17 @@ export default function App() {
   return (
     <div style={{ background: C.table, color: C.parch, fontFamily: SERIF, overflowX: "hidden" }} className="w-full p-3">
       <style>{`
-        @keyframes sweepIn { 0%{transform:translateX(-100%);opacity:0} 18%{transform:translateX(0);opacity:1}
-          78%{transform:translateX(0);opacity:1} 100%{transform:translateX(100%);opacity:0} }
+        @keyframes bannerIn { 0%{transform:translateX(-40px) scale(0.94);opacity:0}
+          100%{transform:translateX(0) scale(1);opacity:1} }
+        @keyframes bannerOut { 0%{transform:translateX(0) scale(1);opacity:1}
+          100%{transform:translateX(40px) scale(0.94);opacity:0} }
         @keyframes riseOut { 0%{transform:translate(-50%,0);opacity:0} 20%{transform:translate(-50%,-8px);opacity:1}
           100%{transform:translate(-50%,-34px);opacity:0} }
         @keyframes popIn { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
         @keyframes hintPulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
       `}</style>
 
-      {!began && <TitleCard onBegin={() => setBegan(true)} />}
+      {!began && <TitleCard onBegin={onBegin} />}
 
       <div className="mx-auto" style={{ maxWidth: 980 }}>
         <div className="flex items-end justify-between flex-wrap gap-2 mb-2">
@@ -118,7 +138,7 @@ export default function App() {
               {hint}
             </div>
 
-            {began && !onboarded && <OnboardingCard onDismiss={dismissOnboarding} />}
+            {bannerCleared && !onboarded && <OnboardingCard onDismiss={dismissOnboarding} />}
 
             {/* damage numbers */}
             {floats.map((f) => (
@@ -142,15 +162,10 @@ export default function App() {
             </div>
 
             {/* phase banner */}
-            <div key={g.banner.n} className="absolute flex items-center justify-center"
-              style={{
-                left: 0, right: 0, top: "calc(min(58vh, 430px) * 0.44)", height: 44, zIndex: 25, pointerEvents: "none",
-                background: g.banner.side === "player" ? "rgba(47,93,140,0.92)" : "rgba(157,47,51,0.92)",
-                borderTop: "2px solid " + C.gold, borderBottom: "2px solid " + C.gold,
-                fontSize: 20, letterSpacing: "0.12em", animation: "sweepIn 1.5s ease-in-out forwards",
-              }}>
-              {g.banner.text}
-            </div>
+            {g.banner.n >= 0 && (
+              <PhaseBanner key={g.banner.n} side={g.banner.side} text={g.banner.text}
+                top="calc(min(58vh, 430px) * 0.44)" />
+            )}
 
             {/* level up */}
             {g.levelUp && (

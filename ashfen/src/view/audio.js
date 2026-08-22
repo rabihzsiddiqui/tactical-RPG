@@ -14,6 +14,8 @@
    as an asset — nothing to license, and "deeper for enemy phase" is just
    the same recipe transposed down with a longer decay. */
 
+import { PHASE_BANNER_MS } from "../ui/theme.js";
+
 const MUSIC_URL = "/audio/prelude.mp3";
 const LOOP_START = 159; // 2:39
 const LOOP_END = 291; // 4:51
@@ -58,17 +60,19 @@ async function startMusic() {
   src.start(0, 0);
 }
 
-/* browsers won't run audio before a user gesture — call on the first
-   pointerdown/keydown (armed below) to resume the context. The initial
-   "Player Phase" banner is state set directly in newGame(), not an event
-   played through scene.js's banner case, so nothing else would ever fire
-   its sheath sound — this is that first play. Music then starts once the
-   sheath's tail has finished, rather than stacking on top of it. */
+/* browsers won't run audio before a user gesture — called directly from the
+   title card's Begin button (App.jsx), the page's first and only click
+   before that point, so this always runs inside a real user gesture. That
+   same click also sets the first "Player Phase" banner, so the sting here
+   is timed to land right as it appears. Music starts once the banner's own
+   on-screen lifetime (PHASE_BANNER_MS, see ui/theme.js) has fully played
+   out, not just once the sting's own short tail has decayed — otherwise
+   music would start while the banner is still animating. */
 export function unlockAudio() {
   const c = getContext();
   c.resume().then(() => {
-    const tail = playSheath();
-    setTimeout(startMusic, tail * 1000);
+    playSheath();
+    setTimeout(startMusic, PHASE_BANNER_MS);
   }).catch(() => {});
 }
 
@@ -85,8 +89,9 @@ function getNoiseBuffer(c) {
 /* blade-sheathing stinger for a phase banner. Both sides use the bright
    variant for now — the deep one (lower filter/partial frequencies, longer
    decay) didn't sound good; kept as a toggle to revisit later. Returns the
-   sound's tail length in seconds so callers (see unlockAudio) can chain
-   something after it finishes instead of guessing a delay. */
+   sound's own tail length in seconds, unused by unlockAudio (which times off
+   the banner's on-screen duration instead) but kept for any future caller
+   that wants to chain off the sound itself rather than the visual. */
 export function playSheath() {
   if (!ctx) return 0; // not unlocked yet — skip rather than queue for later
   const c = ctx;
@@ -126,14 +131,4 @@ export function playSheath() {
   });
 
   return Math.max(dur, ringDur) + 0.05;
-}
-
-if (typeof window !== "undefined") {
-  const arm = () => {
-    unlockAudio();
-    window.removeEventListener("pointerdown", arm);
-    window.removeEventListener("keydown", arm);
-  };
-  window.addEventListener("pointerdown", arm);
-  window.addEventListener("keydown", arm);
 }

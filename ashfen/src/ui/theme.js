@@ -8,3 +8,8 @@ export const C = {
   rule: "#b3a586", blue: "#2f5d8c", blueLite: "#7fb0e8", red: "#9d2f33",
   redLite: "#e0868a", gold: "#c8a04a", green: "#5f8a4a", table: "#0c0f16",
 };
+
+/* the phase banner's full on-screen lifetime (enter + hold + exit) — audio.js
+   times the first "Player Phase" banner's music cue off this same number, so
+   the sting-to-music handoff stays in sync with what's actually on screen. */
+export const PHASE_BANNER_MS = 1500;

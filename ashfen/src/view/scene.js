@@ -37,7 +37,12 @@ export function newGame() {
     units: ROSTER.map(makeUnit),
     turn: 1, phase: "player", status: "playing",
     sel: null, danger: false, inspect: null, forecast: null,
-    levelUp: null, banner: { text: "Player Phase", side: "player", n: 0 },
+    /* n:-1 is a sentinel meaning "no banner shown yet" — App.jsx sets the
+       real first banner from the title card's Begin button, in the same
+       click that unlocks audio, so the sting and the banner's entrance
+       animation land together instead of the banner having already played
+       out silently behind the title card before the player ever sees it. */
+    levelUp: null, banner: { text: "", side: "player", n: -1 },
     log: ["Turn 1 begins."],
     tutorial: true, // cleared on first selection (or turn 1 ending, whichever first) — see select()/startEnemyPhase()
   };
@@ -602,6 +607,21 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     tick();
   }
 
+  /* undoes whatever the current selection has done so far — including a
+     click-to-engage bypass's auto-move — and drops back to "move" mode so
+     the player can choose a different tile or action from scratch. Shared
+     by the action menu's Back and the forecast's Back, so backing out of
+     a target pick can't strand the player mid-decision with no way out. */
+  function backToMove() {
+    const u = g.units.find((z) => z.id === g.sel.id);
+    u.x = g.sel.ox; u.y = g.sel.oy;
+    u.view.root.position.set(u.x - CX, lvlH(u.x, u.y), u.y - CZ);
+    g.sel.mode = "move";
+    g.forecast = null;
+    paintSel();
+    tick();
+  }
+
   let busy = false;
 
   function scheduleEnemyPhaseIfDone() {
@@ -853,17 +873,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     chooseHeal: () => { g.sel.mode = "targetHeal"; paintSel(); tick(); },
     vulnerary: doVulnerary,
     wait: doWait,
-    back: () => {
-      const u = g.units.find((z) => z.id === g.sel.id);
-      u.x = g.sel.ox; u.y = g.sel.oy;
-      u.view.root.position.set(u.x - CX, lvlH(u.x, u.y), u.y - CZ);
-      g.sel.mode = "move";
-      g.forecast = null;
-      paintSel();
-      tick();
-    },
+    back: backToMove,
     confirmAttack: (id) => doAttack(id),
-    cancelForecast: () => { g.forecast = null; tick(); },
+    cancelForecast: backToMove,
     isBusy: () => busy,
   };
 
