@@ -64,8 +64,11 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   scene.fog = new THREE.Fog(0x9fc3d8, 16, 40);
   const camera = new THREE.PerspectiveCamera(30, 1.6, 0.5, 120);
 
-  scene.add(new THREE.AmbientLight(0x93a9c6, 0.85));
-  const sun = new THREE.DirectionalLight(0xfff0d4, 1.15);
+  /* tuned for this map specifically (Ashfen Pass's terrain palette skews
+     dark). If a second map ever ships, lighting should become a per-map
+     parameter here rather than a shared constant. */
+  scene.add(new THREE.AmbientLight(0x93a9c6, 1.55));
+  const sun = new THREE.DirectionalLight(0xfff0d4, 1.55);
   sun.position.set(7, 12, 6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
@@ -74,7 +77,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   sun.shadow.normalBias = 0.02;
   sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun, sun.target);
-  const bounce = new THREE.DirectionalLight(0x86a4d8, 0.4);
+  const bounce = new THREE.DirectionalLight(0x86a4d8, 0.8);
   bounce.position.set(-6, 3, -7);
   scene.add(bounce);
 
@@ -222,7 +225,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const postMat = new THREE.ShaderMaterial({
     vertexShader: POST_VERT, fragmentShader: POST_FRAG,
-    uniforms: { tDiffuse: { value: rt.texture }, uLevels: { value: 32 }, uVignette: { value: 0.16 } },
+    uniforms: { tDiffuse: { value: rt.texture }, uLevels: { value: 32 }, uVignette: { value: 0.04 } },
     depthTest: false,
   });
   postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat));
