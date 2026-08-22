@@ -88,7 +88,7 @@ export default function App() {
   const nudge = g.tutorial && g.phase === "player" && g.status === "playing";
 
   return (
-    <div style={{ background: C.table, color: C.parch, fontFamily: SERIF, overflowX: "hidden" }} className="w-full p-3">
+    <div style={{ background: C.table, color: C.parch, fontFamily: SERIF, overflowX: "hidden", minHeight: "100vh" }} className="w-full p-3">
       <style>{`
         @keyframes bannerIn { 0%{transform:translateX(-40px) scale(0.94);opacity:0}
           100%{transform:translateX(0) scale(1);opacity:1} }
