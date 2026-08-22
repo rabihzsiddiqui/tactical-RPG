@@ -99,7 +99,10 @@ export default function App() {
           <div className="relative" style={{ flex: "1 1 560px", minWidth: 280 }}>
             <div
               ref={mountRef}
-              style={{ width: "100%", height: 430, border: "2px solid #2f3746", background: "#9fc3d8", overflow: "hidden" }}
+              style={{
+                width: "100%", height: "min(58vh, 430px)", minHeight: 220,
+                border: "2px solid #2f3746", background: "#9fc3d8", overflow: "hidden", touchAction: "none",
+              }}
             />
 
             {/* hint line — always names the next action; HTML, never inside the render buffer */}
@@ -137,7 +140,7 @@ export default function App() {
             {/* phase banner */}
             <div key={g.banner.n} className="absolute flex items-center justify-center"
               style={{
-                left: 0, right: 0, top: 190, height: 44, zIndex: 25, pointerEvents: "none",
+                left: 0, right: 0, top: "calc(min(58vh, 430px) * 0.44)", height: 44, zIndex: 25, pointerEvents: "none",
                 background: g.banner.side === "player" ? "rgba(47,93,140,0.92)" : "rgba(157,47,51,0.92)",
                 borderTop: "2px solid " + C.gold, borderBottom: "2px solid " + C.gold,
                 fontSize: 20, letterSpacing: "0.12em", animation: "sweepIn 1.5s ease-in-out forwards",

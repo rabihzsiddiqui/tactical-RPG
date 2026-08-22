@@ -31,12 +31,13 @@ export function Pill({ k, v, tone }) {
 export function Btn({ children, on, disabled, active, strong, light }) {
   return (
     <button onClick={on} disabled={disabled} style={{
-      fontFamily: MONO, fontSize: 11, letterSpacing: "0.08em", padding: "7px 13px",
-      cursor: disabled ? "default" : "pointer",
+      fontFamily: MONO, fontSize: 11, letterSpacing: "0.08em", padding: "10px 14px",
+      minHeight: 40, cursor: disabled ? "default" : "pointer",
       background: active ? C.gold : light && strong ? C.ink : strong ? C.gold : "transparent",
       color: active || (strong && !light) ? C.ink : light && strong ? C.parch : light ? C.ink : C.parch,
       border: "2px solid " + (light ? C.ink : C.rule),
       opacity: disabled ? 0.4 : 1,
+      touchAction: "manipulation", WebkitTapHighlightColor: "transparent", userSelect: "none",
     }}>{children}</button>
   );
 }
@@ -45,10 +46,11 @@ export function Item({ label, on, disabled, muted }) {
   return (
     <button onClick={disabled ? undefined : on} disabled={disabled} style={{
       display: "block", width: "100%", textAlign: "left", fontFamily: MONO, fontSize: 12,
-      padding: "7px 10px", background: "transparent",
+      padding: "11px 10px", minHeight: 40, background: "transparent",
       color: disabled ? "#a99e88" : muted ? C.inkSoft : C.ink,
       border: "none", borderBottom: "1px solid " + C.rule,
       cursor: disabled ? "default" : "pointer",
+      touchAction: "manipulation", WebkitTapHighlightColor: "transparent", userSelect: "none",
     }}>{label}</button>
   );
 }

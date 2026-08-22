@@ -702,23 +702,54 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     busy = false;
   }
 
-  /* ---- input ---- */
+  /* ---- input ----
+     pointer events cover mouse and touch alike: one finger drags to orbit
+     and taps to select/act, two fingers pinch to zoom. `pinched` latches for
+     the whole gesture so releasing the first finger after a pinch never
+     reads as a tap from the second. Touch gets a wider drag threshold than
+     mouse — real fingers wobble more than a mouse does between down and up. */
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
-  let dragging = false, dragged = 0, lastX = 0, lastY = 0;
+  const pointers = new Map();
+  let dragging = false, dragged = 0, lastX = 0, lastY = 0, dragThreshold = 6;
+  let pinchDist = 0, pinched = false;
+
+  const pinchDistance = () => {
+    const [a, b] = [...pointers.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
 
   function onDown(e) {
+    try { cv.setPointerCapture(e.pointerId); } catch { /* pointer already gone — a fast tap-and-lift */ }
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size >= 2) {
+      dragging = false;
+      pinched = true;
+      pinchDist = pinchDistance();
+      return;
+    }
     dragging = true; dragged = 0;
     lastX = e.clientX; lastY = e.clientY;
-    cv.setPointerCapture(e.pointerId);
+    dragThreshold = e.pointerType === "touch" ? 10 : 6;
     cv.style.cursor = "grabbing";
   }
   function onMove(e) {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.size >= 2) {
+      const d = pinchDistance();
+      if (pinchDist > 0) {
+        setCam((c) => ({ ...c, zoom: clamp(c.zoom - (d - pinchDist) * 0.05, 6, 22) }));
+      }
+      pinchDist = d;
+      return;
+    }
     if (!dragging) return;
     const dx = e.clientX - lastX, dy = e.clientY - lastY;
     lastX = e.clientX; lastY = e.clientY;
     dragged += Math.abs(dx) + Math.abs(dy);
-    if (dragged > 6) {
+    if (dragged > dragThreshold) {
       setCam((c) => ({
         ...c,
         yaw: (c.yaw - dx * 0.4 + 360) % 360,
@@ -726,11 +757,16 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       }));
     }
   }
-  function onUp(e) {
+  function endPointer(e) {
+    const wasSingle = pointers.size === 1 && !pinched;
+    pointers.delete(e.pointerId);
     cv.style.cursor = "grab";
-    if (!dragging) return;
+    if (pointers.size < 2) pinchDist = 0;
+    if (pointers.size === 0) pinched = false;
+
+    if (e.type === "pointercancel" || !wasSingle) { dragging = false; return; }
     dragging = false;
-    if (dragged > 6) return;
+    if (dragged > dragThreshold) return;
     const r = cv.getBoundingClientRect();
     ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
     ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
@@ -744,7 +780,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
   cv.addEventListener("pointerdown", onDown);
   cv.addEventListener("pointermove", onMove);
-  cv.addEventListener("pointerup", onUp);
+  cv.addEventListener("pointerup", endPointer);
+  cv.addEventListener("pointercancel", endPointer);
   cv.addEventListener("wheel", onWheel, { passive: false });
 
   function onTile(x, y) {
@@ -897,7 +934,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     ro.disconnect();
     cv.removeEventListener("pointerdown", onDown);
     cv.removeEventListener("pointermove", onMove);
-    cv.removeEventListener("pointerup", onUp);
+    cv.removeEventListener("pointerup", endPointer);
+    cv.removeEventListener("pointercancel", endPointer);
     cv.removeEventListener("wheel", onWheel);
     renderer.dispose();
     if (cv.parentNode) cv.parentNode.removeChild(cv);
