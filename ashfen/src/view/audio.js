@@ -2,12 +2,15 @@
    Lives in view/, not core/: it's presentation, same as scene.js's
    walkPath/lunge/flash. core/game.js never imports this.
 
-   Music: prelude.mp3 plays start-to-finish once (0:00-4:51), then loops
-   the 2:39-4:51 section forever. That's native AudioBufferSourceNode
-   behavior — loop=true with loopStart/loopEnd only kicks in once playback
-   first reaches loopEnd, so a start offset before loopStart plays through
-   as an intro exactly once. Needs Web Audio (not <audio loop>) because
-   <audio>'s loop points aren't sample-accurate and would click at the seam.
+   Music: two selectable tracks (MUSIC_TRACKS), switched from the pause
+   menu. prelude.mp3 plays start-to-finish once (0:00-4:51), then loops the
+   2:39-4:51 section forever — that's native AudioBufferSourceNode behavior,
+   loop=true with loopStart/loopEnd only kicks in once playback first
+   reaches loopEnd, so a start offset before loopStart plays through as an
+   intro exactly once. conquest.mp3 has no intro: loopStart 0/loopEnd 122
+   means the whole 0:00-2:02 clip repeats from the first frame, via the
+   same mechanism. Needs Web Audio (not <audio loop>) because <audio>'s
+   loop points aren't sample-accurate and would click at the seam.
 
    SFX: the synthesized "sheath" stinger (filtered noise "shing" + a few
    inharmonic metallic partials) now plays on unit selection, not phase
@@ -19,9 +22,10 @@
 
 import { PHASE_BANNER_MS } from "../ui/theme.js";
 
-const MUSIC_URL = "/audio/prelude.mp3";
-const LOOP_START = 159; // 2:39
-const LOOP_END = 291; // 4:51
+const MUSIC_TRACKS = {
+  prelude: { url: "/audio/prelude.mp3", loopStart: 159, loopEnd: 291 }, // 2:39-4:51
+  conquest: { url: "/audio/conquest.mp3", loopStart: 0, loopEnd: 122 }, // 0:00-2:02
+};
 const MUSIC_VOLUME = 0.5;
 const SFX_VOLUME = 0.7;
 
@@ -47,11 +51,14 @@ const ATTACK_HIT_NAMES = ["attackHit1", "attackHit2", "attackHit3", "attackHit4"
 let ctx = null;
 let musicGain = null;
 let sfxGain = null;
-let musicBuffer = null;
-let musicStarted = false;
 let noiseBuffer = null;
 const sfxBuffers = {};
 let sfxReady = null;
+const musicBuffers = {}; // keyed by MUSIC_TRACKS name
+let musicSource = null; // the currently-playing BufferSourceNode, if any
+let musicTrack = "prelude";
+let musicEnabled = true;
+let musicStarted = false; // true once unlockAudio's post-banner start has fired
 
 function getContext() {
   if (!ctx) {
@@ -99,22 +106,63 @@ export const playHeal = () => playSfx("heal");
 export const playAttackHit = () =>
   playSfx(ATTACK_HIT_NAMES[Math.floor(Math.random() * ATTACK_HIT_NAMES.length)]);
 
-async function startMusic() {
-  if (musicStarted) return;
-  musicStarted = true;
-  const c = getContext();
-  if (!musicBuffer) {
-    const res = await fetch(MUSIC_URL);
+async function loadMusicBuffer(c, name) {
+  if (!musicBuffers[name]) {
+    const res = await fetch(MUSIC_TRACKS[name].url);
     const bytes = await res.arrayBuffer();
-    musicBuffer = await c.decodeAudioData(bytes);
+    musicBuffers[name] = await c.decodeAudioData(bytes);
   }
+  return musicBuffers[name];
+}
+
+function stopMusicSource() {
+  if (musicSource) {
+    try { musicSource.stop(); } catch { /* already stopped */ }
+    musicSource = null;
+  }
+}
+
+/* (re)starts playback of the current track from its own beginning. Safe to
+   call whenever the selected track or the on/off toggle changes — it always
+   tears down whatever was playing first, so there's never two tracks
+   overlapping. No-ops if music is toggled off; the pause menu's "on" click
+   calls this again to actually start it. musicPlayToken guards against two
+   overlapping calls (e.g. a quick track switch before the first track's
+   fetch/decode resolves) racing to decide which one actually starts. */
+let musicPlayToken = 0;
+async function playCurrentTrack() {
+  if (!musicEnabled) return;
+  const token = ++musicPlayToken;
+  const c = getContext();
+  const track = musicTrack;
+  const buf = await loadMusicBuffer(c, track);
+  if (token !== musicPlayToken || !musicEnabled) return;
+  stopMusicSource();
+  const { loopStart, loopEnd } = MUSIC_TRACKS[track];
   const src = c.createBufferSource();
-  src.buffer = musicBuffer;
+  src.buffer = buf;
   src.loop = true;
-  src.loopStart = LOOP_START;
-  src.loopEnd = LOOP_END;
+  src.loopStart = loopStart;
+  src.loopEnd = loopEnd;
   src.connect(musicGain);
   src.start(0, 0);
+  musicSource = src;
+}
+
+/* pause menu calls — safe before unlockAudio's delayed first start has
+   fired: they just record the preference, and playCurrentTrack (invoked
+   from that delayed start) reads musicEnabled/musicTrack when it runs. */
+export function setMusicEnabled(on) {
+  musicEnabled = on;
+  if (!musicStarted) return;
+  if (on) playCurrentTrack();
+  else { musicPlayToken++; stopMusicSource(); }
+}
+
+export function setMusicTrack(name) {
+  if (!MUSIC_TRACKS[name] || name === musicTrack) return;
+  musicTrack = name;
+  if (musicStarted && musicEnabled) playCurrentTrack();
 }
 
 /* browsers won't run audio before a user gesture — called directly from the
@@ -133,7 +181,7 @@ export function unlockAudio() {
   c.resume().then(async () => {
     await ready;
     playNextTurn();
-    setTimeout(startMusic, PHASE_BANNER_MS);
+    setTimeout(() => { musicStarted = true; playCurrentTrack(); }, PHASE_BANNER_MS);
   }).catch(() => {});
 }
 

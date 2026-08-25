@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useReducer, useState } from "react";
 import { mountScene, newGame, RES } from "../view/scene.js";
-import { unlockAudio } from "../view/audio.js";
+import { unlockAudio, setMusicEnabled, setMusicTrack } from "../view/audio.js";
 import { forecastOf } from "../core/combat.js";
 import { C, MONO, SERIF, PHASE_BANNER_MS } from "./theme.js";
 import { Card, Eyebrow, Pill, Btn } from "./primitives.jsx";
@@ -12,6 +12,7 @@ import ActionMenu from "./ActionMenu.jsx";
 import OnboardingCard from "./OnboardingCard.jsx";
 import TitleCard from "./TitleCard.jsx";
 import PhaseBanner from "./PhaseBanner.jsx";
+import PauseMenu from "./PauseMenu.jsx";
 import { hintFor } from "./hint.js";
 
 const ONBOARD_KEY = "ashfen-onboarded";
@@ -38,6 +39,9 @@ export default function App() {
   );
   const [began, setBegan] = useState(false);
   const [bannerCleared, setBannerCleared] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [musicOn, setMusicOn] = useState(true);
+  const [track, setTrack] = useState("prelude");
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -53,6 +57,13 @@ export default function App() {
   function dismissOnboarding() {
     localStorage.setItem(ONBOARD_KEY, "1");
     setOnboarded(true);
+  }
+  function toggleMusic() {
+    setMusicOn((on) => { setMusicEnabled(!on); return !on; });
+  }
+  function chooseTrack(name) {
+    setTrack(name);
+    setMusicTrack(name);
   }
   /* g and tick are stable regardless of whether mountScene's effect has run
      yet — unlike apiRef.current, which this click predates (it's the very
@@ -110,11 +121,12 @@ export default function App() {
             </div>
             <div style={{ fontSize: 21 }}>Ashfen Pass</div>
           </div>
-          <div className="flex gap-2" style={{ fontFamily: MONO, fontSize: 11 }}>
+          <div className="flex items-center gap-2" style={{ fontFamily: MONO, fontSize: 11 }}>
             <Pill k="Turn" v={String(g.turn)} />
             <Pill k="Phase" v={g.phase === "player" ? "Player" : "Enemy"}
               tone={g.phase === "player" ? C.blueLite : C.redLite} />
             <Pill k="Foes" v={String(foesLeft)} />
+            {began && <Btn on={() => setPaused(true)}>Pause</Btn>}
           </div>
         </div>
 
@@ -200,6 +212,15 @@ export default function App() {
                 </div>
                 <Btn light strong on={restart}>Restart</Btn>
               </div>
+            )}
+
+            {paused && (
+              <PauseMenu
+                onResume={() => setPaused(false)}
+                api={api} g={g} cam={cam} setCam={setCam} RES={RES}
+                musicOn={musicOn} onToggleMusic={toggleMusic}
+                track={track} onSetTrack={chooseTrack}
+              />
             )}
 
             <div className="flex flex-wrap gap-2 mt-2">
