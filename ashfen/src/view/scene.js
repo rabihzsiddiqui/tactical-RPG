@@ -23,7 +23,10 @@ import {
   POST_VERT, POST_FRAG, TILE_VERT, TILE_FRAG, RING_FRAG, WATER_VERT, WATER_FRAG,
 } from "./shaders.js";
 import { C } from "../ui/theme.js";
-import { playSheath } from "./audio.js";
+import {
+  playSheath, playNextTurn, playCritHit, playMiss, playNoDamage, playDeath, playFinalHit, playLevelUp,
+  playAttackHit, playHeal,
+} from "./audio.js";
 
 export const RES = [
   { label: "400x240 (3DS)", h: 240 },
@@ -540,10 +543,15 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
           await lunge(src, tgt);
           if (!e.hit) {
             floater(tgt, "miss", C.parchDim);
+            playMiss();
           } else {
             tgt.hp = e.hpAfter;
             flash(tgt, e.crit);
             floater(tgt, e.dmg + (e.crit ? "!" : ""), e.crit ? C.gold : C.redLite);
+            if (e.hpAfter <= 0) playFinalHit();
+            else if (e.dmg === 0) playNoDamage();
+            else if (e.crit) playCritHit();
+            else playAttackHit();
           }
           tick();
           await sleep(e.crit ? 380 : 260);
@@ -551,6 +559,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         }
         case "death": {
           const u = g.units.find((z) => z.id === e.unitId);
+          playDeath();
           await die(u);
           break;
         }
@@ -559,11 +568,15 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
           tgt.hp += e.amount;
           floater(tgt, "+" + e.amount, C.green);
           tick();
-          if (!e.instant) await sleep(600);
+          if (!e.instant) {
+            playHeal();
+            await sleep(600);
+          }
           break;
         }
         case "levelUp": {
           const u = g.units.find((z) => z.id === e.unitId);
+          playLevelUp();
           g.levelUp = { name: u.name, lvl: e.lvl, gains: e.gains };
           tick();
           await sleep(1700);
@@ -573,7 +586,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         }
         case "banner": {
           g.banner = { text: e.text, side: e.side, n: g.banner.n + 1 };
-          playSheath();
+          playNextTurn();
           tick();
           break;
         }
@@ -584,6 +597,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
 
   function select(u) {
+    playSheath();
     const { stand, atk, dist, prev } = reachTiles(u, g.units);
     g.sel = { id: u.id, ox: u.x, oy: u.y, stand, atk, dist, prev, mode: "move", targets: null };
     g.inspect = u.id;
