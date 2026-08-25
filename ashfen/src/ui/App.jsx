@@ -126,9 +126,6 @@ export default function App() {
             <Pill k="Phase" v={g.phase === "player" ? "Player" : "Enemy"}
               tone={g.phase === "player" ? C.blueLite : C.redLite} />
             <Pill k="Foes" v={String(foesLeft)} />
-            {began && (
-              <Btn on={() => setPaused((p) => !p)} active={paused}>{paused ? "Resume" : "Pause"}</Btn>
-            )}
           </div>
         </div>
 
@@ -142,6 +139,16 @@ export default function App() {
                 border: "2px solid #2f3746", background: "#9fc3d8", overflow: "hidden", touchAction: "none",
               }}
             />
+
+            {/* while paused, block input to the map and everything overlaid on it
+                (unit selection, action menu, forecast) — sized to the canvas only,
+                so it never covers the under-map row where Resume actually lives */}
+            {paused && g.status === "playing" && (
+              <div className="absolute" style={{
+                top: 0, left: 0, right: 0, height: "min(58vh, 430px)",
+                zIndex: 45, background: "rgba(10,12,18,0.4)", cursor: "default",
+              }} />
+            )}
 
             {/* hint line — always names the next action; HTML, never inside the render buffer */}
             <div style={{
@@ -217,9 +224,10 @@ export default function App() {
             )}
 
             {/* pause menu takes over this same under-map slot instead of floating
-                over the viewport — see PauseMenu.jsx */}
+                over the viewport — see PauseMenu.jsx. Gated on status==="playing"
+                so it can't get stuck open (or reachable) behind the end screen. */}
             <div className="mt-2">
-              {paused ? (
+              {paused && g.status === "playing" ? (
                 <PauseMenu
                   onResume={() => setPaused(false)}
                   api={api} g={g} cam={cam} setCam={setCam} RES={RES}
@@ -238,6 +246,7 @@ export default function App() {
                   <Btn on={() => setCam((c) => ({ ...c, res: (c.res + 1) % RES.length }))}>
                     {RES[cam.res].label}
                   </Btn>
+                  <Btn on={() => setPaused(true)} disabled={g.status !== "playing"}>Pause</Btn>
                 </div>
               )}
             </div>
