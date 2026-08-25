@@ -25,7 +25,7 @@ import {
 import { C } from "../ui/theme.js";
 import {
   playSheath, playNextTurn, playCritHit, playMiss, playNoDamage, playDeath, playFinalHit, playLevelUp,
-  playAttackHit, playHeal,
+  playAttackHit, playHeal, playPlayerPhase, playEnemyPhase as playEnemyPhaseSfx, playVictory,
 } from "./audio.js";
 
 export const RES = [
@@ -586,7 +586,10 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         }
         case "banner": {
           g.banner = { text: e.text, side: e.side, n: g.banner.n + 1 };
-          playNextTurn();
+          if (e.text === "Player Phase") playPlayerPhase();
+          else if (e.text === "Enemy Phase") playEnemyPhaseSfx();
+          else if (e.text === "Victory") playVictory();
+          else playNextTurn(); // Defeat — no dedicated stinger yet
           tick();
           break;
         }

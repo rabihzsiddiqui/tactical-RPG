@@ -14,11 +14,13 @@
 
    SFX: the synthesized "sheath" stinger (filtered noise "shing" + a few
    inharmonic metallic partials) now plays on unit selection, not phase
-   banners — those use the sourced Next Turn.wav instead (see scene.js's
-   select() and its "banner" event case). The rest of the combat SFX
-   (crit/miss/no-damage/death/final-hit/level-up/heal, plus four
-   interchangeable plain-attack-hit takes, all in public/audio/) are
-   sourced assets, decoded once and cached in sfxBuffers. */
+   banners — those use sourced stingers instead, one per banner text
+   (playerphase/enemyphase/victory.wav; a Defeat banner has no dedicated
+   asset yet and falls back to Next Turn.wav — see scene.js's select() and
+   its "banner" event case). The rest of the combat SFX (crit/miss/no-
+   damage/death/final-hit/level-up/heal, plus four interchangeable plain-
+   attack-hit takes, all in public/audio/) are sourced assets, decoded once
+   and cached in sfxBuffers. */
 
 import { PHASE_BANNER_MS } from "../ui/theme.js";
 
@@ -42,6 +44,9 @@ const SFX_FILES = {
   attackHit3: "/audio/Attack Hit 3.wav",
   attackHit4: "/audio/Attack Hit 4.wav",
   heal: "/audio/Heal.wav",
+  playerPhase: "/audio/playerphase.wav",
+  enemyPhase: "/audio/enemyphase.wav",
+  victory: "/audio/victory.wav",
 };
 
 // four interchangeable takes for a plain (non-crit) landed hit — picked at
@@ -105,6 +110,9 @@ export const playLevelUp = () => playSfx("levelUp");
 export const playHeal = () => playSfx("heal");
 export const playAttackHit = () =>
   playSfx(ATTACK_HIT_NAMES[Math.floor(Math.random() * ATTACK_HIT_NAMES.length)]);
+export const playPlayerPhase = () => playSfx("playerPhase");
+export const playEnemyPhase = () => playSfx("enemyPhase");
+export const playVictory = () => playSfx("victory");
 
 async function loadMusicBuffer(c, name) {
   if (!musicBuffers[name]) {
@@ -168,19 +176,19 @@ export function setMusicTrack(name) {
 /* browsers won't run audio before a user gesture — called directly from the
    title card's Begin button (App.jsx), the page's first and only click
    before that point, so this always runs inside a real user gesture. That
-   same click also sets the first "Player Phase" banner, so the Next Turn
-   stinger here is timed to land right as it appears (sfxReady is awaited
-   first since decoding is async, but these are small local files so the
-   wait is negligible). Music starts once the banner's own on-screen
-   lifetime (PHASE_BANNER_MS, see ui/theme.js) has fully played out, not
-   just once the sting's own short tail has decayed — otherwise music would
-   start while the banner is still animating. */
+   same click also sets the first "Player Phase" banner, so the stinger
+   here is timed to land right as it appears (sfxReady is awaited first
+   since decoding is async, but these are small local files so the wait is
+   negligible). Music starts once the banner's own on-screen lifetime
+   (PHASE_BANNER_MS, see ui/theme.js) has fully played out, not just once
+   the sting's own short tail has decayed — otherwise music would start
+   while the banner is still animating. */
 export function unlockAudio() {
   const c = getContext();
   const ready = loadSfx(c);
   c.resume().then(async () => {
     await ready;
-    playNextTurn();
+    playPlayerPhase();
     setTimeout(() => { musicStarted = true; playCurrentTrack(); }, PHASE_BANNER_MS);
   }).catch(() => {});
 }
