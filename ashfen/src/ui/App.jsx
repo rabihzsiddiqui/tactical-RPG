@@ -126,7 +126,9 @@ export default function App() {
             <Pill k="Phase" v={g.phase === "player" ? "Player" : "Enemy"}
               tone={g.phase === "player" ? C.blueLite : C.redLite} />
             <Pill k="Foes" v={String(foesLeft)} />
-            {began && <Btn on={() => setPaused(true)}>Pause</Btn>}
+            {began && (
+              <Btn on={() => setPaused((p) => !p)} active={paused}>{paused ? "Resume" : "Pause"}</Btn>
+            )}
           </div>
         </div>
 
@@ -214,26 +216,30 @@ export default function App() {
               </div>
             )}
 
-            {paused && (
-              <PauseMenu
-                onResume={() => setPaused(false)}
-                api={api} g={g} cam={cam} setCam={setCam} RES={RES}
-                musicOn={musicOn} onToggleMusic={toggleMusic}
-                track={track} onSetTrack={chooseTrack}
-              />
-            )}
-
-            <div className="flex flex-wrap gap-2 mt-2">
-              <Btn on={api.endTurn} disabled={g.phase !== "player" || g.status !== "playing"} strong>
-                End turn
-              </Btn>
-              <Btn on={api.toggleDanger} active={g.danger}>
-                {g.danger ? "Hide threat" : "Show threat"}
-              </Btn>
-              <Btn on={() => setCam((c) => ({ ...c, yaw: (c.yaw + 90) % 360 }))}>Rotate 90&deg;</Btn>
-              <Btn on={() => setCam((c) => ({ ...c, res: (c.res + 1) % RES.length }))}>
-                {RES[cam.res].label}
-              </Btn>
+            {/* pause menu takes over this same under-map slot instead of floating
+                over the viewport — see PauseMenu.jsx */}
+            <div className="mt-2">
+              {paused ? (
+                <PauseMenu
+                  onResume={() => setPaused(false)}
+                  api={api} g={g} cam={cam} setCam={setCam} RES={RES}
+                  musicOn={musicOn} onToggleMusic={toggleMusic}
+                  track={track} onSetTrack={chooseTrack}
+                />
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <Btn on={api.endTurn} disabled={g.phase !== "player" || g.status !== "playing"} strong>
+                    End turn
+                  </Btn>
+                  <Btn on={api.toggleDanger} active={g.danger}>
+                    {g.danger ? "Hide threat" : "Show threat"}
+                  </Btn>
+                  <Btn on={() => setCam((c) => ({ ...c, yaw: (c.yaw + 90) % 360 }))}>Rotate 90&deg;</Btn>
+                  <Btn on={() => setCam((c) => ({ ...c, res: (c.res + 1) % RES.length }))}>
+                    {RES[cam.res].label}
+                  </Btn>
+                </div>
+              )}
             </div>
           </div>
 
