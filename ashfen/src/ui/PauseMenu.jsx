@@ -14,7 +14,7 @@ export default function PauseMenu({
 }) {
   return (
     <Card>
-      <div style={{ fontSize: 19, marginBottom: 8 }}>Paused</div>
+      <div style={{ fontSize: 19, marginBottom: 8 }}>Menu</div>
 
       <Eyebrow>Battle</Eyebrow>
       <div className="flex flex-wrap gap-2 mb-4">

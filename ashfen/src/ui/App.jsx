@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useReducer, useState } from "react";
 import { mountScene, newGame, RES } from "../view/scene.js";
-import { unlockAudio, setMusicEnabled, setMusicTrack } from "../view/audio.js";
+import { unlockAudio, setMusicEnabled, setMusicTrack, restartAudio } from "../view/audio.js";
 import { forecastOf } from "../core/combat.js";
 import { C, MONO, SERIF, PHASE_BANNER_MS } from "./theme.js";
 import { Card, Eyebrow, Pill, Btn } from "./primitives.jsx";
@@ -49,10 +49,18 @@ export default function App() {
     return mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, setFloats, tick, apiRef });
   }, [resetKey]);
 
+  /* mirrors onBegin below: same manual first "Player Phase" banner (the
+     event stream itself only emits that banner when returning from an
+     enemy phase, not for a turn-1 start), same audio reset — restartAudio
+     forces the track back to prelude and replays the unlock sequence, so
+     a restarted run sounds exactly like a fresh one. */
   function restart() {
     gs.current = newGame();
+    gs.current.banner = { text: "Player Phase", side: "player", n: 0 };
     setFloats([]);
     setResetKey((k) => k + 1);
+    restartAudio();
+    setTrack("prelude");
   }
   function dismissOnboarding() {
     localStorage.setItem(ONBOARD_KEY, "1");
@@ -223,9 +231,11 @@ export default function App() {
               </div>
             )}
 
-            {/* pause menu takes over this same under-map slot instead of floating
+            {/* the menu takes over this same under-map slot instead of floating
                 over the viewport — see PauseMenu.jsx. Gated on status==="playing"
-                so it can't get stuck open (or reachable) behind the end screen. */}
+                so it can't get stuck open (or reachable) behind the end screen.
+                End turn and the resolution ("graphics") toggle live only inside
+                it now; Show threat/Rotate 90 stay available in both places. */}
             <div className="mt-2">
               {paused && g.status === "playing" ? (
                 <PauseMenu
@@ -236,17 +246,13 @@ export default function App() {
                 />
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  <Btn on={api.endTurn} disabled={g.phase !== "player" || g.status !== "playing"} strong>
-                    End turn
+                  <Btn on={() => setPaused(true)} disabled={g.status !== "playing"} strong>
+                    Menu
                   </Btn>
                   <Btn on={api.toggleDanger} active={g.danger}>
                     {g.danger ? "Hide threat" : "Show threat"}
                   </Btn>
                   <Btn on={() => setCam((c) => ({ ...c, yaw: (c.yaw + 90) % 360 }))}>Rotate 90&deg;</Btn>
-                  <Btn on={() => setCam((c) => ({ ...c, res: (c.res + 1) % RES.length }))}>
-                    {RES[cam.res].label}
-                  </Btn>
-                  <Btn on={() => setPaused(true)} disabled={g.status !== "playing"}>Pause</Btn>
                 </div>
               )}
             </div>

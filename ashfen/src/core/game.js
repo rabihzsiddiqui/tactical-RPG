@@ -57,14 +57,17 @@ function resolveCombatExchange(units, attackerId, defenderId, rng) {
   return { events, logLines };
 }
 
-/* internal only — appends a banner+end event and sets status/log on a
-   win or loss. Called only where a kill was just possible. */
+/* internal only — appends an end event and sets status/log on a win or
+   loss. Called only where a kill was just possible. No "banner" event
+   here (unlike the phase transitions below): the end screen already
+   shows "Victory"/"Defeat" with a Restart button, so a ribbon banner for
+   the same text would just be a redundant second announcement. */
 function checkEnd(state, events) {
   if (state.status !== "playing") return { state, events };
   if (!alive(state.units, "enemy").length) {
     return {
       state: { ...state, status: "win", log: pushLog(state.log, "All enemies routed.") },
-      events: [...events, { type: "banner", text: "Victory", side: "player" }, { type: "end", result: "win" }],
+      events: [...events, { type: "end", result: "win" }],
     };
   }
   const lord = state.units.find((u) => u.lord);
@@ -72,7 +75,7 @@ function checkEnd(state, events) {
     const msg = lord && lord.hp <= 0 ? "Kaelen has fallen." : "The company is lost.";
     return {
       state: { ...state, status: "lose", log: pushLog(state.log, msg) },
-      events: [...events, { type: "banner", text: "Defeat", side: "enemy" }, { type: "end", result: "lose" }],
+      events: [...events, { type: "end", result: "lose" }],
     };
   }
   return { state, events };

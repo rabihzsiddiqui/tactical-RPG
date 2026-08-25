@@ -10,17 +10,22 @@
    intro exactly once. conquest.mp3 has no intro: loopStart 0/loopEnd 122
    means the whole 0:00-2:02 clip repeats from the first frame, via the
    same mechanism. Needs Web Audio (not <audio loop>) because <audio>'s
-   loop points aren't sample-accurate and would click at the seam.
+   loop points aren't sample-accurate and would click at the seam. Music
+   stops outright on the "end" event (win or lose — see stopMusic and
+   scene.js's playEvents) and restartAudio puts it back at the exact state
+   unlockAudio starts it in (track forced back to prelude, stinger, then
+   the same delayed start), so a restarted run sounds like a fresh one.
 
    SFX: the synthesized "sheath" stinger (filtered noise "shing" + a few
    inharmonic metallic partials) now plays on unit selection, not phase
    banners — those use sourced stingers instead, one per banner text
-   (playerphase/enemyphase/victory.wav; a Defeat banner has no dedicated
-   asset yet and falls back to Next Turn.wav — see scene.js's select() and
-   its "banner" event case). The rest of the combat SFX (crit/miss/no-
-   damage/death/final-hit/level-up/heal, plus four interchangeable plain-
-   attack-hit takes, all in public/audio/) are sourced assets, decoded once
-   and cached in sfxBuffers. */
+   (playerphase/enemyphase.wav; a Defeat banner has no dedicated asset yet
+   and falls back to Next Turn.wav). Victory/Defeat no longer get a banner
+   event at all — see game.js's checkEnd — so their sound plays from the
+   "end" event instead (see scene.js's playEvents). The rest
+   of the combat SFX (crit/miss/no-damage/death/final-hit/level-up/heal,
+   plus four interchangeable plain-attack-hit takes, all in public/audio/)
+   are sourced assets, decoded once and cached in sfxBuffers. */
 
 import { PHASE_BANNER_MS } from "../ui/theme.js";
 
@@ -91,12 +96,20 @@ function loadSfx(c) {
   return sfxReady;
 }
 
-function playSfx(name) {
+// gain defaults to 1 (the shared sfxGain level); pass a multiplier to trim
+// one sound's volume without touching every other SFX on the same bus.
+function playSfx(name, gain = 1) {
   const buf = sfxBuffers[name];
   if (!ctx || !buf) return; // not unlocked, or still decoding — skip rather than queue
   const src = ctx.createBufferSource();
   src.buffer = buf;
-  src.connect(sfxGain);
+  if (gain === 1) {
+    src.connect(sfxGain);
+  } else {
+    const trim = ctx.createGain();
+    trim.gain.value = gain;
+    src.connect(trim).connect(sfxGain);
+  }
   src.start(0);
 }
 
@@ -112,7 +125,7 @@ export const playAttackHit = () =>
   playSfx(ATTACK_HIT_NAMES[Math.floor(Math.random() * ATTACK_HIT_NAMES.length)]);
 export const playPlayerPhase = () => playSfx("playerPhase");
 export const playEnemyPhase = () => playSfx("enemyPhase");
-export const playVictory = () => playSfx("victory");
+export const playVictory = () => playSfx("victory", 0.9); // 10% quieter than the shared sfx level
 
 async function loadMusicBuffer(c, name) {
   if (!musicBuffers[name]) {
@@ -173,6 +186,14 @@ export function setMusicTrack(name) {
   if (musicStarted && musicEnabled) playCurrentTrack();
 }
 
+/* called on the win/lose "end" event (see scene.js's playEvents) — stops
+   playback outright without touching musicEnabled, so a still-muted
+   preference isn't silently flipped back on by this. */
+export function stopMusic() {
+  musicPlayToken++;
+  stopMusicSource();
+}
+
 /* browsers won't run audio before a user gesture — called directly from the
    title card's Begin button (App.jsx), the page's first and only click
    before that point, so this always runs inside a real user gesture. That
@@ -191,6 +212,20 @@ export function unlockAudio() {
     playPlayerPhase();
     setTimeout(() => { musicStarted = true; playCurrentTrack(); }, PHASE_BANNER_MS);
   }).catch(() => {});
+}
+
+/* Restart's audio counterpart — App.jsx calls this alongside remaking the
+   game state. The audio context is already unlocked and sfx already
+   loaded by the time Restart is reachable (it only appears once the game
+   has ended), so this skips straight to unlockAudio's tail: force the
+   track back to prelude (the actual "beginning", regardless of whatever
+   was selected mid-run) and replay the same stinger-then-music sequence
+   as the very first game start. musicEnabled is left as the player set
+   it — restarting the run isn't the same as un-muting it. */
+export function restartAudio() {
+  musicTrack = "prelude";
+  playPlayerPhase();
+  setTimeout(() => { musicStarted = true; playCurrentTrack(); }, PHASE_BANNER_MS);
 }
 
 function getNoiseBuffer(c) {

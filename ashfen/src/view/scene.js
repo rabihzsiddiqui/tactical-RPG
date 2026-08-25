@@ -25,7 +25,7 @@ import {
 import { C } from "../ui/theme.js";
 import {
   playSheath, playNextTurn, playCritHit, playMiss, playNoDamage, playDeath, playFinalHit, playLevelUp,
-  playAttackHit, playHeal, playPlayerPhase, playEnemyPhase as playEnemyPhaseSfx, playVictory,
+  playAttackHit, playHeal, playPlayerPhase, playEnemyPhase as playEnemyPhaseSfx, playVictory, stopMusic,
 } from "./audio.js";
 
 export const RES = [
@@ -585,16 +585,21 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
           break;
         }
         case "banner": {
+          // only "Player Phase"/"Enemy Phase" reach here — Victory/Defeat
+          // don't get a banner event at all, see game.js's checkEnd
           g.banner = { text: e.text, side: e.side, n: g.banner.n + 1 };
           if (e.text === "Player Phase") playPlayerPhase();
-          else if (e.text === "Enemy Phase") playEnemyPhaseSfx();
-          else if (e.text === "Victory") playVictory();
-          else playNextTurn(); // Defeat — no dedicated stinger yet
+          else playEnemyPhaseSfx();
           tick();
           break;
         }
         case "end":
-          break; // status is applied by applyResolve once every event above has played
+          // status itself is applied by applyResolve once every event above
+          // has played; this just fires the win/lose sound and cuts the music
+          if (e.result === "win") playVictory();
+          else playNextTurn(); // Defeat — no dedicated stinger yet
+          stopMusic();
+          break;
       }
     }
   }
