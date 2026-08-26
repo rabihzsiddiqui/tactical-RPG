@@ -12,13 +12,20 @@ export default function PauseMenu({
   onResume, api, g, cam, setCam, RES,
   musicOn, onToggleMusic, track, onSetTrack,
 }) {
+  // ending the turn kicks off the enemy phase, which needs the map visible —
+  // closes the menu on the way out instead of leaving it sitting open over it
+  function endTurnAndClose() {
+    api.endTurn();
+    onResume();
+  }
+
   return (
     <Card>
       <div style={{ fontSize: 19, marginBottom: 8 }}>Menu</div>
 
       <Eyebrow>Battle</Eyebrow>
       <div className="flex flex-wrap gap-2 mb-4">
-        <Btn on={api.endTurn} disabled={g.phase !== "player" || g.status !== "playing"} strong>
+        <Btn on={endTurnAndClose} disabled={g.phase !== "player" || g.status !== "playing"} strong>
           End turn
         </Btn>
         <Btn light on={api.toggleDanger} active={g.danger}>

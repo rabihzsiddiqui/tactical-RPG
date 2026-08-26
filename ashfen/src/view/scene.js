@@ -548,9 +548,13 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
             tgt.hp = e.hpAfter;
             flash(tgt, e.crit);
             floater(tgt, e.dmg + (e.crit ? "!" : ""), e.crit ? C.gold : C.redLite);
-            if (e.hpAfter <= 0) playFinalHit();
+            // crit always gets its own sound, even on a killing or 0-damage
+            // blow — finalHit is for a *non-crit* kill specifically; a
+            // crit that also kills still gets Death.wav right after, from
+            // the "death" event below
+            if (e.crit) playCritHit();
+            else if (e.hpAfter <= 0) playFinalHit();
             else if (e.dmg === 0) playNoDamage();
-            else if (e.crit) playCritHit();
             else playAttackHit();
           }
           tick();
