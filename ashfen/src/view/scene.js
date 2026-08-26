@@ -740,6 +740,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
 
   async function doVulnerary() {
     playActionSelect();
+    playHeal();
     const unitId = g.sel.id;
     busy = true;
     tick();
