@@ -714,6 +714,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
 
   /* ---- player actions ---- */
   async function doAttack(targetId) {
+    playActionSelect();
     const attackerId = g.sel.id;
     g.forecast = null;
     releaseAll();
@@ -897,7 +898,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
 
   /* ---- api for the html layer ---- */
   apiRef.current = {
-    endTurn: () => { if (!busy && g.phase === "player" && g.status === "playing") startEnemyPhase(); },
+    endTurn: () => { if (!busy && g.phase === "player" && g.status === "playing") { playActionSelect(); startEnemyPhase(); } },
     toggleDanger: () => { g.danger = !g.danger; paintSel(); tick(); },
     chooseAttack: () => { playActionSelect(); g.sel.mode = "target"; paintSel(); tick(); },
     chooseHeal: () => { playActionSelect(); g.sel.mode = "targetHeal"; paintSel(); tick(); },

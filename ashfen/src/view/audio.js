@@ -18,10 +18,11 @@
 
    SFX: unit selection plays a sourced stinger (unit.wav), not the earlier
    synthesized "sheath" sound (filtered noise "shing" + inharmonic metallic
-   partials) it replaced. Picking an action-menu entry (Attack/Heal/
-   Vulnerary/Wait) plays select.wav; backing out of it (the action menu's
-   Back and the forecast's Back, both routed through scene.js's
-   backToMove) plays back.wav. Phase banners use their own sourced
+   partials) it replaced. select.wav plays on every player-committed
+   choice: picking an action-menu entry (Attack/Heal/Vulnerary/Wait),
+   confirming an attack from the forecast, and End Turn. Backing out of the
+   action menu or the forecast (both routed through scene.js's
+   backToMove) plays back.wav instead. Phase banners use their own sourced
    stingers, one per banner text (playerphase/enemyphase.wav; a Defeat
    banner has no dedicated asset yet and falls back to Next Turn.wav).
    Victory/Defeat no longer get a banner event at all — see game.js's
