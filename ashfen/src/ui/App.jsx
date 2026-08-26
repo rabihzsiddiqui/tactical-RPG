@@ -225,7 +225,7 @@ export default function App() {
               <div className="absolute flex flex-col items-center justify-center gap-3"
                 style={{ inset: 0, zIndex: 35, background: "rgba(10,12,18,0.78)" }}>
                 <div style={{ fontSize: 32, color: g.status === "win" ? C.gold : C.redLite }}>
-                  {g.status === "win" ? "Victory" : "Defeat"}
+                  {g.status === "win" ? "Victory!" : "Defeat"}
                 </div>
                 <Btn light strong on={restart}>Restart</Btn>
               </div>

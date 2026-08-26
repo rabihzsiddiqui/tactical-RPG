@@ -11,13 +11,28 @@ function triLine(a, d) {
   return "No triangle bonus" + note;
 }
 
-function Side({ u, s, right }) {
+/* name/weapon/HP — its own row, separate from the stat grid below. Kept
+   apart on purpose: this text wraps to a different number of lines on
+   each side depending on name/weapon length (e.g. "Iron Axe · HP 26/26"
+   vs "Iron Sword · HP 21/21"), and it used to sit directly above each
+   side's DMG/HIT/CRIT/HITS numbers — so whichever side wrapped further
+   pushed its numbers down out of line with the center labels and the
+   other side's numbers. Splitting it into its own row means nothing
+   above the stat grid can vary its height. */
+function Header({ u, right }) {
   return (
-    <div className={"flex-1 flex flex-col " + (right ? "items-end" : "items-start")}>
+    <div className={"flex-1 " + (right ? "text-right" : "text-left")}>
       <div style={{ fontFamily: SERIF, fontSize: 14 }}>{u.name}</div>
-      <div style={{ fontSize: 10, color: C.inkSoft, marginBottom: 4 }}>
+      <div style={{ fontSize: 10, color: C.inkSoft }}>
         {wep(u).name} &middot; HP {u.hp}/{u.maxHp}
       </div>
+    </div>
+  );
+}
+
+function StatCol({ s, right }) {
+  return (
+    <div className={"flex-1 flex flex-col " + (right ? "items-end" : "items-start")}>
       {[s ? s.dmg : "--", s ? s.acc : "--", s ? s.crit : "--", s ? (s.doubles ? "x2" : "x1") : "--"].map((v, i) => (
         <div key={i} style={{ height: 22, lineHeight: "22px", fontSize: 15, color: C.ink }}>{v}</div>
       ))}
@@ -29,8 +44,14 @@ export default function Forecast({ fc, onAttack, onCancel }) {
   return (
     <Card>
       <Eyebrow>Battle forecast</Eyebrow>
-      <div className="flex items-stretch" style={{ fontFamily: MONO, fontSize: 12 }}>
-        <Side u={fc.a} s={fc.f.a} />
+
+      <div className="flex items-start gap-2" style={{ fontFamily: MONO, fontSize: 12 }}>
+        <Header u={fc.a} />
+        <Header u={fc.d} right />
+      </div>
+
+      <div className="flex items-stretch mt-1" style={{ fontFamily: MONO, fontSize: 12 }}>
+        <StatCol s={fc.f.a} />
         <div className="flex flex-col items-center px-2"
           style={{ borderLeft: "1px solid " + C.rule, borderRight: "1px solid " + C.rule, color: C.inkSoft }}>
           {["dmg", "hit", "crit", "hits"].map((l) => (
@@ -38,8 +59,9 @@ export default function Forecast({ fc, onAttack, onCancel }) {
               style={{ height: 22, lineHeight: "22px", fontSize: 10, letterSpacing: "0.12em" }}>{l}</div>
           ))}
         </div>
-        <Side u={fc.d} s={fc.f.counters ? fc.f.d : null} right />
+        <StatCol s={fc.f.counters ? fc.f.d : null} right />
       </div>
+
       <div style={{ fontFamily: MONO, fontSize: 10, color: C.inkSoft, marginTop: 6 }}>
         {triLine(fc.a, fc.d)}
       </div>
