@@ -16,16 +16,20 @@
    unlockAudio starts it in (track forced back to prelude, stinger, then
    the same delayed start), so a restarted run sounds like a fresh one.
 
-   SFX: the synthesized "sheath" stinger (filtered noise "shing" + a few
-   inharmonic metallic partials) now plays on unit selection, not phase
-   banners — those use sourced stingers instead, one per banner text
-   (playerphase/enemyphase.wav; a Defeat banner has no dedicated asset yet
-   and falls back to Next Turn.wav). Victory/Defeat no longer get a banner
-   event at all — see game.js's checkEnd — so their sound plays from the
-   "end" event instead (see scene.js's playEvents). The rest
-   of the combat SFX (crit/miss/no-damage/death/final-hit/level-up/heal,
-   plus four interchangeable plain-attack-hit takes, all in public/audio/)
-   are sourced assets, decoded once and cached in sfxBuffers. */
+   SFX: unit selection plays a sourced stinger (unit.wav), not the earlier
+   synthesized "sheath" sound (filtered noise "shing" + inharmonic metallic
+   partials) it replaced. Picking an action-menu entry (Attack/Heal/
+   Vulnerary/Wait) plays select.wav; backing out of it (the action menu's
+   Back and the forecast's Back, both routed through scene.js's
+   backToMove) plays back.wav. Phase banners use their own sourced
+   stingers, one per banner text (playerphase/enemyphase.wav; a Defeat
+   banner has no dedicated asset yet and falls back to Next Turn.wav).
+   Victory/Defeat no longer get a banner event at all — see game.js's
+   checkEnd — so their sound plays from the "end" event instead (see
+   scene.js's playEvents). The rest of the combat SFX (crit/miss/no-damage/
+   death/final-hit/level-up/heal, plus four interchangeable plain-attack-hit
+   takes) are all sourced assets in public/audio/, decoded once and cached
+   in sfxBuffers. */
 
 import { PHASE_BANNER_MS } from "../ui/theme.js";
 
@@ -52,6 +56,9 @@ const SFX_FILES = {
   playerPhase: "/audio/playerphase.wav",
   enemyPhase: "/audio/enemyphase.wav",
   victory: "/audio/victory.wav",
+  unitSelect: "/audio/unit.wav",
+  actionSelect: "/audio/select.wav",
+  back: "/audio/back.wav",
 };
 
 // four interchangeable takes for a plain (non-crit) landed hit — picked at
@@ -61,7 +68,6 @@ const ATTACK_HIT_NAMES = ["attackHit1", "attackHit2", "attackHit3", "attackHit4"
 let ctx = null;
 let musicGain = null;
 let sfxGain = null;
-let noiseBuffer = null;
 const sfxBuffers = {};
 let sfxReady = null;
 const musicBuffers = {}; // keyed by MUSIC_TRACKS name
@@ -126,6 +132,9 @@ export const playAttackHit = () =>
 export const playPlayerPhase = () => playSfx("playerPhase");
 export const playEnemyPhase = () => playSfx("enemyPhase");
 export const playVictory = () => playSfx("victory", 0.9); // 10% quieter than the shared sfx level
+export const playUnitSelect = () => playSfx("unitSelect");
+export const playActionSelect = () => playSfx("actionSelect");
+export const playBack = () => playSfx("back");
 
 async function loadMusicBuffer(c, name) {
   if (!musicBuffers[name]) {
@@ -226,61 +235,4 @@ export function restartAudio() {
   musicTrack = "prelude";
   playPlayerPhase();
   setTimeout(() => { musicStarted = true; playCurrentTrack(); }, PHASE_BANNER_MS);
-}
-
-function getNoiseBuffer(c) {
-  if (!noiseBuffer) {
-    const len = Math.floor(c.sampleRate * 0.4);
-    noiseBuffer = c.createBuffer(1, len, c.sampleRate);
-    const data = noiseBuffer.getChannelData(0);
-    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
-  }
-  return noiseBuffer;
-}
-
-/* blade-sheathing stinger, played when a player unit is selected (see
-   scene.js's select()). Bright variant only for now — the deep one (lower
-   filter/partial frequencies, longer decay) didn't sound good; kept as a
-   toggle to revisit later. Returns the sound's own tail length in seconds,
-   unused by any current caller but kept for one that wants to chain off
-   the sound itself rather than a fixed timeout. */
-export function playSheath() {
-  if (!ctx) return 0; // not unlocked yet — skip rather than queue for later
-  const c = ctx;
-  const deep = false;
-  const now = c.currentTime;
-  const dur = deep ? 0.5 : 0.38;
-
-  const noise = c.createBufferSource();
-  noise.buffer = getNoiseBuffer(c);
-  const bp = c.createBiquadFilter();
-  bp.type = "bandpass";
-  bp.Q.value = 1.1;
-  bp.frequency.setValueAtTime(deep ? 2000 : 4200, now);
-  bp.frequency.exponentialRampToValueAtTime(deep ? 450 : 1100, now + dur);
-  const noiseGain = c.createGain();
-  noiseGain.gain.setValueAtTime(0.0001, now);
-  noiseGain.gain.exponentialRampToValueAtTime(deep ? 0.5 : 0.4, now + 0.012);
-  noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-  noise.connect(bp).connect(noiseGain).connect(sfxGain);
-  noise.start(now);
-  noise.stop(now + dur + 0.05);
-
-  const freqs = deep ? [720, 1080, 1520] : [2500, 3300, 4700];
-  const ringDur = deep ? 0.65 : 0.32;
-  freqs.forEach((f, i) => {
-    const osc = c.createOscillator();
-    osc.type = "triangle";
-    osc.frequency.value = f;
-    const g = c.createGain();
-    const peak = (deep ? 0.16 : 0.11) / (i + 1);
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(peak, now + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + ringDur);
-    osc.connect(g).connect(sfxGain);
-    osc.start(now);
-    osc.stop(now + ringDur + 0.05);
-  });
-
-  return Math.max(dur, ringDur) + 0.05;
 }

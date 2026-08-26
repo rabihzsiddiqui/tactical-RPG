@@ -24,8 +24,9 @@ import {
 } from "./shaders.js";
 import { C } from "../ui/theme.js";
 import {
-  playSheath, playNextTurn, playCritHit, playMiss, playNoDamage, playDeath, playFinalHit, playLevelUp,
-  playAttackHit, playHeal, playPlayerPhase, playEnemyPhase as playEnemyPhaseSfx, playVictory, stopMusic,
+  playUnitSelect, playActionSelect, playBack, playNextTurn, playCritHit, playMiss, playNoDamage, playDeath,
+  playFinalHit, playLevelUp, playAttackHit, playHeal, playPlayerPhase, playEnemyPhase as playEnemyPhaseSfx,
+  playVictory, stopMusic,
 } from "./audio.js";
 
 export const RES = [
@@ -609,7 +610,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
 
   function select(u) {
-    playSheath();
+    playUnitSelect();
     const { stand, atk, dist, prev } = reachTiles(u, g.units);
     g.sel = { id: u.id, ox: u.x, oy: u.y, stand, atk, dist, prev, mode: "move", targets: null };
     g.inspect = u.id;
@@ -639,6 +640,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      by the action menu's Back and the forecast's Back, so backing out of
      a target pick can't strand the player mid-decision with no way out. */
   function backToMove() {
+    playBack();
     const u = g.units.find((z) => z.id === g.sel.id);
     u.x = g.sel.ox; u.y = g.sel.oy;
     u.view.root.position.set(u.x - CX, lvlH(u.x, u.y), u.y - CZ);
@@ -733,6 +735,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
 
   async function doVulnerary() {
+    playActionSelect();
     const unitId = g.sel.id;
     busy = true;
     tick();
@@ -742,6 +745,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
 
   async function doWait() {
+    playActionSelect();
     const unitId = g.sel.id;
     busy = true;
     tick();
@@ -895,8 +899,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   apiRef.current = {
     endTurn: () => { if (!busy && g.phase === "player" && g.status === "playing") startEnemyPhase(); },
     toggleDanger: () => { g.danger = !g.danger; paintSel(); tick(); },
-    chooseAttack: () => { g.sel.mode = "target"; paintSel(); tick(); },
-    chooseHeal: () => { g.sel.mode = "targetHeal"; paintSel(); tick(); },
+    chooseAttack: () => { playActionSelect(); g.sel.mode = "target"; paintSel(); tick(); },
+    chooseHeal: () => { playActionSelect(); g.sel.mode = "targetHeal"; paintSel(); tick(); },
     vulnerary: doVulnerary,
     wait: doWait,
     back: backToMove,
