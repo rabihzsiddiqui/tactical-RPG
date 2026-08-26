@@ -674,6 +674,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
 
   async function commitMove(u, tx, ty) {
+    playActionSelect();
     const nu = await moveUnitTo(u, tx, ty);
     nu.anim.state = "ready";
     g.sel.mode = "action";
@@ -685,6 +686,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   /* click-to-engage bypass: select a character, click an enemy/ally already
      in range, and skip straight past "move here, then choose Attack/Heal" */
   async function engageAttack(u, tile, target) {
+    playActionSelect();
     const nu = await moveUnitTo(u, tile.x, tile.y);
     nu.anim.state = "ready";
     g.sel.mode = "target";
@@ -695,6 +697,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
 
   async function engageHeal(u, tile, target) {
+    playActionSelect();
     const nu = await moveUnitTo(u, tile.x, tile.y);
     nu.anim.state = "ready";
     g.sel.mode = "targetHeal";
