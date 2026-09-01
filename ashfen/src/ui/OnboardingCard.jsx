@@ -1,7 +1,7 @@
 import { C, MONO } from "./theme.js";
 import { Btn } from "./primitives.jsx";
 
-export default function OnboardingCard({ onDismiss }) {
+export default function OnboardingCard({ onDismiss, onFullGuide }) {
   return (
     <div className="absolute flex items-center justify-center"
       style={{ inset: 0, zIndex: 40, background: "rgba(10,12,18,0.78)" }}>
@@ -16,9 +16,13 @@ export default function OnboardingCard({ onDismiss }) {
           <div>Tap a unit, tap a tile to move, then choose an action.</div>
           <div>Drag to orbit the camera. Scroll or pinch to zoom.</div>
           <div>Sword beats Axe &middot; Axe beats Lance &middot; Lance beats Sword.</div>
+          <div>Lose Kaelen and the battle is lost.</div>
         </div>
-        <div className="mt-3">
+        <div className="flex flex-wrap gap-2 mt-3">
           <Btn strong on={onDismiss}>Got it</Btn>
+          {/* the lines above are the whole game in shorthand; anyone who
+              needs the terms explained goes here instead */}
+          <Btn light on={onFullGuide}>How to play</Btn>
         </div>
       </div>
     </div>

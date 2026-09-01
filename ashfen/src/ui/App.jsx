@@ -1,6 +1,6 @@
 /* SECTION 9: react ui overlay */
 
-import { useRef, useEffect, useReducer, useState } from "react";
+import { useRef, useEffect, useReducer, useState, useCallback } from "react";
 import { mountScene, newGame, RES } from "../view/scene.js";
 import { unlockAudio, setMusicEnabled, setMusicTrack, restartAudio } from "../view/audio.js";
 import { forecastOf } from "../core/combat.js";
@@ -13,6 +13,7 @@ import OnboardingCard from "./OnboardingCard.jsx";
 import TitleCard from "./TitleCard.jsx";
 import PhaseBanner from "./PhaseBanner.jsx";
 import PauseMenu from "./PauseMenu.jsx";
+import HelpOverlay from "./HelpOverlay.jsx";
 import { hintFor } from "./hint.js";
 
 const ONBOARD_KEY = "ashfen-onboarded";
@@ -42,12 +43,31 @@ export default function App() {
   const [paused, setPaused] = useState(false);
   const [musicOn, setMusicOn] = useState(true);
   const [track, setTrack] = useState("prelude");
+  /* null when closed, otherwise the tab id the manual should open on — so
+     a button can drop the reader straight into the section it's about */
+  const [help, setHelp] = useState(null);
 
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
     return mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, setFloats, tick, apiRef });
   }, [resetKey]);
+
+  const closeHelp = useCallback(() => setHelp(null), []);
+
+  /* "?" (or "h") toggles the manual anywhere in the app — the map itself is
+     pointer-only, so no keystroke here can collide with a game input */
+  useEffect(() => {
+    function onKey(e) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "?" || e.key === "h" || e.key === "H") {
+        e.preventDefault();
+        setHelp((cur) => (cur ? null : "basics"));
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   /* mirrors onBegin below: same manual first "Player Phase" banner (the
      event stream itself only emits that banner when returning from an
@@ -65,6 +85,13 @@ export default function App() {
   function dismissOnboarding() {
     localStorage.setItem(ONBOARD_KEY, "1");
     setOnboarded(true);
+  }
+  /* the onboarding card's second button — the few lines it shows are the
+     short version, this is the long one. Dismisses the card too, so the
+     reader lands on the board once they close the manual. */
+  function openFullGuide() {
+    dismissOnboarding();
+    setHelp("basics");
   }
   function toggleMusic() {
     setMusicOn((on) => { setMusicEnabled(!on); return !on; });
@@ -119,7 +146,8 @@ export default function App() {
         @keyframes hintPulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
       `}</style>
 
-      {!began && <TitleCard onBegin={onBegin} />}
+      {!began && <TitleCard onBegin={onBegin} onHelp={() => setHelp("basics")} />}
+      {help && <HelpOverlay startTab={help} onClose={closeHelp} />}
 
       <div className="mx-auto" style={{ maxWidth: 980 }}>
         <div className="flex items-end justify-between flex-wrap gap-2 mb-2">
@@ -167,7 +195,9 @@ export default function App() {
               {hint}
             </div>
 
-            {bannerCleared && !onboarded && <OnboardingCard onDismiss={dismissOnboarding} />}
+            {bannerCleared && !onboarded && (
+              <OnboardingCard onDismiss={dismissOnboarding} onFullGuide={openFullGuide} />
+            )}
 
             {/* damage numbers */}
             {floats.map((f) => (
@@ -243,6 +273,7 @@ export default function App() {
                   api={api} g={g} cam={cam} setCam={setCam} RES={RES}
                   musicOn={musicOn} onToggleMusic={toggleMusic}
                   track={track} onSetTrack={chooseTrack}
+                  onHelp={() => setHelp("basics")}
                 />
               ) : (
                 <div className="flex flex-wrap gap-2">
@@ -253,6 +284,7 @@ export default function App() {
                     {g.danger ? "Hide threat" : "Show threat"}
                   </Btn>
                   <Btn on={() => setCam((c) => ({ ...c, yaw: (c.yaw + 90) % 360 }))}>Rotate 90&deg;</Btn>
+                  <Btn on={() => setHelp("basics")}>Help</Btn>
                 </div>
               )}
             </div>
@@ -269,6 +301,9 @@ export default function App() {
                   Tap a unit to see its movement in blue and its reach in red. Tap a tile to
                   move, then pick an action. Drag the map to orbit, scroll to zoom.
                 </p>
+                <div className="mt-2">
+                  <Btn light on={() => setHelp("basics")}>New here? Read the manual</Btn>
+                </div>
               </Card>
             )}
 
@@ -281,6 +316,11 @@ export default function App() {
                 <div style={{ color: C.inkSoft, marginTop: 4 }}>
                   Advantage gives +1 damage and +15 hit. Tomes hit Res and ignore terrain cover.
                 </div>
+                <button onClick={() => setHelp("combat")} style={{
+                  fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", marginTop: 6, padding: 0,
+                  background: "transparent", color: C.inkSoft, border: "none",
+                  borderBottom: "1px solid " + C.rule, cursor: "pointer",
+                }}>HOW COMBAT WORKS &rarr;</button>
               </div>
             </Card>
 

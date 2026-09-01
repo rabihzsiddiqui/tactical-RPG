@@ -4,7 +4,7 @@ import { Btn } from "./primitives.jsx";
 /* the very first thing a visitor sees — also the deliberate user gesture
    that unlocks audio (audio.js's global pointerdown listener fires on this
    click, since nothing on the page is interactive before it). */
-export default function TitleCard({ onBegin }) {
+export default function TitleCard({ onBegin, onHelp }) {
   return (
     <div className="fixed inset-0 flex items-center justify-center"
       style={{ zIndex: 60, background: C.table }}>
@@ -18,7 +18,13 @@ export default function TitleCard({ onBegin }) {
         <div style={{ fontFamily: MONO, fontSize: 13, color: C.parchDim, marginTop: 14, marginBottom: 26 }}>
           Grid tactics in the Fire Emblem tradition.
         </div>
-        <Btn strong on={onBegin}>Begin</Btn>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Btn strong on={onBegin}>Begin</Btn>
+          {/* offered before the first click on purpose: someone who has never
+              played a grid tactics game should be able to read the rules
+              without first committing to a battle they can't yet follow */}
+          <Btn on={onHelp}>How to play</Btn>
+        </div>
       </div>
     </div>
   );
