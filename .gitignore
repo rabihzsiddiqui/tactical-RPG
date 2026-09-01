@@ -1,7 +1,11 @@
-# Claude-authored planning/handoff artifacts — not for the public repo
+# Claude-authored planning/handoff artifacts, not for the public repo
 CLAUDE.md
 HANDOFF.md
 PROJECT_PLAN.md
 
 # OS
 .DS_Store
+
+# stray root install (the app lives in game/)
+node_modules
+dist

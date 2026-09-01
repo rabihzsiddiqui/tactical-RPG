@@ -44,7 +44,7 @@ export default function App() {
   const [paused, setPaused] = useState(false);
   const [musicOn, setMusicOn] = useState(true);
   const [track, setTrack] = useState("prelude");
-  /* null when closed, otherwise the tab id the manual should open on — so
+  /* null when closed, otherwise the tab id the manual should open on, so
      a button can drop the reader straight into the section it's about */
   const [help, setHelp] = useState(null);
 
@@ -56,7 +56,7 @@ export default function App() {
 
   const closeHelp = useCallback(() => setHelp(null), []);
 
-  /* "?" (or "h") toggles the manual anywhere in the app — the map itself is
+  /* "?" (or "h") toggles the manual anywhere in the app. The map itself is
      pointer-only, so no keystroke here can collide with a game input */
   useEffect(() => {
     function onKey(e) {
@@ -72,7 +72,7 @@ export default function App() {
 
   /* mirrors onBegin below: same manual first "Player Phase" banner (the
      event stream itself only emits that banner when returning from an
-     enemy phase, not for a turn-1 start), same audio reset — restartAudio
+     enemy phase, not for a turn-1 start), same audio reset. restartAudio
      forces the track back to prelude and replays the unlock sequence, so
      a restarted run sounds exactly like a fresh one. */
   function restart() {
@@ -87,7 +87,7 @@ export default function App() {
     localStorage.setItem(ONBOARD_KEY, "1");
     setOnboarded(true);
   }
-  /* the onboarding card's second button — the few lines it shows are the
+  /* the onboarding card's second button. The few lines it shows are the
      short version, this is the long one. Dismisses the card too, so the
      reader lands on the board once they close the manual. */
   function openFullGuide() {
@@ -102,7 +102,7 @@ export default function App() {
     setMusicTrack(name);
   }
   /* g and tick are stable regardless of whether mountScene's effect has run
-     yet — unlike apiRef.current, which this click predates (it's the very
+     yet, unlike apiRef.current, which this click predates (it's the very
      first interaction of the session, before any canvas tap has forced a
      re-render), so this can't route through the api object the way the
      in-game buttons do. */
@@ -112,7 +112,7 @@ export default function App() {
     unlockAudio();
     setBegan(true);
     // the onboarding card is a full opaque overlay above the banner
-    // (z-index 40 vs 25) — hold it off until the banner's actually cleared,
+    // (z-index 40 vs 25), so hold it off until the banner's actually cleared,
     // or it would cover the very first thing this fix was meant to show
     setTimeout(() => setBannerCleared(true), PHASE_BANNER_MS);
   }
@@ -183,7 +183,7 @@ export default function App() {
             />
 
             {/* while paused, block input to the map and everything overlaid on it
-                (unit selection, action menu, forecast) — sized to the canvas only,
+                (unit selection, action menu, forecast). Sized to the canvas only,
                 so it never covers the under-map row where Resume actually lives */}
             {paused && g.status === "playing" && (
               <div className="absolute" style={{
@@ -192,7 +192,7 @@ export default function App() {
               }} />
             )}
 
-            {/* hint line — always names the next action; HTML, never inside the render buffer */}
+            {/* hint line: always names the next action; HTML, never inside the render buffer */}
             <div style={{
               fontFamily: MONO, fontSize: 12, letterSpacing: "0.04em", textAlign: "center",
               padding: "6px 4px", color: nudge ? C.gold : C.parchDim,
@@ -219,7 +219,7 @@ export default function App() {
 
             <ActionMenu menuRef={menuRef} sel={sel} selUnit={selUnit} api={api} />
 
-            {/* battle forecast — overlaid on the map itself, near the units involved,
+            {/* battle forecast, overlaid on the map itself near the units involved,
                 so finishing an attack never requires looking away from the board */}
             <div ref={forecastRef} className="absolute"
               style={{ display: fc ? "block" : "none", width: 260, zIndex: 22 }}>
@@ -268,7 +268,7 @@ export default function App() {
             )}
 
             {/* the menu takes over this same under-map slot instead of floating
-                over the viewport — see PauseMenu.jsx. Gated on status==="playing"
+                over the viewport; see PauseMenu.jsx. Gated on status==="playing"
                 so it can't get stuck open (or reachable) behind the end screen.
                 End turn and the resolution ("graphics") toggle live only inside
                 it now; Show threat/Rotate 90 stay available in both places. */}

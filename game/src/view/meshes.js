@@ -202,7 +202,7 @@ export function buildTree() {
 }
 
 /* a low rampart bordering three sides of the tile, open to the south (the
-   side players approach from) — a raised, walkable square with a "rook"
+   side players approach from). A raised, walkable square with a "rook"
    crenellated edge, not a solid tower that would hide whoever stands on it.
    The keep tile is the same height as the ridge tiles flanking it on three
    sides, so leaving the south face open (no wall, no implied stairs) reads
@@ -244,7 +244,7 @@ export function buildKeep() {
 
 /* one continuous deck spanning `tiles` map cells (all in a row, water on the
    near side of the outer two), with railings only on the two outer long
-   edges — the sides that actually face the river. The short north/south
+   edges, the sides that actually face the river. The short north/south
    ends are where a unit steps on and off onto the bank, so they stay open;
    a rail there would fence the direction of travel instead of guarding it. */
 export function buildBridge(tiles = 1) {

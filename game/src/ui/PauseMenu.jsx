@@ -1,8 +1,8 @@
 import { Card, Eyebrow, Btn } from "./primitives.jsx";
 
 /* renders in normal flow under the map (see App.jsx), in the same slot as
-   the row of battle buttons it mirrors — swapped in for that row rather
-   than floated on top of the viewport, so it never covers the 3D scene.
+   the row of battle buttons it mirrors. It is swapped in for that row
+   rather than floated over the viewport, so it never covers the 3D scene.
    Every non-strong button here needs the `light` prop: Btn's default
    (transparent bg, parchment-colored text) assumes a dark parent like the
    table background those under-map buttons normally sit on, and is
@@ -12,8 +12,8 @@ export default function PauseMenu({
   onResume, api, g, cam, setCam, RES,
   musicOn, onToggleMusic, track, onSetTrack, onHelp,
 }) {
-  // ending the turn kicks off the enemy phase, which needs the map visible —
-  // closes the menu on the way out instead of leaving it sitting open over it
+  // ending the turn kicks off the enemy phase, which needs the map visible,
+  // so this closes the menu on the way out rather than leaving it open over it
   function endTurnAndClose() {
     api.endTurn();
     onResume();

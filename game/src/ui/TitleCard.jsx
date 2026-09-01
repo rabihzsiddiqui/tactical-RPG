@@ -3,7 +3,7 @@ import { GAME_TITLE, TAGLINE } from "./meta.js";
 import { C, MONO, SERIF } from "./theme.js";
 import { Btn } from "./primitives.jsx";
 
-/* the very first thing a visitor sees — also the deliberate user gesture
+/* the very first thing a visitor sees, and also the deliberate user gesture
    that unlocks audio (audio.js's global pointerdown listener fires on this
    click, since nothing on the page is interactive before it).
 

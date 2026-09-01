@@ -1,4 +1,4 @@
-/* small shared helpers used across core/, view/, and ui/ — none of it touches three.js */
+/* small shared helpers used across core/, view/, and ui/. None of it touches three.js */
 
 export const K = (x, y) => x + "," + y;
 export const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];

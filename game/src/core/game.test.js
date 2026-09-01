@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
 import { resolveMove, resolveAttack, resolveWait, runEnemyPhase, endPlayerPhase } from "./game.js";
 
-/* local fixture helper — distinct from combat.test.js's `unit()`, which
+/* local fixture helper, distinct from combat.test.js's `unit()`, which
    deliberately omits team/acted/exp/lvl/vulnerary/growths since it never
    needs them. All fixtures below sit on map row 5 ("............"), all
    Plain, so terrain never enters the numbers. */
@@ -52,7 +52,7 @@ describe("resolveAttack: event order", () => {
     const def = unit({ id: "def", team: "enemy", x: 1, y: 5, weaponKey: "ironSword" });
     // identical stats/weapon: tri is 0 either direction, so ironSword's 0
     // crit chance stays exactly 0 regardless of rng, and equal Spd means
-    // neither side doubles — order is exactly [attacker, counter].
+    // neither side doubles, so order is exactly [attacker, counter].
     const alwaysLand = () => 0; // roll2RN saturates low: every landed check passes
     const { state: next, events } = resolveAttack(state([att, def]), "att", "def", alwaysLand);
 
@@ -87,7 +87,7 @@ describe("resolveAttack: event order", () => {
     const att = unit({ id: "att", team: "player", x: 0, y: 5, weaponKey: "ironSword", str: 100 });
     const def = unit({ id: "def", team: "enemy", x: 1, y: 5, weaponKey: "ironSword", hp: 20, maxHp: 20 });
     const filler = unit({ id: "filler", team: "enemy", x: 11, y: 9 }); // keeps the enemy team alive so this kill doesn't also trigger a win
-    // no doubling either side, so the precomputed order is [a, d] — but
+    // no doubling either side, so the precomputed order is [a, d], but
     // the first strike alone is lethal (100+5-10=95 dmg vs 20 hp), so the
     // counter must never fire.
     const alwaysLand = () => 0;

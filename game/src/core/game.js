@@ -1,6 +1,6 @@
 /* event-emitting core: synchronous, pure resolve functions that turn a
    player/AI decision into a new state plus a list of events describing
-   what happened. src/view/scene.js is the only consumer — it plays the
+   what happened. src/view/scene.js is the only consumer: it plays the
    events back against the live three.js scene and animation timing.
    See CLAUDE.md and PROJECT_PLAN.md's M3 section for the design. */
 
@@ -57,7 +57,7 @@ function resolveCombatExchange(units, attackerId, defenderId, rng) {
   return { events, logLines };
 }
 
-/* internal only — appends an end event and sets status/log on a win or
+/* internal only. Appends an end event and sets status/log on a win or
    loss. Called only where a kill was just possible. No "banner" event
    here (unlike the phase transitions below): the end screen already
    shows "Victory"/"Defeat" with a Restart button, so a ribbon banner for
@@ -132,7 +132,7 @@ export function resolveItem(state, unitId) {
   return { state: { ...state, units, log }, events: [{ type: "heal", srcId: u.id, tgtId: u.id, amount: amt, instant: true }] };
 }
 
-/* "Wait" — ends a unit's turn with no other effect. Not one of the six
+/* "Wait" ends a unit's turn with no other effect. Not one of the six
    functions PROJECT_PLAN.md names, but it's the same kind of turn-ending
    bookkeeping as resolveItem, and scene.js has no other rule-free way to
    set `acted` without owning turn logic itself. */

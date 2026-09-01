@@ -1,5 +1,5 @@
 /* one line of text that always names the next action, driven by game
-   state. Never returns empty — see PROJECT_PLAN.md's P1 section for the
+   state. Never returns empty. See PROJECT_PLAN.md's P1 section for the
    state-to-text mapping this implements. */
 export function hintFor(g) {
   if (g.status !== "playing") {
