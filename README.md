@@ -11,10 +11,10 @@ Pass**, and more are planned.
 ## Running it
 
 ```sh
-cd game
+cd ashfen
 npm install
 npm run dev      # dev server with hot reload
-npm run build    # production build into game/dist
+npm run build    # production build into ashfen/dist
 npm run preview  # serve that build
 npm test         # vitest, covering the combat and turn rules
 npm run lint     # oxlint
@@ -49,7 +49,7 @@ then pick an action. Sword beats axe, axe beats lance, lance beats sword.
 ## Layout
 
 ```
-game/
+ashfen/
   src/core/    rules: map, weapons, pathfinding, combat math, enemy AI, turn flow
   src/view/    three.js: scene, meshes, shaders, audio
   src/ui/      react overlay: HUD, action menu, forecast, field manual
@@ -65,12 +65,12 @@ against the live scene. Tests live beside the modules they cover, in
 
 ## Renaming the game
 
-`GAME_TITLE` in `game/src/ui/meta.js` feeds the title card and the manual.
+`GAME_TITLE` in `ashfen/src/ui/meta.js` feeds the title card and the manual.
 Three copies sit outside the bundle and need editing by hand:
 
-- `game/index.html`: the `<title>` tag and `apple-mobile-web-app-title`
-- `game/vite.config.js`: `name` and `short_name` in the PWA manifest
-- `game/package.json`: the `name` field
+- `ashfen/index.html`: the `<title>` tag and `apple-mobile-web-app-title`
+- `ashfen/vite.config.js`: `name` and `short_name` in the PWA manifest
+- `ashfen/package.json`: the `name` field
 
-The level name is separate, in `LEVEL_NAME` in `game/src/core/map.js`, next to
+The level name is separate, in `LEVEL_NAME` in `ashfen/src/core/map.js`, next to
 the map it belongs to. A second level goes there as a second map and name.
