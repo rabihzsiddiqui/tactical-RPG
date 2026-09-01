@@ -1,3 +1,4 @@
+import { LEVEL_NAME } from "../core/map.js";
 import { C, MONO } from "./theme.js";
 import { Btn } from "./primitives.jsx";
 
@@ -10,7 +11,10 @@ export default function OnboardingCard({ onDismiss, onFullGuide }) {
         boxShadow: "4px 4px 0 rgba(0,0,0,0.5)", padding: "16px 18px",
         maxWidth: 320, width: "88%",
       }}>
-        <div style={{ fontSize: 19, marginBottom: 8 }}>Ashfen Pass</div>
+        <div className="uppercase" style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.22em", color: C.inkSoft }}>
+          Level
+        </div>
+        <div style={{ fontSize: 19, marginBottom: 8 }}>{LEVEL_NAME}</div>
         <div style={{ fontFamily: MONO, fontSize: 12, color: C.ink, lineHeight: 1.7 }}>
           <div>Defeat every enemy unit to win.</div>
           <div>Tap a unit, tap a tile to move, then choose an action.</div>

@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons.svg'],
       manifest: {
-        name: 'Ashfen Pass',
-        short_name: 'Ashfen Pass',
+        name: 'Tactical RPG',
+        short_name: 'Tactical RPG',
         description: 'Grid tactics in the Fire Emblem tradition.',
         theme_color: '#0c0f16',
         background_color: '#0c0f16',
@@ -35,7 +35,7 @@ export default defineConfig({
             urlPattern: /\/audio\/.*\.mp3$/,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'ashfen-audio',
+              cacheName: 'tactical-rpg-audio',
               expiration: { maxEntries: 8 },
             },
           },

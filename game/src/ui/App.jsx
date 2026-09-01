@@ -4,6 +4,7 @@ import { useRef, useEffect, useReducer, useState, useCallback } from "react";
 import { mountScene, newGame, RES } from "../view/scene.js";
 import { unlockAudio, setMusicEnabled, setMusicTrack, restartAudio } from "../view/audio.js";
 import { forecastOf } from "../core/combat.js";
+import { LEVEL_NAME } from "../core/map.js";
 import { C, MONO, SERIF, PHASE_BANNER_MS } from "./theme.js";
 import { Card, Eyebrow, Pill, Btn } from "./primitives.jsx";
 import UnitCard from "./UnitCard.jsx";
@@ -16,7 +17,7 @@ import PauseMenu from "./PauseMenu.jsx";
 import HelpOverlay from "./HelpOverlay.jsx";
 import { hintFor } from "./hint.js";
 
-const ONBOARD_KEY = "ashfen-onboarded";
+const ONBOARD_KEY = "tactical-rpg-onboarded";
 
 export default function App() {
   const mountRef = useRef(null);
@@ -155,7 +156,12 @@ export default function App() {
             <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.22em", color: C.gold }}>
               ROUT THE ENEMY COMPANY
             </div>
-            <div style={{ fontSize: 21 }}>Ashfen Pass</div>
+            <div className="flex items-baseline gap-2">
+              <div style={{ fontSize: 21 }}>{LEVEL_NAME}</div>
+              <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.2em", color: C.rule }}>
+                LEVEL
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-2" style={{ fontFamily: MONO, fontSize: 11 }}>
             <Pill k="Turn" v={String(g.turn)} />
