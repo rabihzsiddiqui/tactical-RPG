@@ -10,7 +10,7 @@ import { Card, Eyebrow, Btn } from "./primitives.jsx";
    in ink text/border instead, which reads correctly here. */
 export default function PauseMenu({
   onResume, api, g, cam, setCam, RES,
-  musicOn, onToggleMusic, track, onSetTrack,
+  musicOn, onToggleMusic, track, onSetTrack, onHelp,
 }) {
   // ending the turn kicks off the enemy phase, which needs the map visible —
   // closes the menu on the way out instead of leaving it sitting open over it
@@ -35,6 +35,11 @@ export default function PauseMenu({
         <Btn light on={() => setCam((c) => ({ ...c, res: (c.res + 1) % RES.length }))}>
           {RES[cam.res].label}
         </Btn>
+      </div>
+
+      <Eyebrow>Help</Eyebrow>
+      <div className="flex flex-wrap gap-2 mb-4">
+        <Btn light on={onHelp}>Field manual</Btn>
       </div>
 
       <Eyebrow>Sound</Eyebrow>
