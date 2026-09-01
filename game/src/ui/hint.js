@@ -4,8 +4,8 @@
 export function hintFor(g) {
   if (g.status !== "playing") {
     return g.status === "win"
-      ? "Victory — press Restart to play again."
-      : "Defeat — press Restart to try again.";
+      ? "Victory. Press Restart to play again."
+      : "Defeat. Press Restart to try again.";
   }
   if (g.phase === "enemy") return "Enemy phase.";
   if (g.forecast) return "Attack to commit, or Back to reconsider.";

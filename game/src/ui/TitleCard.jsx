@@ -1,9 +1,15 @@
+import { LEVEL_NAME } from "../core/map.js";
+import { GAME_TITLE, TAGLINE } from "./meta.js";
 import { C, MONO, SERIF } from "./theme.js";
 import { Btn } from "./primitives.jsx";
 
 /* the very first thing a visitor sees — also the deliberate user gesture
    that unlocks audio (audio.js's global pointerdown listener fires on this
-   click, since nothing on the page is interactive before it). */
+   click, since nothing on the page is interactive before it).
+
+   Title and level are separate lines on purpose: the game is the big name,
+   Ashfen Pass is the map it currently ships with, and more levels are
+   planned under the same title. */
 export default function TitleCard({ onBegin, onHelp }) {
   return (
     <div className="fixed inset-0 flex items-center justify-center"
@@ -13,10 +19,13 @@ export default function TitleCard({ onBegin, onHelp }) {
           ROUT THE ENEMY COMPANY
         </div>
         <div style={{ fontFamily: SERIF, fontSize: 44, color: C.parch, lineHeight: 1.1 }}>
-          Ashfen Pass
+          {GAME_TITLE}
         </div>
-        <div style={{ fontFamily: MONO, fontSize: 13, color: C.parchDim, marginTop: 14, marginBottom: 26 }}>
-          Grid tactics in the Fire Emblem tradition.
+        <div style={{ fontFamily: MONO, fontSize: 13, color: C.parchDim, marginTop: 14 }}>
+          {TAGLINE}
+        </div>
+        <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.18em", color: C.rule, marginTop: 18, marginBottom: 26 }}>
+          LEVEL &middot; {LEVEL_NAME.toUpperCase()}
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Btn strong on={onBegin}>Begin</Btn>
