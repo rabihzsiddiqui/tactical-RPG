@@ -1,12 +1,12 @@
 import { C, SERIF, PHASE_BANNER_MS } from "./theme.js";
 
-/* a ribbon rather than a full-width slab — the old version slid a bar the
+/* a ribbon rather than a full-width slab. The old version slid a bar the
    whole viewport's width across the screen, which read as choppy simply
    because the element (and thus the distance it moved) was so large. This
    one is a bounded width and moves a few tens of pixels with a gentle
    scale+fade, so the same enter/hold/exit beat reads as smooth motion
-   instead of a screen-wide slam. Pointed ends are pure CSS (clip-path) —
-   no image assets. */
+   instead of a screen-wide slam. Pointed ends are pure CSS (clip-path),
+   with no image assets. */
 const ENTER_MS = 420;
 const EXIT_MS = 380;
 const EXIT_DELAY_MS = PHASE_BANNER_MS - EXIT_MS;

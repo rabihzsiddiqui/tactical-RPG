@@ -3,7 +3,7 @@ import { ROSTER, makeUnit } from "./data.js";
 import { strikeCalc, canCounter, triBonus, simulateCombat } from "./combat.js";
 import { makeRng } from "./rng.js";
 
-/* minimal synthetic units for isolating one formula at a time — the
+/* minimal synthetic units for isolating one formula at a time. The
    golden tests below use the real roster instead */
 function unit(overrides = {}) {
   return {
@@ -152,14 +152,14 @@ describe("golden: real roster matchups", () => {
     expect(strike.doubles).toBe(true);
   });
 
-  test("Garrick's counter: Kaelen takes 14, not 15 — the Shamshir's +1 Def applies on defence too", () => {
+  test("Garrick's counter: Kaelen takes 14, not 15, since the Shamshir's +1 Def applies on defence too", () => {
     const kaelen = rosterUnit("Kaelen"); // roster position (4,8) is Plain
     const garrick = rosterUnit("Garrick");
     const counter = strikeCalc(garrick, kaelen);
     expect(counter.dmg).toBe(14);
   });
 
-  test("Ilya (Fire) vs Garrick on the Keep: 10 damage — hits Res, Keep's +2 Def does nothing", () => {
+  test("Ilya (Fire) vs Garrick on the Keep: 10 damage, hitting Res so the Keep's +2 Def does nothing", () => {
     const ilya = rosterUnit("Ilya");
     const garrick = rosterUnit("Garrick");
     const strike = strikeCalc(ilya, garrick);
@@ -169,7 +169,7 @@ describe("golden: real roster matchups", () => {
   test("Doran (Iron Axe) vs the lance Soldier: 13 damage from the triangle", () => {
     const doran = rosterUnit("Doran");
     const soldier = rosterUnit("Soldier");
-    soldier.x = 0; soldier.y = 5; // Plain — isolates the triangle math from terrain
+    soldier.x = 0; soldier.y = 5; // Plain, which isolates the triangle math from terrain
     const strike = strikeCalc(doran, soldier);
     expect(strike.dmg).toBe(13);
   });

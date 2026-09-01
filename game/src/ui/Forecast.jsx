@@ -11,11 +11,11 @@ function triLine(a, d) {
   return "No triangle bonus" + note;
 }
 
-/* name/weapon/HP — its own row, separate from the stat grid below. Kept
+/* name/weapon/HP gets its own row, separate from the stat grid below. Kept
    apart on purpose: this text wraps to a different number of lines on
    each side depending on name/weapon length (e.g. "Iron Axe · HP 26/26"
    vs "Iron Sword · HP 21/21"), and it used to sit directly above each
-   side's DMG/HIT/CRIT/HITS numbers — so whichever side wrapped further
+   side's DMG/HIT/CRIT/HITS numbers, so whichever side wrapped further
    pushed its numbers down out of line with the center labels and the
    other side's numbers. Splitting it into its own row means nothing
    above the stat grid can vary its height. */

@@ -1,4 +1,4 @@
-/* the field manual — a full help/tutorial reference for players who have
+/* the field manual: a full help/tutorial reference for players who have
    never touched a grid-tactics game. Reachable from the title card, the
    under-map button row, the pause menu and the onboarding card, so it's
    never more than one tap away.
@@ -49,7 +49,7 @@ function Steps({ items }) {
   );
 }
 
-/* term / definition pairs — the glossary's whole job, but also used inline
+/* term / definition pairs, the glossary's whole job, but also used inline
    wherever a tab needs to name a piece of jargon the HUD shows */
 function Term({ k, children }) {
   return (
@@ -494,7 +494,7 @@ export default function HelpOverlay({ onClose, startTab = "basics" }) {
         width: "min(560px, 100%)", maxHeight: "min(88vh, 720px)",
         fontFamily: SERIF, animation: "popIn .16s ease-out",
       }}>
-        {/* header — title, tabs, and a close affordance that stays put while
+        {/* header: title, tabs, and a close affordance that stays put while
             the body scrolls under it */}
         <div style={{ padding: "12px 14px 8px", borderBottom: "2px solid " + C.ink, flex: "0 0 auto" }}>
           <div className="flex items-start justify-between gap-2">

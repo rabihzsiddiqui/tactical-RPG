@@ -2,7 +2,7 @@
 
    M3: the rules (turn state, combat resolution, enemy AI orchestration)
    now live in ../core/game.js as synchronous functions that return
-   { state, events }. This module is the *player* of those events — it
+   { state, events }. This module is the *player* of those events: it
    applies the returned state to `g` and animates each event against the
    live three.js scene. See applyResolve/playEvents below, and
    PROJECT_PLAN.md's M3 section / CLAUDE.md for the design. */
@@ -41,14 +41,14 @@ export function newGame() {
     units: ROSTER.map(makeUnit),
     turn: 1, phase: "player", status: "playing",
     sel: null, danger: false, inspect: null, forecast: null,
-    /* n:-1 is a sentinel meaning "no banner shown yet" — App.jsx sets the
+    /* n:-1 is a sentinel meaning "no banner shown yet". App.jsx sets the
        real first banner from the title card's Begin button, in the same
        click that unlocks audio, so the sting and the banner's entrance
        animation land together instead of the banner having already played
        out silently behind the title card before the player ever sees it. */
     levelUp: null, banner: { text: "", side: "player", n: -1 },
     log: ["Turn 1 begins."],
-    tutorial: true, // cleared on first selection (or turn 1 ending, whichever first) — see select()/startEnemyPhase()
+    tutorial: true, // cleared on first selection (or turn 1 ending, whichever first); see select()/startEnemyPhase()
   };
 }
 
@@ -188,7 +188,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   ring.visible = false;
   scene.add(ring);
 
-  /* blue "hasn't acted yet" ring — one per unit, shown/hidden by
+  /* blue "hasn't acted yet" ring, one per unit, shown/hidden by
      syncUnitVisuals, distinct from the single reused gold selection ring */
   const readyRingMat = new THREE.ShaderMaterial({
     vertexShader: TILE_VERT, fragmentShader: RING_FRAG,
@@ -196,7 +196,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   });
 
   /* a small self-illumination so units read distinctly against the terrain
-     regardless of light angle — the map stays unlit-by-this, only characters
+     regardless of light angle. The map stays unlit-by-this, only characters
      get it. flash() restores to this instead of black. */
   const POP_EMISSIVE = 0x1c1a16;
 
@@ -509,7 +509,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      holding position back, animUnit's idle-pose branch (which snaps
      straight to u.x/u.y every frame) renders every later-acting enemy at
      its destination for the frame(s) before its own "move" event reaches
-     walkPath — a visible teleport-then-walk-back. */
+     walkPath, a visible teleport-then-walk-back. */
   async function applyResolve({ state, events }) {
     const prev = new Map(g.units.map((u) => [u.id, { hp: u.hp, x: u.x, y: u.y }]));
     g.units = state.units.map((u) => {
@@ -550,7 +550,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
             flash(tgt, e.crit);
             floater(tgt, e.dmg + (e.crit ? "!" : ""), e.crit ? C.gold : C.redLite);
             // crit always gets its own sound, even on a killing or 0-damage
-            // blow — finalHit is for a *non-crit* kill specifically; a
+            // blow. finalHit is for a *non-crit* kill specifically; a
             // crit that also kills still gets Death.wav right after, from
             // the "death" event below
             if (e.crit) playCritHit();
@@ -590,7 +590,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
           break;
         }
         case "banner": {
-          // only "Player Phase"/"Enemy Phase" reach here — Victory/Defeat
+          // only "Player Phase"/"Enemy Phase" reach here. Victory/Defeat
           // don't get a banner event at all, see game.js's checkEnd
           g.banner = { text: e.text, side: e.side, n: g.banner.n + 1 };
           if (e.text === "Player Phase") playPlayerPhase();
@@ -602,7 +602,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
           // status itself is applied by applyResolve once every event above
           // has played; this just fires the win/lose sound and cuts the music
           if (e.result === "win") playVictory();
-          else playNextTurn(); // Defeat — no dedicated stinger yet
+          else playNextTurn(); // Defeat has no dedicated stinger yet
           stopMusic();
           break;
       }
@@ -634,8 +634,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     tick();
   }
 
-  /* undoes whatever the current selection has done so far — including a
-     click-to-engage bypass's auto-move — and drops back to "move" mode so
+  /* undoes whatever the current selection has done so far, including a
+     click-to-engage bypass's auto-move, and drops back to "move" mode so
      the player can choose a different tile or action from scratch. Shared
      by the action menu's Back and the forecast's Back, so backing out of
      a target pick can't strand the player mid-decision with no way out. */
@@ -782,7 +782,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      and taps to select/act, two fingers pinch to zoom. `pinched` latches for
      the whole gesture so releasing the first finger after a pinch never
      reads as a tap from the second. Touch gets a wider drag threshold than
-     mouse — real fingers wobble more than a mouse does between down and up. */
+     mouse, since real fingers wobble more than a mouse does. */
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const pointers = new Map();
@@ -795,7 +795,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   };
 
   function onDown(e) {
-    try { cv.setPointerCapture(e.pointerId); } catch { /* pointer already gone — a fast tap-and-lift */ }
+    try { cv.setPointerCapture(e.pointerId); } catch { /* pointer already gone: a fast tap-and-lift */ }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size >= 2) {
       dragging = false;

@@ -7,7 +7,7 @@ html {
 body {
   margin: 0;
   overscroll-behavior-y: none;
-  /* matches C.table in ui/theme.js — the app root's own background only
+  /* matches C.table in ui/theme.js. The app root's own background only
      covers its content height, so a tall viewport with short content would
      otherwise show the browser's default white below it */
   background: #0c0f16;

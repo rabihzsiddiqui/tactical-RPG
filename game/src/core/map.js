@@ -1,8 +1,8 @@
 /* SECTION 1: map data + terrain rules */
 
 /* the name of the level this map is, shown on the title card and in the
-   HUD. It is the level's name, not the game's — see ui/meta.js for that.
-   A second level lands here as a second map plus a second name. */
+   HUD. It names the level, not the game; the game's own title lives in
+   ui/meta.js. A second level lands here as a second map plus a name. */
 export const LEVEL_NAME = "Ashfen Pass";
 
 export const MAP = [
