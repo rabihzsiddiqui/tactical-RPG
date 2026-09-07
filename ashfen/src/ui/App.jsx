@@ -2,7 +2,10 @@
 
 import { useRef, useEffect, useReducer, useState, useCallback } from "react";
 import { mountScene, newGame, RES } from "../view/scene.js";
-import { unlockAudio, setMusicEnabled, setMusicTrack, restartAudio } from "../view/audio.js";
+import {
+  unlockAudio, setMusicEnabled, setMusicTrack, restartAudio, playHelpOpen, playHelp,
+  setMusicVolume, setSfxVolume, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME,
+} from "../view/audio.js";
 import { forecastOf } from "../core/combat.js";
 import { LEVEL_NAME } from "../core/map.js";
 import { C, MONO, SERIF, PHASE_BANNER_MS } from "./theme.js";
@@ -44,6 +47,11 @@ export default function App() {
   const [paused, setPaused] = useState(false);
   const [musicOn, setMusicOn] = useState(true);
   const [track, setTrack] = useState("prelude");
+  /* mirrors of the two gain buses in audio.js, kept here only so the sliders
+     have something to render. audio.js stays the source of truth for the
+     level itself. */
+  const [musicVol, setMusicVol] = useState(DEFAULT_MUSIC_VOLUME);
+  const [sfxVol, setSfxVol] = useState(DEFAULT_SFX_VOLUME);
   /* null when closed, otherwise the tab id the manual should open on, so
      a button can drop the reader straight into the section it's about */
   const [help, setHelp] = useState(null);
@@ -54,21 +62,37 @@ export default function App() {
     return mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, setFloats, tick, apiRef });
   }, [resetKey]);
 
-  const closeHelp = useCallback(() => setHelp(null), []);
+  /* every way into and out of the manual routes through these two, so the
+     overlay's sounds are decided in one place: HelpPage.wav on the way in,
+     Help.wav on the way out (the tab switches inside it play Help.wav too,
+     see HelpOverlay.jsx). Lifecycle effects were the other option, but
+     StrictMode remounts them in dev and would double up the sound. */
+  const openHelp = useCallback((tab = "basics") => {
+    playHelpOpen();
+    setHelp(tab);
+  }, []);
+  const closeHelp = useCallback(() => {
+    playHelp();
+    setHelp(null);
+  }, []);
 
   /* "?" (or "h") toggles the manual anywhere in the app. The map itself is
-     pointer-only, so no keystroke here can collide with a game input */
+     pointer-only, so no keystroke here can collide with a game input. This
+     reads `help` and re-binds on it rather than using a setHelp updater:
+     the updater is the wrong place to fire a sound, since StrictMode runs
+     updaters twice in dev and the sting would double. */
   useEffect(() => {
     function onKey(e) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "?" || e.key === "h" || e.key === "H") {
         e.preventDefault();
-        setHelp((cur) => (cur ? null : "basics"));
+        if (help) closeHelp();
+        else openHelp();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [help, openHelp, closeHelp]);
 
   /* mirrors onBegin below: same manual first "Player Phase" banner (the
      event stream itself only emits that banner when returning from an
@@ -92,10 +116,18 @@ export default function App() {
      reader lands on the board once they close the manual. */
   function openFullGuide() {
     dismissOnboarding();
-    setHelp("basics");
+    openHelp();
   }
   function toggleMusic() {
     setMusicOn((on) => { setMusicEnabled(!on); return !on; });
+  }
+  function changeMusicVol(v) {
+    setMusicVol(v);
+    setMusicVolume(v);
+  }
+  function changeSfxVol(v) {
+    setSfxVol(v);
+    setSfxVolume(v);
   }
   function chooseTrack(name) {
     setTrack(name);
@@ -147,7 +179,7 @@ export default function App() {
         @keyframes hintPulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
       `}</style>
 
-      {!began && <TitleCard onBegin={onBegin} onHelp={() => setHelp("basics")} />}
+      {!began && <TitleCard onBegin={onBegin} onHelp={() => openHelp()} />}
       {help && <HelpOverlay startTab={help} onClose={closeHelp} />}
 
       <div className="mx-auto" style={{ maxWidth: 980 }}>
@@ -279,7 +311,9 @@ export default function App() {
                   api={api} g={g} cam={cam} setCam={setCam} RES={RES}
                   musicOn={musicOn} onToggleMusic={toggleMusic}
                   track={track} onSetTrack={chooseTrack}
-                  onHelp={() => setHelp("basics")}
+                  onHelp={() => openHelp()}
+                  musicVol={musicVol} onSetMusicVol={changeMusicVol}
+                  sfxVol={sfxVol} onSetSfxVol={changeSfxVol}
                 />
               ) : (
                 <div className="flex flex-wrap gap-2">
@@ -290,7 +324,7 @@ export default function App() {
                     {g.danger ? "Hide threat" : "Show threat"}
                   </Btn>
                   <Btn on={() => setCam((c) => ({ ...c, yaw: (c.yaw + 90) % 360 }))}>Rotate 90&deg;</Btn>
-                  <Btn on={() => setHelp("basics")}>Help</Btn>
+                  <Btn on={() => openHelp()}>Help</Btn>
                 </div>
               )}
             </div>
@@ -308,7 +342,7 @@ export default function App() {
                   move, then pick an action. Drag the map to orbit, scroll to zoom.
                 </p>
                 <div className="mt-2">
-                  <Btn light on={() => setHelp("basics")}>New here? Read the manual</Btn>
+                  <Btn light on={() => openHelp()}>New here? Read the manual</Btn>
                 </div>
               </Card>
             )}
@@ -322,7 +356,7 @@ export default function App() {
                 <div style={{ color: C.inkSoft, marginTop: 4 }}>
                   Advantage gives +1 damage and +15 hit. Tomes hit Res and ignore terrain cover.
                 </div>
-                <button onClick={() => setHelp("combat")} style={{
+                <button onClick={() => openHelp("combat")} style={{
                   fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", marginTop: 6, padding: 0,
                   background: "transparent", color: C.inkSoft, border: "none",
                   borderBottom: "1px solid " + C.rule, cursor: "pointer",

@@ -11,6 +11,7 @@ import { useState, useEffect } from "react";
 import { TYPES, LEVEL_NAME } from "../core/map.js";
 import { WEAPONS } from "../core/data.js";
 import { GAME_TITLE } from "./meta.js";
+import { playHelp } from "../view/audio.js";
 import { C, MONO, SERIF } from "./theme.js";
 import { Eyebrow, Btn } from "./primitives.jsx";
 
@@ -477,6 +478,15 @@ export default function HelpOverlay({ onClose, startTab = "basics" }) {
   const [tab, setTab] = useState(startTab);
   const Panel = PANELS[tab] || Basics;
 
+  /* Help.wav on a real page turn only. Tapping the tab you are already on
+     changes nothing on screen, so it stays silent. Opening and closing the
+     manual are App.jsx's job, see openHelp/closeHelp there. */
+  function pickTab(id) {
+    if (id === tab) return;
+    playHelp();
+    setTab(id);
+  }
+
   useEffect(() => {
     function onKey(e) {
       if (e.key === "Escape") onClose();
@@ -512,7 +522,7 @@ export default function HelpOverlay({ onClose, startTab = "basics" }) {
           </div>
           <div className="flex flex-wrap gap-1" style={{ marginTop: 10 }}>
             {TABS.map(([id, label]) => (
-              <button key={id} onClick={() => setTab(id)} style={{
+              <button key={id} onClick={() => pickTab(id)} style={{
                 fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", padding: "7px 9px", minHeight: 32,
                 background: tab === id ? C.ink : "transparent",
                 color: tab === id ? C.parch : C.inkSoft,

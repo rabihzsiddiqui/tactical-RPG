@@ -12,3 +12,54 @@ body {
      otherwise show the browser's default white below it */
   background: #0c0f16;
 }
+
+/* the pause menu's volume sliders. The track and thumb live in vendor
+   pseudo-elements, which inline styles cannot reach, so the look is set
+   here instead. Square thumb, ink on parchment, to match the rest of the
+   panel furniture. Colors mirror C.ink / C.rule in ui/theme.js. */
+.vol {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+/* box-sizing is spelled out because the `*` in Tailwind's preflight does not
+   match these vendor pseudo-elements: with it, the track is exactly 8px tall
+   and the thumb's centering offset is a plain (8 - 18) / 2 */
+.vol::-webkit-slider-runnable-track {
+  box-sizing: border-box;
+  height: 8px;
+  background: #b3a586;
+  border: 1px solid #221c12;
+}
+.vol::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 18px;
+  margin-top: -5px;
+  background: #221c12;
+  border: none;
+  border-radius: 0;
+}
+/* firefox centres its thumb on the track itself, so no offset here */
+.vol::-moz-range-track {
+  box-sizing: border-box;
+  height: 8px;
+  background: #b3a586;
+  border: 1px solid #221c12;
+}
+.vol::-moz-range-thumb {
+  width: 12px;
+  height: 18px;
+  background: #221c12;
+  border: none;
+  border-radius: 0;
+}
+.vol:focus-visible {
+  outline: 2px solid #221c12;
+  outline-offset: 2px;
+}

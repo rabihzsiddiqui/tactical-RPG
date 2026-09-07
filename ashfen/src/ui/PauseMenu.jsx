@@ -1,4 +1,4 @@
-import { Card, Eyebrow, Btn } from "./primitives.jsx";
+import { Card, Eyebrow, Btn, Slider } from "./primitives.jsx";
 
 /* renders in normal flow under the map (see App.jsx), in the same slot as
    the row of battle buttons it mirrors. It is swapped in for that row
@@ -11,6 +11,7 @@ import { Card, Eyebrow, Btn } from "./primitives.jsx";
 export default function PauseMenu({
   onResume, api, g, cam, setCam, RES,
   musicOn, onToggleMusic, track, onSetTrack, onHelp,
+  musicVol, onSetMusicVol, sfxVol, onSetSfxVol,
 }) {
   // ending the turn kicks off the enemy phase, which needs the map visible,
   // so this closes the menu on the way out rather than leaving it open over it
@@ -46,9 +47,15 @@ export default function PauseMenu({
       <div className="flex flex-wrap gap-2 mb-2">
         <Btn light on={onToggleMusic} active={musicOn}>{musicOn ? "Music: On" : "Music: Off"}</Btn>
       </div>
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-3">
         <Btn light on={() => onSetTrack("prelude")} active={track === "prelude"}>Prelude</Btn>
         <Btn light on={() => onSetTrack("conquest")} active={track === "conquest"}>Conquest</Btn>
+      </div>
+      {/* the music slider stays usable while music is off. It sets the level
+          the track will come back at, rather than being greyed out. */}
+      <div className="mb-4">
+        <Slider label="Music volume" value={musicVol} on={onSetMusicVol} />
+        <Slider label="Effects volume" value={sfxVol} on={onSetSfxVol} />
       </div>
 
       <Btn strong on={onResume}>Resume</Btn>

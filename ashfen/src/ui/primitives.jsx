@@ -42,6 +42,28 @@ export function Btn({ children, on, disabled, active, strong, light }) {
   );
 }
 
+/* a labelled 0-to-1 slider, used for the volume rows in the pause menu.
+   `on` fires on every drag step, since the whole point is hearing the level
+   change as you move it. The percentage readout is there because the track
+   alone gives no sense of where you are once the sound stops. Thumb and
+   track styling lives in index.css under .vol, out of reach of inline
+   styles. */
+export function Slider({ label, value, on }) {
+  return (
+    <label style={{ display: "block", marginBottom: 6 }}>
+      <div className="flex items-center justify-between" style={{
+        fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", color: C.inkSoft,
+      }}>
+        <span className="uppercase">{label}</span>
+        <span>{Math.round(value * 100)}%</span>
+      </div>
+      <input className="vol" type="range" min={0} max={1} step={0.01} value={value}
+        aria-label={label}
+        onChange={(e) => on(Number(e.target.value))} />
+    </label>
+  );
+}
+
 export function Item({ label, on, disabled, muted }) {
   return (
     <button onClick={disabled ? undefined : on} disabled={disabled} style={{

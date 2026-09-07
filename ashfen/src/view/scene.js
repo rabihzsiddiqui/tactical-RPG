@@ -26,7 +26,7 @@ import { C } from "../ui/theme.js";
 import {
   playUnitSelect, playActionSelect, playBack, playNextTurn, playCritHit, playMiss, playNoDamage, playDeath,
   playFinalHit, playLevelUp, playAttackHit, playHeal, playPlayerPhase, playEnemyPhase as playEnemyPhaseSfx,
-  playVictory, stopMusic,
+  playVictory, playThreatCheck, stopMusic,
 } from "./audio.js";
 
 export const RES = [
@@ -903,7 +903,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   /* ---- api for the html layer ---- */
   apiRef.current = {
     endTurn: () => { if (!busy && g.phase === "player" && g.status === "playing") { playActionSelect(); startEnemyPhase(); } },
-    toggleDanger: () => { g.danger = !g.danger; paintSel(); tick(); },
+    // both the under-map row and the pause menu route here, so the toggle
+    // sounds the same wherever it was pressed, and in both directions
+    toggleDanger: () => { g.danger = !g.danger; playThreatCheck(); paintSel(); tick(); },
     chooseAttack: () => { playActionSelect(); g.sel.mode = "target"; paintSel(); tick(); },
     chooseHeal: () => { playActionSelect(); g.sel.mode = "targetHeal"; paintSel(); tick(); },
     vulnerary: doVulnerary,

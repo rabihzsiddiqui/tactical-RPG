@@ -29,19 +29,36 @@
    a Defeat banner has no dedicated asset yet and falls back to Next Turn.wav).
    Victory/Defeat no longer get a banner event at all (see game.js's
    checkEnd), so their sound plays from the "end" event instead (see
-   scene.js's playEvents). The rest of the combat SFX (crit/miss/no-damage/
+   scene.js's playEvents). The field manual has its own pair: HelpPage.wav
+   when the overlay opens (App.jsx's openHelp, the single funnel every
+   entry point goes through) and Help.wav for the smaller moves inside it,
+   switching tabs and closing. ThreatCheck.wav plays on the Show/Hide threat
+   toggle, fired from scene.js's toggleDanger so both buttons that reach it
+   sound the same. Opening the manual from the title card is
+   silent, since that click comes before unlockAudio and playSfx no-ops
+   until the context exists. The rest of the combat SFX (crit/miss/no-damage/
    death/final-hit/level-up/heal, plus four interchangeable plain-attack-hit
    takes) are all sourced assets in public/audio/, decoded once and cached
-   in sfxBuffers. */
+   in sfxBuffers.
 
+   Levels: music and SFX run through two gain buses, and the pause menu's
+   sliders move them (setMusicVolume/setSfxVolume). The music on/off toggle
+   is separate and stops the source outright, so muting is not the same as
+   dragging the music slider to zero. Neither the levels nor the toggle are
+   persisted between sessions yet. */
+
+import { clamp } from "../core/util.js";
 import { PHASE_BANNER_MS } from "../ui/theme.js";
 
 const MUSIC_TRACKS = {
   prelude: { url: "/audio/prelude.mp3", loopStart: 159, loopEnd: 291 }, // 2:39-4:51
   conquest: { url: "/audio/conquest.mp3", loopStart: 0, loopEnd: 122 }, // 0:00-2:02
 };
-const MUSIC_VOLUME = 0.5;
-const SFX_VOLUME = 0.7;
+/* where the pause menu's two sliders start. They are the defaults, not the
+   current level: musicVolume/sfxVolume below hold that, and the sliders
+   move them. */
+export const DEFAULT_MUSIC_VOLUME = 0.5;
+export const DEFAULT_SFX_VOLUME = 0.7;
 
 const SFX_FILES = {
   critHit: "/audio/Critical Hit 1.wav",
@@ -62,6 +79,9 @@ const SFX_FILES = {
   unitSelect: "/audio/unit.wav",
   actionSelect: "/audio/select.wav",
   back: "/audio/back.wav",
+  helpOpen: "/audio/HelpPage.wav",
+  help: "/audio/Help.wav",
+  threatCheck: "/audio/ThreatCheck.wav",
 };
 
 // four interchangeable takes for a plain (non-crit) landed hit, picked at
@@ -76,6 +96,8 @@ let sfxReady = null;
 const musicBuffers = {}; // keyed by MUSIC_TRACKS name
 let musicSource = null; // the currently-playing BufferSourceNode, if any
 let musicTrack = "prelude";
+let musicVolume = DEFAULT_MUSIC_VOLUME;
+let sfxVolume = DEFAULT_SFX_VOLUME;
 let musicEnabled = true;
 let musicStarted = false; // true once unlockAudio's post-banner start has fired
 
@@ -83,10 +105,10 @@ function getContext() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
     musicGain = ctx.createGain();
-    musicGain.gain.value = MUSIC_VOLUME;
+    musicGain.gain.value = musicVolume;
     musicGain.connect(ctx.destination);
     sfxGain = ctx.createGain();
-    sfxGain.gain.value = SFX_VOLUME;
+    sfxGain.gain.value = sfxVolume;
     sfxGain.connect(ctx.destination);
   }
   return ctx;
@@ -138,6 +160,26 @@ export const playVictory = () => playSfx("victory", 0.9); // 10% quieter than th
 export const playUnitSelect = () => playSfx("unitSelect");
 export const playActionSelect = () => playSfx("actionSelect");
 export const playBack = () => playSfx("back");
+export const playHelpOpen = () => playSfx("helpOpen");
+export const playHelp = () => playSfx("help");
+export const playThreatCheck = () => playSfx("threatCheck");
+
+/* the pause menu's volume sliders, both taking 0 to 1. Safe to call before
+   the audio context exists: the level is remembered here and getContext
+   applies it when it builds the two buses. Dragging a slider fires these
+   on every pointer move, so the change is ramped over ~15ms instead of
+   assigned outright, which would step the gain and click. */
+function rampGain(node, v) {
+  if (node) node.gain.setTargetAtTime(v, ctx.currentTime, 0.015);
+}
+export function setMusicVolume(v) {
+  musicVolume = clamp(v, 0, 1);
+  rampGain(musicGain, musicVolume);
+}
+export function setSfxVolume(v) {
+  sfxVolume = clamp(v, 0, 1);
+  rampGain(sfxGain, sfxVolume);
+}
 
 async function loadMusicBuffer(c, name) {
   if (!musicBuffers[name]) {
