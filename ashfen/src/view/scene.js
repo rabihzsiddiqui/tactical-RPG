@@ -4,8 +4,7 @@
    now live in ../core/game.js as synchronous functions that return
    { state, events }. This module is the *player* of those events: it
    applies the returned state to `g` and animates each event against the
-   live three.js scene. See applyResolve/playEvents below, and
-   PROJECT_PLAN.md's M3 section / CLAUDE.md for the design. */
+   live three.js scene. See applyResolve/playEvents below. */
 
 import * as THREE from "three";
 import { MW, MH, CX, CZ, cell, lvlH, walkable } from "../core/map.js";

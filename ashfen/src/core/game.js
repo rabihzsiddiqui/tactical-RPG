@@ -2,7 +2,7 @@
    player/AI decision into a new state plus a list of events describing
    what happened. src/view/scene.js is the only consumer: it plays the
    events back against the live three.js scene and animation timing.
-   See CLAUDE.md and PROJECT_PLAN.md's M3 section for the design. */
+   See applyResolve/playEvents in scene.js for the playback side. */
 
 import { cell } from "./map.js";
 import { WEAPONS } from "./data.js";
