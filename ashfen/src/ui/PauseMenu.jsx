@@ -1,3 +1,4 @@
+import { playActionSelect, playBack, playDrag } from "../view/audio.js";
 import { Card, Eyebrow, Btn, Slider } from "./primitives.jsx";
 
 /* renders in normal flow under the map (see App.jsx), in the same slot as
@@ -20,6 +21,36 @@ export default function PauseMenu({
     onResume();
   }
 
+  /* Resume plays back.wav, since leaving the menu is the same gesture as
+     backing out of the action menu or the forecast. It sits on the button
+     rather than on onResume itself, because endTurnAndClose closes the menu
+     too and End turn already has its own sound. */
+  function resumeAndSound() {
+    playBack();
+    onResume();
+  }
+
+  /* the controls below own their sound, unlike End turn, Show threat and
+     Field manual, which are already voiced further down the call (by
+     api.endTurn, api.toggleDanger and App's openHelp). Adding a second one
+     here would double them up. */
+  function rotate() {
+    playActionSelect();
+    setCam((c) => ({ ...c, yaw: (c.yaw + 90) % 360 }));
+  }
+  function cycleRes() {
+    playActionSelect();
+    setCam((c) => ({ ...c, res: (c.res + 1) % RES.length }));
+  }
+  function toggleMusic() {
+    playActionSelect();
+    onToggleMusic();
+  }
+  function pickTrack(name) {
+    playActionSelect();
+    onSetTrack(name);
+  }
+
   return (
     <Card>
       <div style={{ fontSize: 19, marginBottom: 8 }}>Menu</div>
@@ -32,10 +63,8 @@ export default function PauseMenu({
         <Btn light on={api.toggleDanger} active={g.danger}>
           {g.danger ? "Hide threat" : "Show threat"}
         </Btn>
-        <Btn light on={() => setCam((c) => ({ ...c, yaw: (c.yaw + 90) % 360 }))}>Rotate 90&deg;</Btn>
-        <Btn light on={() => setCam((c) => ({ ...c, res: (c.res + 1) % RES.length }))}>
-          {RES[cam.res].label}
-        </Btn>
+        <Btn light on={rotate}>Rotate 90&deg;</Btn>
+        <Btn light on={cycleRes}>{RES[cam.res].label}</Btn>
       </div>
 
       <Eyebrow>Help</Eyebrow>
@@ -45,20 +74,20 @@ export default function PauseMenu({
 
       <Eyebrow>Sound</Eyebrow>
       <div className="flex flex-wrap gap-2 mb-2">
-        <Btn light on={onToggleMusic} active={musicOn}>{musicOn ? "Music: On" : "Music: Off"}</Btn>
+        <Btn light on={toggleMusic} active={musicOn}>{musicOn ? "Music: On" : "Music: Off"}</Btn>
       </div>
       <div className="flex flex-wrap gap-2 mb-3">
-        <Btn light on={() => onSetTrack("prelude")} active={track === "prelude"}>Prelude</Btn>
-        <Btn light on={() => onSetTrack("conquest")} active={track === "conquest"}>Conquest</Btn>
+        <Btn light on={() => pickTrack("prelude")} active={track === "prelude"}>Prelude</Btn>
+        <Btn light on={() => pickTrack("conquest")} active={track === "conquest"}>Conquest</Btn>
       </div>
       {/* the music slider stays usable while music is off. It sets the level
           the track will come back at, rather than being greyed out. */}
       <div className="mb-4">
-        <Slider label="Music volume" value={musicVol} on={onSetMusicVol} />
-        <Slider label="Effects volume" value={sfxVol} on={onSetSfxVol} />
+        <Slider label="Music volume" value={musicVol} on={onSetMusicVol} onGrab={playDrag} />
+        <Slider label="Effects volume" value={sfxVol} on={onSetSfxVol} onGrab={playDrag} />
       </div>
 
-      <Btn strong on={onResume}>Resume</Btn>
+      <Btn strong on={resumeAndSound}>Resume</Btn>
     </Card>
   );
 }

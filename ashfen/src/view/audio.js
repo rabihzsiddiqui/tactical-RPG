@@ -82,6 +82,8 @@ const SFX_FILES = {
   helpOpen: "/audio/HelpPage.wav",
   help: "/audio/Help.wav",
   threatCheck: "/audio/ThreatCheck.wav",
+  menu: "/audio/Menu.wav",
+  drag: "/audio/Drag.wav",
 };
 
 // four interchangeable takes for a plain (non-crit) landed hit, picked at
@@ -118,9 +120,20 @@ function loadSfx(c) {
   if (!sfxReady) {
     sfxReady = Promise.all(
       Object.entries(SFX_FILES).map(async ([name, url]) => {
-        const res = await fetch(url);
-        const bytes = await res.arrayBuffer();
-        sfxBuffers[name] = await c.decodeAudioData(bytes);
+        /* per-file catch on purpose. These share one Promise.all, so without
+           it a single missing or undecodable asset rejects the lot: every
+           SFX goes quiet and unlockAudio never reaches its music start,
+           because it awaits this before playing anything. Swallowing the
+           failure costs one sound instead of all of them, and playSfx
+           already no-ops on a buffer that is not there. */
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(res.status + " for " + url);
+          const bytes = await res.arrayBuffer();
+          sfxBuffers[name] = await c.decodeAudioData(bytes);
+        } catch (err) {
+          console.warn("sfx failed to load:", name, err);
+        }
       })
     );
   }
@@ -163,6 +176,8 @@ export const playBack = () => playSfx("back");
 export const playHelpOpen = () => playSfx("helpOpen");
 export const playHelp = () => playSfx("help");
 export const playThreatCheck = () => playSfx("threatCheck");
+export const playMenu = () => playSfx("menu");
+export const playDrag = () => playSfx("drag");
 
 /* the pause menu's volume sliders, both taking 0 to 1. Safe to call before
    the audio context exists: the level is remembered here and getContext

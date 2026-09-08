@@ -5,6 +5,7 @@ import { mountScene, newGame, RES } from "../view/scene.js";
 import {
   unlockAudio, setMusicEnabled, setMusicTrack, restartAudio, playHelpOpen, playHelp,
   setMusicVolume, setSfxVolume, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME,
+  playActionSelect, playMenu,
 } from "../view/audio.js";
 import { forecastOf } from "../core/combat.js";
 import { LEVEL_NAME } from "../core/map.js";
@@ -100,6 +101,7 @@ export default function App() {
      forces the track back to prelude and replays the unlock sequence, so
      a restarted run sounds exactly like a fresh one. */
   function restart() {
+    playActionSelect();
     gs.current = newGame();
     gs.current.banner = { text: "Player Phase", side: "player", n: 0 };
     setFloats([]);
@@ -108,14 +110,18 @@ export default function App() {
     setTrack("prelude");
   }
   function dismissOnboarding() {
+    playActionSelect();
     localStorage.setItem(ONBOARD_KEY, "1");
     setOnboarded(true);
   }
   /* the onboarding card's second button. The few lines it shows are the
      short version, this is the long one. Dismisses the card too, so the
      reader lands on the board once they close the manual. */
+  /* dismisses without the select sound: openHelp's own HelpPage.wav is the
+     cue for this button, and playing both would stack them. */
   function openFullGuide() {
-    dismissOnboarding();
+    localStorage.setItem(ONBOARD_KEY, "1");
+    setOnboarded(true);
     openHelp();
   }
   function toggleMusic() {
@@ -317,13 +323,16 @@ export default function App() {
                 />
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  <Btn on={() => setPaused(true)} disabled={g.status !== "playing"} strong>
+                  <Btn on={() => { playMenu(); setPaused(true); }}
+                    disabled={g.status !== "playing"} strong>
                     Menu
                   </Btn>
                   <Btn on={api.toggleDanger} active={g.danger}>
                     {g.danger ? "Hide threat" : "Show threat"}
                   </Btn>
-                  <Btn on={() => setCam((c) => ({ ...c, yaw: (c.yaw + 90) % 360 }))}>Rotate 90&deg;</Btn>
+                  <Btn on={() => { playActionSelect(); setCam((c) => ({ ...c, yaw: (c.yaw + 90) % 360 })); }}>
+                    Rotate 90&deg;
+                  </Btn>
                   <Btn on={() => openHelp()}>Help</Btn>
                 </div>
               )}

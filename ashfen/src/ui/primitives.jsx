@@ -48,7 +48,7 @@ export function Btn({ children, on, disabled, active, strong, light }) {
    alone gives no sense of where you are once the sound stops. Thumb and
    track styling lives in index.css under .vol, out of reach of inline
    styles. */
-export function Slider({ label, value, on }) {
+export function Slider({ label, value, on, onGrab }) {
   return (
     <label style={{ display: "block", marginBottom: 6 }}>
       <div className="flex items-center justify-between" style={{
@@ -57,8 +57,14 @@ export function Slider({ label, value, on }) {
         <span className="uppercase">{label}</span>
         <span>{Math.round(value * 100)}%</span>
       </div>
+      {/* onGrab fires once when the drag starts, not on every step. The
+          sample runs about half a second, so a tick per pointer move would
+          stack dozens of overlapping copies. Keyboard users get the same
+          single cue from the arrow keys. */}
       <input className="vol" type="range" min={0} max={1} step={0.01} value={value}
         aria-label={label}
+        onPointerDown={onGrab}
+        onKeyDown={(e) => { if (onGrab && !e.repeat && e.key.startsWith("Arrow")) onGrab(); }}
         onChange={(e) => on(Number(e.target.value))} />
     </label>
   );
