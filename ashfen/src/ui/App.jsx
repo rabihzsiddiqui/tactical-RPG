@@ -173,7 +173,21 @@ export default function App() {
   const nudge = g.tutorial && g.phase === "player" && g.status === "playing";
 
   return (
-    <div style={{ background: C.table, color: C.parch, fontFamily: SERIF, overflowX: "hidden", minHeight: "100vh" }} className="w-full p-3">
+    /* installed as a PWA, index.html asks for viewport-fit=cover and a
+       black-translucent status bar, which puts the page *under* the status
+       bar and the home indicator rather than below them. Nothing was paying
+       that back, so on an iPad the header row sat beneath the clock in both
+       orientations. This is the plain 12px of the old p-3 plus whatever the
+       device reserves on each edge, which is 0 on hardware without insets.
+       Landscape needs the left and right values too: iPads inset those. */
+    <div style={{
+      background: C.table, color: C.parch, fontFamily: SERIF,
+      overflowX: "hidden", minHeight: "100vh",
+      paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)",
+      paddingRight: "calc(env(safe-area-inset-right, 0px) + 12px)",
+      paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+      paddingLeft: "calc(env(safe-area-inset-left, 0px) + 12px)",
+    }} className="w-full">
       <style>{`
         @keyframes bannerIn { 0%{transform:translateX(-40px) scale(0.94);opacity:0}
           100%{transform:translateX(0) scale(1);opacity:1} }

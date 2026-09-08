@@ -55,6 +55,13 @@ export default function PauseMenu({
     <Card>
       <div style={{ fontSize: 19, marginBottom: 8 }}>Menu</div>
 
+      {/* Resume leads. Closing the menu is the most common reason to open it,
+          so it sits above the Battle group rather than at the far end of a
+          panel the reader has to scroll past first. */}
+      <div className="mb-4">
+        <Btn strong on={resumeAndSound}>Resume</Btn>
+      </div>
+
       <Eyebrow>Battle</Eyebrow>
       <div className="flex flex-wrap gap-2 mb-4">
         <Btn on={endTurnAndClose} disabled={g.phase !== "player" || g.status !== "playing"} strong>
@@ -86,8 +93,6 @@ export default function PauseMenu({
         <Slider label="Music volume" value={musicVol} on={onSetMusicVol} onGrab={playDrag} />
         <Slider label="Effects volume" value={sfxVol} on={onSetSfxVol} onGrab={playDrag} />
       </div>
-
-      <Btn strong on={resumeAndSound}>Resume</Btn>
     </Card>
   );
 }
