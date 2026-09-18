@@ -23,6 +23,7 @@ import {
 } from "./shaders.js";
 import { tween, stepTweens, resetTweens } from "./anim.js";
 import { createDirector } from "./camera.js";
+import { createAttackPlayer } from "./attacks.js";
 import { C } from "../ui/theme.js";
 import {
   playUnitSelect, playActionSelect, playBack, playNextTurn, playCritHit, playMiss, playNoDamage, playDeath,
@@ -265,6 +266,11 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      director either passes it straight through or blends it toward the
      attack cut-in. See playEvents for when a cut-in starts. */
   const director = createDirector({ isEnabled: () => camRef.current.cinematics !== false });
+
+  /* ---- attack beats ----
+     one beat per weapon type, see attacks.js. The player adds its two
+     projectile meshes to the scene once and reuses them. */
+  const attacks = createAttackPlayer({ scene, director });
   const orbit = { pos: new THREE.Vector3(), target: new THREE.Vector3(0, 0.4, 0), fov: 30 };
 
   /* ---- screen projection ---- */
@@ -328,6 +334,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
           done && done();
         }
       }
+    } else if (a.state === "attack") {
+      /* attacks.js owns every part while a beat plays; only position,
+         offset and yaw below are still ours */
     } else if (a.state === "ready") {
       a.phase += dt * 3;
       p.legL.rotation.x = 0.16;
@@ -381,16 +390,6 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       u.anim.state = "walk";
       u.anim.walk = { path: path.slice(), from, to: path[0], t: 0, done: res };
     });
-  }
-
-  async function lunge(src, tgt) {
-    faceToward(src, tgt);
-    const dx = Math.sign(tgt.x - src.x) * 0.34;
-    const dz = Math.sign(tgt.y - src.y) * 0.34;
-    const ranged = man(src.x, src.y, tgt.x, tgt.y) > 1;
-    const amt = ranged ? 0.1 : 1;
-    await tween(120, (k) => src.anim.offset.set(dx * k * amt, 0, dz * k * amt));
-    await tween(180, (k) => src.anim.offset.set(dx * (1 - k) * amt, 0, dz * (1 - k) * amt));
   }
 
   function flash(u, crit) {
@@ -542,15 +541,20 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      concatenates every enemy's events, so if two enemies were already
      adjacent to their targets their strikes would sit back to back with no
      move event between them, and one cut-in framing the first pair would
-     hold through the second pair's exchange off camera. */
+     hold through the second pair's exchange off camera.
+
+     A staff heal gets the same treatment as a one-event run, so the staff
+     beat plays from the cut-in camera like every other weapon. Instant
+     heals (vulnerary, terrain) stay out: nothing animates for them. */
   function exchangeEnd(events, i) {
     const first = events[i];
-    if (first.type !== "strike") return i;
+    const isStrike = first.type === "strike";
+    if (!isStrike && !(first.type === "heal" && !first.instant)) return i;
     const pair = new Set([first.srcId, first.tgtId]);
     let j = i + 1;
     while (j < events.length) {
       const e = events[j];
-      if (e.type === "strike" && pair.has(e.srcId) && pair.has(e.tgtId)) j++;
+      if (isStrike && e.type === "strike" && pair.has(e.srcId) && pair.has(e.tgtId)) j++;
       else if (e.type === "death" && pair.has(e.unitId)) j++;
       else if (e.type === "levelUp" && pair.has(e.unitId)) j++;
       else break;
@@ -590,25 +594,35 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       case "strike": {
         const src = g.units.find((z) => z.id === e.srcId);
         const tgt = g.units.find((z) => z.id === e.tgtId);
-        await lunge(src, tgt);
-        if (!e.hit) {
-          floater(tgt, "miss", C.parchDim);
-          playMiss();
-        } else {
-          tgt.hp = e.hpAfter;
-          flash(tgt, e.crit);
-          floater(tgt, e.dmg + (e.crit ? "!" : ""), e.crit ? C.gold : C.redLite);
-          // crit always gets its own sound, even on a killing or 0-damage
-          // blow. finalHit is for a *non-crit* kill specifically; a
-          // crit that also kills still gets Death.wav right after, from
-          // the "death" event below
-          if (e.crit) playCritHit();
-          else if (e.hpAfter <= 0) playFinalHit();
-          else if (e.dmg === 0) playNoDamage();
-          else playAttackHit();
-        }
-        tick();
-        await sleep(e.crit ? 380 : 260);
+        faceToward(src, tgt);
+        /* the beat owns the attacker from windup to recovery and fires
+           onImpact at the frame of contact, so the feedback below lands
+           on the hit rather than after the whole motion */
+        await attacks.play(src, tgt, {
+          onImpact: () => {
+            if (!e.hit) {
+              floater(tgt, "miss", C.parchDim);
+              playMiss();
+            } else {
+              tgt.hp = e.hpAfter;
+              flash(tgt, e.crit);
+              floater(tgt, e.dmg + (e.crit ? "!" : ""), e.crit ? C.gold : C.redLite);
+              // crit always gets its own sound, even on a killing or 0-damage
+              // blow. finalHit is for a *non-crit* kill specifically; a
+              // crit that also kills still gets Death.wav right after, from
+              // the "death" event below
+              if (e.crit) playCritHit();
+              else if (e.hpAfter <= 0) playFinalHit();
+              else if (e.dmg === 0) playNoDamage();
+              else playAttackHit();
+            }
+            tick();
+          },
+        });
+        /* the recovery already sits between impact and here, so this is
+           shorter than the old post-lunge pause and the pacing per strike
+           comes out about the same */
+        await sleep(e.crit ? 240 : 100);
         break;
       }
       case "death": {
@@ -619,13 +633,24 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       }
       case "heal": {
         const tgt = g.units.find((z) => z.id === e.tgtId);
-        tgt.hp += e.amount;
-        floater(tgt, "+" + e.amount, C.green);
-        tick();
-        if (!e.instant) {
-          playHeal();
-          await sleep(600);
+        if (e.instant) {
+          tgt.hp += e.amount;
+          floater(tgt, "+" + e.amount, C.green);
+          tick();
+          break;
         }
+        /* a staff heal is the sixth beat: the caster raises the staff and
+           the target glows. The number and sound land at its peak. */
+        const src = g.units.find((z) => z.id === e.srcId);
+        await attacks.play(src, tgt, {
+          onImpact: () => {
+            tgt.hp += e.amount;
+            floater(tgt, "+" + e.amount, C.green);
+            playHeal();
+            tick();
+          },
+        });
+        await sleep(120);
         break;
       }
       case "levelUp": {
@@ -986,7 +1011,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       Math.cos(pit) * Math.cos(yaw) * dist
     );
     orbit.fov = o.fov;
-    director.apply(camera, orbit);
+    director.apply(camera, orbit, dt * 1000);
 
     const t = now / 1000;
     matMove.uniforms.uTime.value = t;

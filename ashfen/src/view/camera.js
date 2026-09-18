@@ -22,6 +22,8 @@ const DIST_PER_TILE = 0.6; // extra distance per tile of separation, so range-2 
 const ELEVATION = 0.28;    // rise per unit of distance, roughly 16 degrees, versus the orbit's 48
 const FLY_IN_MS = 340;
 const FLY_OUT_MS = 520;
+const TRACK_WEIGHT = 0.4;  // how far the look target leans toward a tracked projectile
+const TRACK_LAG_MS = 90;   // smoothing time constant for that lean, so a spawn or despawn never pops
 
 const makePose = () => ({ pos: new THREE.Vector3(), target: new THREE.Vector3(), fov: CINE_FOV });
 const copyPose = (dst, src) => { dst.pos.copy(src.pos); dst.target.copy(src.target); dst.fov = src.fov; };
@@ -36,6 +38,7 @@ export function createDirector({ isEnabled }) {
   let active = false;
   let leaving = false;
   let shakeAmp = 0;
+  let tracked = null;        // a live Vector3 the look target leans toward, or null
 
   const axis = new THREE.Vector3();
   const mid = new THREE.Vector3();
@@ -44,6 +47,8 @@ export function createDirector({ isEnabled }) {
   const pos = new THREE.Vector3();
   const target = new THREE.Vector3();
   const jitter = new THREE.Vector3();
+  const lean = new THREE.Vector3();     // current smoothed lean of the look target
+  const wantLean = new THREE.Vector3(); // where the lean is heading this frame
 
   function save() {
     copyPose(saved, base);
@@ -101,7 +106,15 @@ export function createDirector({ isEnabled }) {
     return tween(ms, (k) => { shakeAmp = intensity * (1 - k); });
   }
 
-  function apply(camera, orbit) {
+  /* leans the look target toward a moving point, a projectile in flight,
+     for as long as `point` is set. Pass the object's own position vector
+     rather than a copy: it is read live every frame. null releases it and
+     the lean eases back out. Only has an effect during a cut-in. */
+  function track(point) {
+    tracked = point;
+  }
+
+  function apply(camera, orbit, dtMs = 16) {
     copyPose(base, orbit);
     if (active) {
       const from = leaving ? base : saved;
@@ -113,6 +126,12 @@ export function createDirector({ isEnabled }) {
       target.copy(base.target);
       camera.fov = base.fov;
     }
+    /* exponential smoothing toward the tracked point, framerate independent:
+       the lean covers 1 - e^-1 of the remaining gap every TRACK_LAG_MS */
+    if (tracked && active) wantLean.subVectors(tracked, cine.target).multiplyScalar(TRACK_WEIGHT * mix);
+    else wantLean.set(0, 0, 0);
+    lean.lerp(wantLean, 1 - Math.exp(-dtMs / TRACK_LAG_MS));
+    target.add(lean);
     if (shakeAmp > 0) {
       jitter.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(shakeAmp * 2);
       pos.add(jitter);
@@ -124,7 +143,7 @@ export function createDirector({ isEnabled }) {
   }
 
   return {
-    save, flyIn, flyOut, shake, apply,
+    save, flyIn, flyOut, shake, track, apply,
     get enabled() { return isEnabled(); },
     get active() { return active; },
   };

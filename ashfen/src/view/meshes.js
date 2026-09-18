@@ -295,3 +295,29 @@ export function buildHealthBar(fillHex) {
 
   return { group, fill };
 }
+
+/* projectiles for the ranged beats in attacks.js. Each is built once and
+   reused, so neither takes a palette: the arrow is plain wood whoever
+   fires it, and the bolt is fire. Both start hidden. The arrow points
+   along its local +z so Object3D.lookAt aims it at the target. */
+export function buildArrow() {
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.022, 0.42), new THREE.MeshLambertMaterial({ color: 0x8a6a42 }));
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 4), new THREE.MeshLambertMaterial({ color: 0xdfe7f2 }));
+  head.rotation.x = Math.PI / 2;
+  head.position.z = 0.25;
+  const fletch = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.012, 0.09), new THREE.MeshLambertMaterial({ color: 0xe8e2cf }));
+  fletch.position.z = -0.17;
+  g.add(shaft, head, fletch);
+  g.visible = false;
+  return g;
+}
+
+/* the fire bolt. Lambert with a strong emissive so it reads lit from any
+   angle; transparent so the burst on impact can fade it out. */
+export function buildBolt() {
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffa040, emissive: 0xff5a1a, transparent: true });
+  const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.11, 0), mat);
+  m.visible = false;
+  return m;
+}

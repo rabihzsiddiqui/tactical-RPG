@@ -300,3 +300,37 @@ Known issues introduced:
 Next session starts with:
   - Session 2, `src/view/attacks.js`: absorb `lunge()` into a per-weapon-type beat table. The cut-in camera now makes the bow and tome lunge visibly wrong at range 2.
   - Headless check recipe: `npx vite --port 5199` in `ashfen/`, then a Playwright script using the npx-cached package with `executablePath` pointing at the cached `chromium_headless_shell` and args `--use-angle=swiftshader --enable-unsafe-swiftshader`. Set `tactical-rpg-onboarded=1` in localStorage, click Begin, then Menu and End turn. Turn 1's enemy phase already produces an exchange.
+
+---
+
+## Session 2 handoff: per-class attack behaviour
+Date: 2026-09-18
+Session goal: replace the one-size lunge with a beat per weapon type, so bows and tomes stop lunging at range 2 under the cut-in camera.
+Completed:
+  - `src/view/attacks.js`: `createAttackPlayer({ scene, director })` returning `play(src, tgt, { onImpact })`. A beat owns the attacker's limbs from windup to recovery and fires `onImpact` at the frame of contact; scene.js does flash, floater, sound and hp there. Beats are keyed by `WEAPONS[k].type`: sword, lance and axe share one melee routine with different keyframes and phase durations (axe: 200ms windup, 260ms recover; sword: 90/170; lance thrusts with the weapon rotated along the forearm). Bow draws, holds, looses an arrow that flies with a shallow arc. Anima forms a bolt in the casting hand, throws it, bursts it at the target. Staff raises, the target tints green and lifts a touch, then settles.
+  - The old `lunge()` in scene.js is gone; melee is the table's first three entries, not a second path.
+  - `meshes.js`: `buildArrow()` (box shaft, cone head, box fletching, +z forward) and `buildBolt()` (emissive octahedron, transparent for the burst fade). Built once by the attack player and reused, never allocated per strike.
+  - `camera.js`: `director.track(vec3 | null)`. The look target leans 40% of the way toward a tracked point with a 90ms exponential lag, so the camera pans with the arrow or bolt and eases back when it lands. `apply(camera, orbit, dtMs)` now takes dt for that smoothing.
+  - `scene.js`: `animUnit` has an `"attack"` state that leaves every part to attacks.js and only keeps position, offset and yaw current. The `strike` case calls `faceToward` then `attacks.play`; per-strike trailing sleep dropped from 260/380 to 100/240 because the recovery now sits between impact and the next strike. Non-instant `heal` events play the staff beat and get their own one-event cut-in via `exchangeEnd`, so the sixth beat is seen from the same camera as the other five. Instant heals (vulnerary, terrain) are untouched.
+  - Square-up: `play()` waits 150ms before the windup when the attacker still has more than about 30 degrees to turn, because a windup that starts mid-spin read as flailing on the first screenshots.
+  - Verified headlessly with a throwaway harness page (not committed, recipe in memory) that mounts the scene with fake React refs and drives real canvas taps: sword vs lance counter, axe vs axe counter, bow at range 2, fire at range 2, staff heal. All six beats play, every unit ends with zero offset, weapon back at 1.5 and body twist 0. `npm test` 29 green, lint unchanged at the pre-existing warnings, `npm run build` clean.
+Not completed, and why:
+  - No hit reaction on the defender beyond the existing flash. Session 3 owns hit-stop, shake and impact effects.
+  - The bow is held in the right hand with the same carry rotation as every other weapon, so the draw reads as "bow in front, string hand pulling" rather than a true side-on draw. Deliberate enough to pass the stop condition; a dedicated bow carry rotation is a five-minute tweak if it bothers you in play.
+Files touched:
+  - `ashfen/src/view/attacks.js` (new)
+  - `ashfen/src/view/meshes.js`
+  - `ashfen/src/view/camera.js`
+  - `ashfen/src/view/scene.js`
+  - `ashfen/CLAUDE.md` (local only, it is in `.git/info/exclude`)
+Decisions made and the reasoning:
+  - Beats are whole-pose keyframes, not deltas. animUnit overwrites the same rotation fields every frame in its other states, so an additive approach would fight it; absolute poses lerped from and to a NEUTRAL keyframe also guarantee a beat can never leave a limb somewhere odd.
+  - `onImpact` is a callback into scene.js rather than the beat resolving at impact and scene.js running the recovery, so the beat stays one readable async sequence and scene.js keeps every bit of game feedback in one place.
+  - `play()` restores whatever anim state the unit had before, so a player attacker still lands back in its ready pose after acting, exactly as before beats existed.
+  - The heal cut-in is a grouping change in `exchangeEnd`, not a new event type, in keeping with the ground rules.
+  - The staff beat tints from each material's `userData.baseEmissive` so k = 0 is exactly the resting look and nothing has to be remembered or restored.
+Known issues introduced:
+  - A half-turn square-up plus the longer beats makes an axe exchange about 0.4s longer than the lunge version. Feels right in the cut-in, may want trimming with cinematics off.
+Next session starts with:
+  - Session 3, effects and impact. `director.shake` still has no caller; the beat's `onImpact` is the natural place for hit-stop and shake, and `WEAPONS[k].mt` is already on `wep(src)`.
+  - Headless recipe is in memory (`headless-verify-recipe`) with the harness page inline; it drives real taps via a reconstructed orbit camera and exposes `window.H`.
