@@ -266,7 +266,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      from the cam state into `orbit` every tick and hands it over, and the
      director either passes it straight through or blends it toward the
      attack cut-in. See playEvents for when a cut-in starts. */
-  const director = createDirector({ isEnabled: () => camRef.current.cinematics !== false });
+  const director = createDirector({ isEnabled: () => camRef.current.cinematics !== false, scene });
 
   /* ---- attack beats and their effects ----
      one beat per weapon type, see attacks.js. The player adds its two
@@ -1063,7 +1063,14 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     ringMat.uniforms.uTime.value = t;
     readyRingMat.uniforms.uTime.value = t;
     waterMat.uniforms.uTime.value = t;
-    postMat.uniforms.uLevels.value = o.levels;
+    /* posterisation eases off during a cut-in. POST_FRAG quantises the
+       frame to uLevels steps and skips the step entirely at 63 and above.
+       At grid distance the banding is the look; at cut-in distance it
+       cuts the new specular highlights into hard rings, so the level
+       count rides the director's mix from the setting up to 64. The
+       blend is gradual on purpose: bands get finer as the camera closes
+       in, rather than snapping off on the first frame of the fly. */
+    postMat.uniforms.uLevels.value = o.levels < 63 ? o.levels + (64 - o.levels) * director.mix : o.levels;
 
     g.units.forEach((u) => animUnit(u, animDt));
     effects.update(animDt * 1000, camera);

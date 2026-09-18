@@ -54,26 +54,48 @@ export function buildTerrain() {
   return g;
 }
 
+/* the face is drawn on a canvas in a 32 unit grid and scaled up by FACE_S,
+   so the proportions are unchanged from the original 32px texture while
+   the finer strokes (eye highlight, brow, mouth) get real pixels of their
+   own. Nearest filtering keeps the pixel look; the extra resolution is
+   for the cut-in camera, which sits close enough that a 32px face was
+   about one texel per screen pixel at the 3DS render size. */
+const FACE_S = 2;
 function faceTexture(P) {
   const c = document.createElement("canvas");
-  c.width = 32; c.height = 32;
+  c.width = 32 * FACE_S; c.height = 32 * FACE_S;
   const x = c.getContext("2d");
-  x.fillStyle = P.skin; x.fillRect(0, 0, 32, 32);
-  x.fillStyle = P.hair; x.fillRect(0, 0, 32, 7); x.fillRect(5, 10, 7, 2); x.fillRect(20, 10, 7, 2);
-  x.fillStyle = P.eye; x.fillRect(6, 14, 5, 7); x.fillRect(21, 14, 5, 7);
-  x.fillStyle = "#ffffff"; x.fillRect(7, 15, 2, 2); x.fillRect(22, 15, 2, 2);
-  x.fillStyle = "rgba(0,0,0,0.28)"; x.fillRect(14, 26, 4, 1);
+  const R = (px, py, w, h) => x.fillRect(px * FACE_S, py * FACE_S, w * FACE_S, h * FACE_S);
+  x.fillStyle = P.skin; R(0, 0, 32, 32);
+  x.fillStyle = P.hair; R(0, 0, 32, 7); R(0, 7, 3, 4); R(29, 7, 3, 4); R(5, 10, 7, 2); R(20, 10, 7, 2);
+  x.fillStyle = "rgba(0,0,0,0.14)"; R(0, 7, 32, 1);           // fringe shadow
+  x.fillStyle = P.eye; R(6, 14, 5, 7); R(21, 14, 5, 7);
+  x.fillStyle = "#ffffff"; R(7, 15, 2, 2); R(22, 15, 2, 2);
+  x.fillStyle = "rgba(255,255,255,0.35)"; R(6.5, 19.5, 1.5, 1); R(21.5, 19.5, 1.5, 1); // lower catchlight
+  x.fillStyle = "rgba(0,0,0,0.28)"; R(14, 26, 4, 1);
+  x.fillStyle = "rgba(0,0,0,0.10)"; R(12, 22, 8, 0.5); R(2, 28, 28, 4); // nose line, jaw shade
   const t = new THREE.CanvasTexture(c);
   t.magFilter = THREE.NearestFilter;
   t.minFilter = THREE.NearestFilter;
   return t;
 }
 
+const METAL = { metalness: 0.7, roughness: 0.4 }; // 0.35 made the highlight a hard-edged facet on these flat boxes
+
 export function buildUnitMesh(palKey, weaponKey) {
   const P = PALS[palKey];
   const mats = [];
   const M = (hex) => {
     const m = new THREE.MeshLambertMaterial({ color: hex });
+    mats.push(m);
+    return m;
+  };
+  /* metal parts: blade, helm, trim, plume. Standard gives them a specular
+     lobe so a swinging blade catches the sun and the cut-in key light;
+     Lambert has none and reads as grey card up close. Cloth stays on
+     Lambert, which is both cheaper and the right look for it. */
+  const MM = (hex) => {
+    const m = new THREE.MeshStandardMaterial({ color: hex, ...METAL });
     mats.push(m);
     return m;
   };
@@ -84,7 +106,7 @@ export function buildUnitMesh(palKey, weaponKey) {
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.26, 0.19), M(P.tunic));
   torso.position.y = 0.4;
   body.add(torso);
-  const belt = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.21), M(P.trim));
+  const belt = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.21), MM(P.trim));
   belt.position.y = 0.3;
   body.add(belt);
   const cape = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.34, 0.04), M(P.cape));
@@ -130,30 +152,30 @@ export function buildUnitMesh(palKey, weaponKey) {
   } else if (w.staff) {
     const rod = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.5, 0.03), M(P.grip));
     rod.position.y = 0.24;
-    const orb = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), M(P.plume));
+    const orb = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), MM(P.plume));
     orb.position.y = 0.52;
     weapon.add(rod, orb);
   } else if (w.magic) {
     const tome = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.24, 0.06), M(P.tunic));
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.25, 0.02), M(P.trim));
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.25, 0.02), MM(P.trim));
     edge.position.z = -0.03;
     weapon.add(tome, edge);
   } else if (w.type === "axe") {
     const haft = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.46, 0.035), M(P.grip));
     haft.position.y = 0.22;
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.19), M(P.blade));
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.19), MM(P.blade));
     head.position.set(0.06, 0.38, 0);
     weapon.add(haft, head);
   } else if (w.type === "lance") {
     const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.62, 0.03), M(P.grip));
     shaft.position.y = 0.3;
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.16, 4), M(P.blade));
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.16, 4), MM(P.blade));
     tip.position.y = 0.68;
     weapon.add(shaft, tip);
   } else {
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.42, 0.015), M(P.blade));
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.42, 0.015), MM(P.blade));
     blade.position.y = 0.26;
-    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.04), M(P.plume));
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.04), MM(P.plume));
     guard.position.y = 0.05;
     const grip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.1, 0.04), M(P.grip));
     weapon.add(blade, guard, grip);
@@ -174,10 +196,10 @@ export function buildUnitMesh(palKey, weaponKey) {
   );
   head.position.y = 0.16;
   headG.add(head);
-  const helm = new THREE.Mesh(new THREE.BoxGeometry(0.37, 0.11, 0.33), M(P.helm));
+  const helm = new THREE.Mesh(new THREE.BoxGeometry(0.37, 0.11, 0.33), MM(P.helm));
   helm.position.y = 0.29;
   headG.add(helm);
-  const plume = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.2), M(P.plume));
+  const plume = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.2), MM(P.plume));
   plume.position.set(0, 0.4, -0.03);
   headG.add(plume);
 
@@ -303,7 +325,7 @@ export function buildHealthBar(fillHex) {
 export function buildArrow() {
   const g = new THREE.Group();
   const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.022, 0.42), new THREE.MeshLambertMaterial({ color: 0x8a6a42 }));
-  const head = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 4), new THREE.MeshLambertMaterial({ color: 0xdfe7f2 }));
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 4), new THREE.MeshStandardMaterial({ color: 0xdfe7f2, ...METAL }));
   head.rotation.x = Math.PI / 2;
   head.position.z = 0.25;
   const fletch = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.012, 0.09), new THREE.MeshLambertMaterial({ color: 0xe8e2cf }));

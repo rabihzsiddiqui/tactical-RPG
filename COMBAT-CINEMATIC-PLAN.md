@@ -369,3 +369,33 @@ Known issues introduced:
 Next session starts with:
   - Session 4, materials. Switch `blade`, `helm`, `trim`, `plume` to `MeshStandardMaterial`, add the key light on fly-in, decide what to do about `uLevels` banding. The flare light in effects.js is a working example of a light living in the scene at intensity 0.
   - Headless recipe is in memory (`headless-verify-recipe`), now with the slow-motion switch and the scenario driver.
+
+---
+
+## Session 4 handoff: materials
+Date: 2026-09-18
+Session goal: make metal read as metal under the cut-in camera. Standard materials on the metal parts, a key light tied to the fly, a sharper face, and a deliberate answer to posterisation banding.
+Completed:
+  - `meshes.js`: a second material maker `MM()` next to `M()` in `buildUnitMesh`. Blade (sword blade, axe head, lance tip), helm, trim (belt, tome edge) and plume (plume, sword guard, staff orb) are `MeshStandardMaterial` with metalness 0.7 and roughness 0.4, from one `METAL` constant. The arrow head in `buildArrow` uses the same. Cloth, skin, hair, grip, bow limb, string and face stay Lambert. `parts` names are unchanged, so `animUnit` and `attacks.js` are untouched.
+  - `faceTexture` draws in the same 32 unit grid scaled by `FACE_S = 2` to a 64px canvas, with a helper `R()` so every stroke is in the old coordinates. Added a fringe shadow, side hair, a lower catchlight, a nose line and a jaw shade, all sub-32px strokes that the old texture had no room for. Still nearest filtered.
+  - `camera.js`: the director owns the key light. `createDirector({ isEnabled, scene })` adds one `DirectionalLight` plus its target at mount, intensity 0, no shadow. `framePair` aims it and `apply` sets `intensity = KEY_INTENSITY * mix`, so it fades up with the fly and down with the release. New getter `director.mix`.
+  - `scene.js`: `uLevels` rides the mix from the setting up to 64 (`POST_FRAG` skips quantising at 63 and above). The grid keeps its posterised look; the cut-in gets smooth gradients.
+  - Verified headlessly with the harness page and the Session 3 driver, sword hit with counter and axe crit with counter, both in slow motion. The sword blade goes white at the top of its arc and the guard glints gold, the axe head shows a lit facet, a helm two tiles from the lens shows a smooth specular gradient with no banding, and the new face reads at cut-in distance. `npm test` 29 green, lint at the same 53 pre-existing warnings and 0 errors, `npm run build` clean.
+Not completed, and why:
+  - Idle-frame profiling on a phone. Two lights now sit in every Lambert shader at intensity 0 (the flare from Session 3 and this key). Both are directional-or-point at zero, which is cheap, but the plan's performance budget says check after Session 4 and that needs a device.
+Files touched:
+  - `ashfen/src/view/meshes.js`
+  - `ashfen/src/view/camera.js`
+  - `ashfen/src/view/scene.js`
+Decisions made and the reasoning:
+  - The key light is aimed, not just placed. From the cut-in camera a box blade is seen edge-on: its wide faces sweep the vertical plane of the swing and the face turned to the lens is the narrow side, whose normal is the framing `perp` rotated by the body's yaw. The melee beats finish the strike with the torso twisted about 0.3 rad, so the light sits where a mirror on that face would show the camera at contact (`L = 2(N.V)N - V`), tilted so it lands above the horizon. The first pass put it high and to the side and the blade never caught anything; this version makes the glint a property of the pose rather than luck.
+  - Intensity 1.1, down from a first try at 1.6. With no tone mapping anything over 1.0 clips, and Kaelen's near-white helm went to a flat white slab when he stood in the near corner of the frame.
+  - Roughness 0.4 rather than the plan's 0.35. On flat six-sided boxes a tighter lobe lights a whole face or nothing, which read as a facet popping on and off. 0.4 spreads it into a gradient across the face.
+  - Posterisation: blend, not a switch. Levels at 40 or 50 mid-fly give finer bands, so the effect dissolves as the camera closes in rather than snapping off on the first frame. Reading `director.mix` in the frame loop was the smallest way to do it; the post pass already ran per frame.
+  - The key light lives in the director rather than effects.js because it is part of the shot, not of a beat: it follows the framing and the fly timing, nothing a weapon type decides.
+  - Metal parts lose 70 percent of their ambient diffuse under Standard, so helms sit a touch darker on the grid than before. Judged correct: the grid view now has a small value contrast between cloth and metal where before it had none.
+Known issues introduced:
+  - A unit standing in the near corner of the cut-in frame catches the key light on its helm as a large soft highlight. Session 1 already flagged the near-corner unit as a framing problem; this makes it a little more visible.
+  - Standard materials cost more per fragment than Lambert. Only around a quarter of each unit's parts changed and the effect at 400x240 is small, but it is untested on a phone.
+Next session starts with:
+  - Session 5, class silhouettes, is the remaining item. Or run the mobile profiling check the performance budget asks for after Sessions 3 and 4 first. Either way, headless recipe is in memory (`headless-verify-recipe`); note that ImageMagick's `montage` fails on this machine with a font error, so build contact sheets with `magick ... +append` and `-append` instead.

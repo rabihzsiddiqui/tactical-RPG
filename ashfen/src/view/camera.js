@@ -24,13 +24,27 @@ const FLY_IN_MS = 340;
 const FLY_OUT_MS = 520;
 const TRACK_WEIGHT = 0.4;  // how far the look target leans toward a tracked projectile
 const TRACK_LAG_MS = 90;   // smoothing time constant for that lean, so a spawn or despawn never pops
+const KEY_INTENSITY = 1.1; // peak of the cut-in key light, reached at mix = 1; higher clips the helms white
+const KEY_COLOR = 0xfff1d6;
+const KEY_TWIST = 0.3;     // body yaw at the moment of contact in the melee beats, see attacks.js
+const KEY_TILT = 0.36;     // lifts the aim so the light sits above the horizon, not raking up from below
 
 const makePose = () => ({ pos: new THREE.Vector3(), target: new THREE.Vector3(), fov: CINE_FOV });
 const copyPose = (dst, src) => { dst.pos.copy(src.pos); dst.target.copy(src.target); dst.fov = src.fov; };
 
 /* `isEnabled` is read on every flyIn rather than captured once, so the pause
-   menu toggle takes effect on the very next attack. */
-export function createDirector({ isEnabled }) {
+   menu toggle takes effect on the very next attack.
+
+   The director also owns the cut-in key light: a directional light that
+   fades up with the fly and back down with the release, so the metal
+   parts (see MeshStandardMaterial in meshes.js) have something to catch
+   through a swing. It is added to `scene` once at intensity 0 rather than
+   on fly-in, for the same reason as the flare in effects.js: adding a
+   light recompiles every lit material, a hitch worth paying at mount and
+   never mid-exchange. No shadow, that would be a second shadow pass. */
+export function createDirector({ isEnabled, scene }) {
+  const key = new THREE.DirectionalLight(KEY_COLOR, 0);
+  scene.add(key, key.target);
   const base = makePose();   // the orbit pose from the most recent apply()
   const saved = makePose();  // the orbit pose at the moment the cut-in began
   const cine = makePose();   // where flyIn wants the camera
@@ -48,6 +62,8 @@ export function createDirector({ isEnabled }) {
   const target = new THREE.Vector3();
   const jitter = new THREE.Vector3();
   const lean = new THREE.Vector3();     // current smoothed lean of the look target
+  const keyN = new THREE.Vector3();     // surface normal the key light is aimed to glint off
+  const keyV = new THREE.Vector3();     // unit vector from the framed pair to the camera
   const wantLean = new THREE.Vector3(); // where the lean is heading this frame
 
   function save() {
@@ -76,6 +92,24 @@ export function createDirector({ isEnabled }) {
     cine.pos.copy(cine.target).addScaledVector(perp, dist);
     cine.pos.y += dist * ELEVATION;
     cine.fov = opts.fov ?? CINE_FOV;
+
+    /* key light aim. From this camera a blade is seen edge-on: its wide
+       faces sweep the vertical plane of the swing, and the face turned to
+       the lens is the narrow side, whose normal is `perp` turned by the
+       body's yaw. The melee beats end their strike with the torso twisted
+       about KEY_TWIST toward the swing, so the light goes where a mirror
+       on that face would show the camera at the moment of contact: the
+       blade brightens as it arrives and dims as it leaves. Standard
+       mirror formula, L = 2(N.V)N - V. The normal is tilted up a little
+       so the light lands above the horizon rather than lighting the
+       undersides of everything. A directional light only reads the
+       vector from position to target, so the 3 is arbitrary. */
+    keyN.set(perp.z, 0, -perp.x).multiplyScalar(Math.sin(KEY_TWIST)).addScaledVector(perp, Math.cos(KEY_TWIST));
+    keyN.y += KEY_TILT;
+    keyN.normalize();
+    keyV.subVectors(cine.pos, cine.target).normalize();
+    key.position.copy(keyN).multiplyScalar(2 * keyN.dot(keyV)).sub(keyV).multiplyScalar(3).add(cine.target);
+    key.target.position.copy(cine.target);
   }
 
   /* ease-out on the way in: most of the travel happens in the first third,
@@ -140,11 +174,15 @@ export function createDirector({ isEnabled }) {
     camera.position.copy(pos);
     camera.lookAt(target);
     camera.updateProjectionMatrix();
+    key.intensity = KEY_INTENSITY * mix;
   }
 
   return {
     save, flyIn, flyOut, shake, track, apply,
     get enabled() { return isEnabled(); },
     get active() { return active; },
+    /* 0 on the grid, 1 fully in the cut-in, eased in between. scene.js
+       reads it to relax the posteriser while the camera is close. */
+    get mix() { return mix; },
   };
 }
