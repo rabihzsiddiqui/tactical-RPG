@@ -242,7 +242,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const postMat = new THREE.ShaderMaterial({
     vertexShader: POST_VERT, fragmentShader: POST_FRAG,
-    uniforms: { tDiffuse: { value: rt.texture }, uLevels: { value: 32 }, uVignette: { value: 0.04 } },
+    uniforms: { tDiffuse: { value: rt.texture }, uLevels: { value: 32 }, uVignette: { value: 0.04 }, uRush: { value: 0 } },
     depthTest: false,
   });
   postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat));
@@ -613,7 +613,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
           amount: first.type === "heal" ? first.amount : 0,
         };
         tick();
-        await director.flyIn(src, tgt);
+        await director.flyIn(src, tgt, {
+          others: g.units.filter((z) => z !== src && z !== tgt && z.hp > 0 && z.view).map((z) => z.view.root.position),
+        });
         let crit = false;
         for (; i < end; i++) {
           crit = crit || (events[i].type === "strike" && events[i].hit && events[i].crit);
@@ -1100,6 +1102,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
        blend is gradual on purpose: bands get finer as the camera closes
        in, rather than snapping off on the first frame of the fly. */
     postMat.uniforms.uLevels.value = o.levels < 63 ? o.levels + (64 - o.levels) * director.mix : o.levels;
+    /* radial blur while the camera is in transit, see POST_FRAG */
+    postMat.uniforms.uRush.value = director.rush;
 
     g.units.forEach((u) => animUnit(u, animDt));
     effects.update(animDt * 1000, camera);

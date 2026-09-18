@@ -1,15 +1,32 @@
 /* SECTION 6: shaders */
 
 export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
+/* POST_FRAG: posterise, warm, vignette. uRush is the camera director's
+   transit speed, 0 at rest and 1 at the peak of a fly-in. While it is up,
+   each pixel averages eight taps along the line from itself toward the
+   screen centre, a smear that grows with distance from the centre, so
+   the middle of the frame stays readable while the edges streak past.
+   Taps step inward rather than outward so the streak reads as the
+   world rushing at the lens. The blur runs before the posteriser, which
+   would otherwise cut the averaged ramps back into bands. */
 export const POST_FRAG = `
   precision mediump float;
-  uniform sampler2D tDiffuse; uniform float uLevels; uniform float uVignette;
+  uniform sampler2D tDiffuse; uniform float uLevels; uniform float uVignette; uniform float uRush;
   varying vec2 vUv;
   void main(){
-    vec3 c = texture2D(tDiffuse, vUv).rgb;
+    vec2 d = vUv-0.5;
+    vec3 c;
+    if (uRush > 0.002) {
+      vec2 stp = d * uRush * 0.4 / 7.0;
+      c = vec3(0.0);
+      for (int i = 0; i < 8; i++) c += texture2D(tDiffuse, vUv - stp * float(i)).rgb;
+      c /= 8.0;
+    } else {
+      c = texture2D(tDiffuse, vUv).rgb;
+    }
     if (uLevels < 63.0) c = floor(c*uLevels + 0.5)/uLevels;
     c = mix(c, c*vec3(1.06,1.01,0.93), 0.5);
-    vec2 d = vUv-0.5; c *= 1.0 - dot(d,d)*uVignette;
+    c *= 1.0 - dot(d,d)*uVignette;
     gl_FragColor = vec4(c,1.0);
   }`;
 

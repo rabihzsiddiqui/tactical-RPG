@@ -54,4 +54,5 @@ export function resetTweens() {
 /* easings. tween() hands out linear progress and the caller shapes it,
    which keeps the primitive dumb and lets one tween drive two curves. */
 export const easeOutCubic = (k) => 1 - Math.pow(1 - k, 3);
+export const easeOutQuart = (k) => 1 - Math.pow(1 - k, 4);
 export const easeInOutQuad = (k) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2);

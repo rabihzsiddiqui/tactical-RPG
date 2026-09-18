@@ -13,15 +13,22 @@
    points plus a lerp of fov. */
 
 import * as THREE from "three";
-import { tween, easeOutCubic, easeInOutQuad } from "./anim.js";
+import { tween, easeOutQuart, easeInOutQuad } from "./anim.js";
 
-const CINE_FOV = 50;       // the orbit camera sits at 30; widening is what sells the rush over a zoom
+const CINE_FOV = 66;       // the orbit camera sits at 30; widening is what sells the rush over a zoom
 const LOOK_LIFT = 0.42;    // look target sits mid-torso above the ground midpoint
-const BASE_DIST = 2.0;     // camera distance for two adjacent units
-const DIST_PER_TILE = 0.6; // extra distance per tile of separation, so range-2 shots still fit
-const ELEVATION = 0.28;    // rise per unit of distance, roughly 16 degrees, versus the orbit's 48
-const FLY_IN_MS = 340;
+const BASE_DIST = 1.3;     // camera distance for two adjacent units, close enough that the wide fov stretches depth
+const DIST_PER_TILE = 0.5; // extra distance per tile of separation, so range-2 shots still fit
+const ELEVATION = 0.12;    // rise per unit of distance, about 7 degrees: a unit's eyes sit near 0.7, the camera lands just under
+const FLY_IN_MS = 300;
 const FLY_OUT_MS = 520;
+const OVER_START = 0.5;    // fraction of the fly-in at which the overshoot hump begins; it peaks 75% in and settles by the end
+const OVER_PUSH = 0.1;     // fraction of the framing distance the camera carries past the frame at the hump's peak
+const OVER_FOV = 4;        // degrees of extra fov at that peak
+const RUSH_PEAK = 4;       // initial slope of easeOutQuart: the fly's top speed in fly-lengths per fly-duration
+const FRAME_SPREAD = 0.9;  // half-width of the cut-in frame per unit of depth, tan(CINE_FOV / 2) times a 1.4 aspect
+const UNIT_RADIUS = 0.3;   // how far past the frame edge a bystander still shows a shoulder
+const BACK_WEIGHT = 0.3;   // a bystander behind the fighters counts this much of one in front, fading out over a second framing distance
 const TRACK_WEIGHT = 0.4;  // how far the look target leans toward a tracked projectile
 const TRACK_LAG_MS = 90;   // smoothing time constant for that lean, so a spawn or despawn never pops
 const KEY_INTENSITY = 1.1; // peak of the cut-in key light, reached at mix = 1; higher clips the helms white
@@ -49,6 +56,10 @@ export function createDirector({ isEnabled, scene }) {
   const saved = makePose();  // the orbit pose at the moment the cut-in began
   const cine = makePose();   // where flyIn wants the camera
   let mix = 0;               // 0 = fully orbit, 1 = fully cinematic
+  let over = 0;              // overshoot hump, 0 to 1 and back, during the fly-in only
+  let rush = 0;              // camera transit speed, 0 at rest, 1 at a fly-in's top speed
+  let frameDist = 0;         // camera distance of the current framing, set by framePair
+  let flyLen = 0;            // straight-line length of the current fly-in, set by flyIn
   let active = false;
   let leaving = false;
   let shakeAmp = 0;
@@ -65,6 +76,11 @@ export function createDirector({ isEnabled, scene }) {
   const keyN = new THREE.Vector3();     // surface normal the key light is aimed to glint off
   const keyV = new THREE.Vector3();     // unit vector from the framed pair to the camera
   const wantLean = new THREE.Vector3(); // where the lean is heading this frame
+  const flyDir = new THREE.Vector3();   // unit vector along the fly-in, orbit pose to cinematic pose
+  const prevPos = new THREE.Vector3();  // camera position last frame, before shake, for the rush measure
+  const candPos = new THREE.Vector3();  // a candidate camera position while choosing a side
+  const viewDir = new THREE.Vector3();  // candidate view direction, camera to look target
+  const rel = new THREE.Vector3();      // a bystander's offset from the candidate camera
 
   function save() {
     copyPose(saved, base);
@@ -87,8 +103,23 @@ export function createDirector({ isEnabled, scene }) {
     if (perp.dot(toCam) < 0) perp.negate();
 
     const dist = (opts.dist ?? BASE_DIST) + sep * DIST_PER_TILE;
+    frameDist = dist;
     cine.target.copy(mid);
     cine.target.y += LOOK_LIFT;
+
+    /* with the camera this low and this close, a bystander on the near
+       side of the pair is not a shoulder in the corner, it is a wall
+       across a third of the frame. So both sides of the axis are scored
+       for clutter and the orbit side only keeps its claim when the far
+       side is no clearer. The far side means a longer fly, which the
+       rush blur covers, and it can swap which fighter stands left; the
+       HUD keeps the player's unit on the left regardless. */
+    if (opts.others && opts.others.length) {
+      const near = clutter(perp, dist, opts.others);
+      perp.negate();
+      const far = clutter(perp, dist, opts.others);
+      if (far >= near) perp.negate();
+    }
     cine.pos.copy(cine.target).addScaledVector(perp, dist);
     cine.pos.y += dist * ELEVATION;
     cine.fov = opts.fov ?? CINE_FOV;
@@ -112,14 +143,55 @@ export function createDirector({ isEnabled, scene }) {
     key.target.position.copy(cine.target);
   }
 
-  /* ease-out on the way in: most of the travel happens in the first third,
-     which is what reads as a rush rather than a drift */
+  /* how much of the frame bystanders would fill from the camera on `side`.
+     Each unit between the camera and the look target adds its overlap
+     with the view cone, weighted toward the camera end where a unit
+     looms largest. A unit behind the look target counts less, the
+     fighters cover most of it, and less again the further back it
+     stands, so a clean backdrop still wins a tie. */
+  function clutter(side, dist, others) {
+    candPos.copy(cine.target).addScaledVector(side, dist);
+    candPos.y += dist * ELEVATION;
+    viewDir.subVectors(cine.target, candPos);
+    const len = viewDir.length();
+    viewDir.divideScalar(len);
+    let score = 0;
+    for (const p of others) {
+      rel.subVectors(p, candPos);
+      const depth = rel.dot(viewDir);
+      if (depth <= 0.05 || depth >= 2 * len) continue;
+      const lateral = rel.addScaledVector(viewDir, -depth).length();
+      const reach = depth * FRAME_SPREAD + UNIT_RADIUS;
+      if (lateral >= reach) continue;
+      const overlap = 1 - lateral / reach;
+      score += depth < len ? overlap * (1 - depth / len) : overlap * BACK_WEIGHT * (2 - depth / len);
+    }
+    return score;
+  }
+
+  /* ease-out quart on the way in: the camera starts at top speed and
+     bleeds it off, which is what reads as thrown rather than driven.
+     The travel is a straight lerp of the two poses, so the tail of the
+     quart over a long fly still covers real ground; the overshoot is
+     a separate hump on top of it in world units, along the fly line,
+     scaled to the framing distance rather than the fly length. A few
+     percent of a twenty-unit fly would put the lens inside a helm. It
+     starts once the travel is nine tenths done, peaks three quarters
+     of the way through the fly, and settles over the last quarter,
+     around 75ms, as the fov eases back at the same time. */
   async function flyIn(attacker, defender, opts = {}) {
     if (!active) save();
     active = true;
     leaving = false;
     framePair(attacker.view.root.position, defender.view.root.position, opts);
-    await tween(opts.ms ?? FLY_IN_MS, (k) => { mix = easeOutCubic(k); });
+    flyDir.subVectors(cine.pos, saved.pos);
+    flyLen = flyDir.length();
+    if (flyLen > 1e-3) flyDir.divideScalar(flyLen); else flyDir.set(0, 0, 0);
+    await tween(opts.ms ?? FLY_IN_MS, (k) => {
+      mix = easeOutQuart(k);
+      over = k > OVER_START ? Math.sin(Math.PI * (k - OVER_START) / (1 - OVER_START)) : 0;
+    });
+    over = 0;
   }
 
   /* the return blends toward the live orbit pose, not the saved one, so a
@@ -131,6 +203,7 @@ export function createDirector({ isEnabled, scene }) {
     active = false;
     leaving = false;
     mix = 0;
+    rush = 0;
   }
 
   /* random per-frame offset that decays linearly over ms. Translates the
@@ -155,11 +228,28 @@ export function createDirector({ isEnabled, scene }) {
       pos.lerpVectors(from.pos, cine.pos, mix);
       target.lerpVectors(from.target, cine.target, mix);
       camera.fov = from.fov + (cine.fov - from.fov) * mix;
+      if (over > 0) {
+        /* both points move together, so the overshoot slides the frame
+           rather than swinging the view */
+        pos.addScaledVector(flyDir, over * OVER_PUSH * frameDist);
+        target.addScaledVector(flyDir, over * OVER_PUSH * frameDist);
+        camera.fov += over * OVER_FOV;
+      }
+      /* transit speed, measured off the actual path rather than read from
+         the easing, so the settle and the fly-out blur by exactly as much
+         as they move. Normalised so a fly-in's first frame reads 1 for
+         any orbit zoom: speed in fly-lengths per fly-duration over the
+         quart's initial slope. Taken before the shake is added, a hit
+         should not smear the frame. */
+      const dist = pos.distanceTo(prevPos);
+      rush = flyLen > 1e-3 ? Math.min(1, (dist / Math.max(dtMs, 1)) * (FLY_IN_MS / flyLen) / RUSH_PEAK) : 0;
     } else {
       pos.copy(base.pos);
       target.copy(base.target);
       camera.fov = base.fov;
+      rush = 0;
     }
+    prevPos.copy(pos);
     /* exponential smoothing toward the tracked point, framerate independent:
        the lean covers 1 - e^-1 of the remaining gap every TRACK_LAG_MS */
     if (tracked && active) wantLean.subVectors(tracked, cine.target).multiplyScalar(TRACK_WEIGHT * mix);
@@ -184,5 +274,8 @@ export function createDirector({ isEnabled, scene }) {
     /* 0 on the grid, 1 fully in the cut-in, eased in between. scene.js
        reads it to relax the posteriser while the camera is close. */
     get mix() { return mix; },
+    /* transit speed for the post pass radial blur, 0 at rest, 1 at the
+       peak of a fly-in. scene.js copies it into POST_FRAG's uRush. */
+    get rush() { return rush; },
   };
 }
