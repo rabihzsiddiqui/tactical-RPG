@@ -190,8 +190,8 @@ function Controls() {
 
       <Section title="Buttons">
         <Term k="Menu">
-          Holds End turn, the graphics resolution, music on and off, and the track selector,
-          alongside Show threat and Rotate.
+          Holds End turn, the graphics resolution, the attack cinematics toggle, music on
+          and off, and the track selector, alongside Show threat and Rotate.
         </Term>
         <Term k="Show threat">
           Shades every tile the enemy could attack next phase. Toggle it freely. It changes

@@ -10,7 +10,7 @@ import { Card, Eyebrow, Btn, Slider } from "./primitives.jsx";
    invisible against this Card's own parchment background. `light` swaps
    in ink text/border instead, which reads correctly here. */
 export default function PauseMenu({
-  onResume, api, g, cam, setCam, RES,
+  onResume, api, g, cam, setCam, RES, onToggleCinematics,
   musicOn, onToggleMusic, track, onSetTrack, onHelp,
   musicVol, onSetMusicVol, sfxVol, onSetSfxVol,
 }) {
@@ -46,6 +46,10 @@ export default function PauseMenu({
     playActionSelect();
     onToggleMusic();
   }
+  function toggleCinematics() {
+    playActionSelect();
+    onToggleCinematics();
+  }
   function pickTrack(name) {
     playActionSelect();
     onSetTrack(name);
@@ -72,6 +76,11 @@ export default function PauseMenu({
         </Btn>
         <Btn light on={rotate}>Rotate 90&deg;</Btn>
         <Btn light on={cycleRes}>{RES[cam.res].label}</Btn>
+        {/* the attack cut-in. Off plays every strike from the orbit camera,
+            exactly as it did before the camera director existed. */}
+        <Btn light on={toggleCinematics} active={cam.cinematics}>
+          {cam.cinematics ? "Cinematics: On" : "Cinematics: Off"}
+        </Btn>
       </div>
 
       <Eyebrow>Help</Eyebrow>

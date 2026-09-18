@@ -21,6 +21,8 @@ import { buildTerrain, buildUnitMesh, buildTree, buildKeep, buildBridge, buildHe
 import {
   POST_VERT, POST_FRAG, TILE_VERT, TILE_FRAG, RING_FRAG, WATER_VERT, WATER_FRAG,
 } from "./shaders.js";
+import { tween, stepTweens, resetTweens } from "./anim.js";
+import { createDirector } from "./camera.js";
 import { C } from "../ui/theme.js";
 import {
   playUnitSelect, playActionSelect, playBack, playNextTurn, playCritHit, playMiss, playNoDamage, playDeath,
@@ -256,9 +258,14 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   ro.observe(mount);
   resize();
 
-  /* ---- tween helper ---- */
-  const tweens = [];
-  const tween = (ms, fn) => new Promise((res) => tweens.push({ t: 0, ms, fn, res }));
+  /* ---- camera director ----
+     tween() itself lives in anim.js now, shared with camera.js. The
+     director owns final camera placement: frame() computes the orbit pose
+     from the cam state into `orbit` every tick and hands it over, and the
+     director either passes it straight through or blends it toward the
+     attack cut-in. See playEvents for when a cut-in starts. */
+  const director = createDirector({ isEnabled: () => camRef.current.cinematics !== false });
+  const orbit = { pos: new THREE.Vector3(), target: new THREE.Vector3(0, 0.4, 0), fov: 30 };
 
   /* ---- screen projection ---- */
   const tmp = new THREE.Vector3();
@@ -524,87 +531,129 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     tick();
   }
 
+  /* an exchange arrives as a flat run of strike events (attack, counter,
+     double), and flying the camera in and out per strike would be
+     unwatchable. So this scans ahead for the contiguous run, flies in once
+     before it, plays the whole run inside the cut-in, and flies out once
+     after. A death or levelUp directly after the run stays inside it so a
+     kill lands on camera.
+
+     The run is also bounded by the pair of units involved. runEnemyPhase
+     concatenates every enemy's events, so if two enemies were already
+     adjacent to their targets their strikes would sit back to back with no
+     move event between them, and one cut-in framing the first pair would
+     hold through the second pair's exchange off camera. */
+  function exchangeEnd(events, i) {
+    const first = events[i];
+    if (first.type !== "strike") return i;
+    const pair = new Set([first.srcId, first.tgtId]);
+    let j = i + 1;
+    while (j < events.length) {
+      const e = events[j];
+      if (e.type === "strike" && pair.has(e.srcId) && pair.has(e.tgtId)) j++;
+      else if (e.type === "death" && pair.has(e.unitId)) j++;
+      else if (e.type === "levelUp" && pair.has(e.unitId)) j++;
+      else break;
+    }
+    return j;
+  }
+
   async function playEvents(events) {
-    for (const e of events) {
-      switch (e.type) {
-        case "move": {
-          const u = g.units.find((z) => z.id === e.unitId);
-          if (e.path.length) await walkPath(u, e.path, e.from);
-          break;
-        }
-        case "face": {
-          const u = g.units.find((z) => z.id === e.unitId);
-          u.anim.targetYaw = { e: Math.PI / 2, w: -Math.PI / 2, s: 0, n: Math.PI }[e.dir];
-          break;
-        }
-        case "strike": {
-          const src = g.units.find((z) => z.id === e.srcId);
-          const tgt = g.units.find((z) => z.id === e.tgtId);
-          await lunge(src, tgt);
-          if (!e.hit) {
-            floater(tgt, "miss", C.parchDim);
-            playMiss();
-          } else {
-            tgt.hp = e.hpAfter;
-            flash(tgt, e.crit);
-            floater(tgt, e.dmg + (e.crit ? "!" : ""), e.crit ? C.gold : C.redLite);
-            // crit always gets its own sound, even on a killing or 0-damage
-            // blow. finalHit is for a *non-crit* kill specifically; a
-            // crit that also kills still gets Death.wav right after, from
-            // the "death" event below
-            if (e.crit) playCritHit();
-            else if (e.hpAfter <= 0) playFinalHit();
-            else if (e.dmg === 0) playNoDamage();
-            else playAttackHit();
-          }
-          tick();
-          await sleep(e.crit ? 380 : 260);
-          break;
-        }
-        case "death": {
-          const u = g.units.find((z) => z.id === e.unitId);
-          playDeath();
-          await die(u);
-          break;
-        }
-        case "heal": {
-          const tgt = g.units.find((z) => z.id === e.tgtId);
-          tgt.hp += e.amount;
-          floater(tgt, "+" + e.amount, C.green);
-          tick();
-          if (!e.instant) {
-            playHeal();
-            await sleep(600);
-          }
-          break;
-        }
-        case "levelUp": {
-          const u = g.units.find((z) => z.id === e.unitId);
-          playLevelUp();
-          g.levelUp = { name: u.name, lvl: e.lvl, gains: e.gains };
-          tick();
-          await sleep(1700);
-          g.levelUp = null;
-          tick();
-          break;
-        }
-        case "banner": {
-          // only "Player Phase"/"Enemy Phase" reach here. Victory/Defeat
-          // don't get a banner event at all, see game.js's checkEnd
-          g.banner = { text: e.text, side: e.side, n: g.banner.n + 1 };
-          if (e.text === "Player Phase") playPlayerPhase();
-          else playEnemyPhaseSfx();
-          tick();
-          break;
-        }
-        case "end":
-          // status itself is applied by applyResolve once every event above
-          // has played; this just fires the win/lose sound and cuts the music
-          if (e.result === "win") playVictory();
-          else playNextTurn(); // Defeat has no dedicated stinger yet
-          stopMusic();
-          break;
+    let i = 0;
+    while (i < events.length) {
+      const end = exchangeEnd(events, i);
+      if (end > i && director.enabled) {
+        const first = events[i];
+        const src = g.units.find((z) => z.id === first.srcId);
+        const tgt = g.units.find((z) => z.id === first.tgtId);
+        await director.flyIn(src, tgt);
+        for (; i < end; i++) await playEvent(events[i]);
+        await director.flyOut();
+      } else {
+        await playEvent(events[i++]);
       }
+    }
+  }
+
+  async function playEvent(e) {
+    switch (e.type) {
+      case "move": {
+        const u = g.units.find((z) => z.id === e.unitId);
+        if (e.path.length) await walkPath(u, e.path, e.from);
+        break;
+      }
+      case "face": {
+        const u = g.units.find((z) => z.id === e.unitId);
+        u.anim.targetYaw = { e: Math.PI / 2, w: -Math.PI / 2, s: 0, n: Math.PI }[e.dir];
+        break;
+      }
+      case "strike": {
+        const src = g.units.find((z) => z.id === e.srcId);
+        const tgt = g.units.find((z) => z.id === e.tgtId);
+        await lunge(src, tgt);
+        if (!e.hit) {
+          floater(tgt, "miss", C.parchDim);
+          playMiss();
+        } else {
+          tgt.hp = e.hpAfter;
+          flash(tgt, e.crit);
+          floater(tgt, e.dmg + (e.crit ? "!" : ""), e.crit ? C.gold : C.redLite);
+          // crit always gets its own sound, even on a killing or 0-damage
+          // blow. finalHit is for a *non-crit* kill specifically; a
+          // crit that also kills still gets Death.wav right after, from
+          // the "death" event below
+          if (e.crit) playCritHit();
+          else if (e.hpAfter <= 0) playFinalHit();
+          else if (e.dmg === 0) playNoDamage();
+          else playAttackHit();
+        }
+        tick();
+        await sleep(e.crit ? 380 : 260);
+        break;
+      }
+      case "death": {
+        const u = g.units.find((z) => z.id === e.unitId);
+        playDeath();
+        await die(u);
+        break;
+      }
+      case "heal": {
+        const tgt = g.units.find((z) => z.id === e.tgtId);
+        tgt.hp += e.amount;
+        floater(tgt, "+" + e.amount, C.green);
+        tick();
+        if (!e.instant) {
+          playHeal();
+          await sleep(600);
+        }
+        break;
+      }
+      case "levelUp": {
+        const u = g.units.find((z) => z.id === e.unitId);
+        playLevelUp();
+        g.levelUp = { name: u.name, lvl: e.lvl, gains: e.gains };
+        tick();
+        await sleep(1700);
+        g.levelUp = null;
+        tick();
+        break;
+      }
+      case "banner": {
+        // only "Player Phase"/"Enemy Phase" reach here. Victory/Defeat
+        // don't get a banner event at all, see game.js's checkEnd
+        g.banner = { text: e.text, side: e.side, n: g.banner.n + 1 };
+        if (e.text === "Player Phase") playPlayerPhase();
+        else playEnemyPhaseSfx();
+        tick();
+        break;
+      }
+      case "end":
+        // status itself is applied by applyResolve once every event above
+        // has played; this just fires the win/lose sound and cuts the music
+        if (e.result === "win") playVictory();
+        else playNextTurn(); // Defeat has no dedicated stinger yet
+        stopMusic();
+        break;
     }
   }
 
@@ -924,27 +973,20 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     const o = camRef.current;
     if (o.res !== lastRes) applyRes();
 
-    for (let i = tweens.length - 1; i >= 0; i--) {
-      const tw = tweens[i];
-      tw.t += dt * 1000;
-      const k = Math.min(1, tw.t / tw.ms);
-      tw.fn(k);
-      if (k >= 1) { tweens.splice(i, 1); tw.res(); }
-    }
+    stepTweens(dt * 1000);
 
     const pit = THREE.MathUtils.degToRad(o.pitch);
     const yaw = THREE.MathUtils.degToRad(o.yaw);
     const dist = (o.zoom / 2) / Math.tan(THREE.MathUtils.degToRad(o.fov) / 2);
-    camera.fov = o.fov;
     camera.aspect = VW / VH;
     camera.far = dist + 80;
-    camera.position.set(
+    orbit.pos.set(
       Math.cos(pit) * Math.sin(yaw) * dist,
       Math.sin(pit) * dist + 0.4,
       Math.cos(pit) * Math.cos(yaw) * dist
     );
-    camera.lookAt(0, 0.4, 0);
-    camera.updateProjectionMatrix();
+    orbit.fov = o.fov;
+    director.apply(camera, orbit);
 
     const t = now / 1000;
     matMove.uniforms.uTime.value = t;
@@ -999,6 +1041,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   return () => {
     cancelAnimationFrame(raf);
     phaseToken++;
+    resetTweens();
     ro.disconnect();
     cv.removeEventListener("pointerdown", onDown);
     cv.removeEventListener("pointermove", onMove);

@@ -22,6 +22,11 @@ import HelpOverlay from "./HelpOverlay.jsx";
 import { hintFor } from "./hint.js";
 
 const ONBOARD_KEY = "tactical-rpg-onboarded";
+/* the attack cut-in is on unless the player has switched it off. Persisted,
+   unlike the music toggles, because turning it off is as much an
+   accessibility choice (camera motion) as a taste one, and it should not
+   come back on every launch of the installed app. */
+const CINEMATICS_KEY = "tactical-rpg-cinematics";
 
 export default function App() {
   const mountRef = useRef(null);
@@ -34,9 +39,10 @@ export default function App() {
 
   const [, tick] = useReducer((n) => n + 1, 0);
   const [floats, setFloats] = useState([]);
-  const [cam, setCam] = useState({
+  const [cam, setCam] = useState(() => ({
     pitch: 48, yaw: 0, fov: 30, zoom: 12, res: RES.length - 1, post: true, levels: 32,
-  });
+    cinematics: typeof localStorage === "undefined" || localStorage.getItem(CINEMATICS_KEY) !== "0",
+  }));
   const camRef = useRef(cam);
   camRef.current = cam;
   const [resetKey, setResetKey] = useState(0);
@@ -126,6 +132,14 @@ export default function App() {
   }
   function toggleMusic() {
     setMusicOn((on) => { setMusicEnabled(!on); return !on; });
+  }
+  /* reads `cam` from the closure rather than inside the updater so the
+     localStorage write is not a side effect of a function React may call
+     twice in StrictMode */
+  function toggleCinematics() {
+    const on = !cam.cinematics;
+    localStorage.setItem(CINEMATICS_KEY, on ? "1" : "0");
+    setCam((c) => ({ ...c, cinematics: on }));
   }
   function changeMusicVol(v) {
     setMusicVol(v);
@@ -329,6 +343,7 @@ export default function App() {
                 <PauseMenu
                   onResume={() => setPaused(false)}
                   api={api} g={g} cam={cam} setCam={setCam} RES={RES}
+                  onToggleCinematics={toggleCinematics}
                   musicOn={musicOn} onToggleMusic={toggleMusic}
                   track={track} onSetTrack={chooseTrack}
                   onHelp={() => openHelp()}
