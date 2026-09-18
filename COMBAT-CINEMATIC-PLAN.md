@@ -184,7 +184,70 @@ deliberately rather than discovering it.
 
 ---
 
-## Session 5: class silhouettes
+## Session 5: health bars and battle HUD
+
+**Warm-up, do this first.** Health bars are ground decals pinned to a fixed
+world offset, so they slide out from under the unit when the camera orbits and
+compress to nothing at low angles.
+
+- In `meshes.js`, remove both `rotation.x = -Math.PI / 2` lines in
+  `buildHealthBar` so the planes stand upright in local space
+- In `animUnit`, drop the `+ 0.62` world offset and billboard instead:
+
+```js
+const bar = u.view.hpBar.group;
+bar.position.set(root.position.x, lvlH(u.x, u.y) + 0.12, root.position.z);
+bar.quaternion.copy(camera.quaternion);
+bar.translateY(-0.34);
+```
+
+- Re-tune `HP_BAR_W` and `HP_BAR_H`. Upright reads larger than a floor decal
+- Depth is already correct, `depthTest: false` with renderOrder 10 and 11.
+  Leave it
+
+**Then the HUD.** During a cut-in, hide the world bars and show a Fire Emblem
+style forecast panel instead.
+
+The data already exists. `combat.js` exports `forecastOf(att, def)` returning
+`{ a, d, counters }`, which is both sides' damage, hit, crit and whether a
+counter happens. No core work needed.
+
+- New component in `src/ui`, driven by the camera director's cut-in state
+- Static panel from `forecastOf(attacker, defender)` at cut-in start
+- Live HP drain from `hpAfter` on each `strike` event
+- World bars hidden for the duration, restored on fly-out
+
+**Stop when:** bars sit under every unit at any camera angle, and the cut-in
+swaps them for a panel that shows the exchange before it resolves.
+
+---
+
+## Session 6: camera punch-up
+
+Tuning what session 1 built. The fly-in works, it just doesn't hit hard enough.
+
+Read the Current state section before changing any numbers. The existing values
+were tuned by eye and some of them are deliberate.
+
+In rough order of impact:
+
+- **Radial blur during transit.** Add a uniform to `POST_FRAG` that ramps while
+  the camera is flying and smears radially from screen centre. This is the one
+  that makes it read as a rush. Nothing else is close
+- **Bigger fov swing.** 30 to 65 or 70, not the 45 to 55 originally specced
+- **Drop the camera low.** Near eye level or below
+- **Keep it short.** 250 to 350ms in. Past 500ms it becomes a pan
+- **Ease-out quart with a slight overshoot.** Blow a few percent past the final
+  framing, settle back over ~100ms. The overshoot sells arrival
+
+Runs after the HUD because the HUD changes what the framing has to leave room
+for.
+
+**Stop when:** the cut-in feels like the camera was thrown rather than moved.
+
+---
+
+## Session 7: class silhouettes
 
 Last for a reason. Worst payoff per hour under a close camera, and no natural
 stopping point.
@@ -246,156 +309,42 @@ Noted so they do not get lost, and deliberately out of scope for the day.
 
 ---
 
-## Session handoff template
+## Current state
 
-Append one of these at the end of every session.
+Maintained across sessions. Read this before starting any session that touches
+earlier work. Records decisions the code alone doesn't explain.
 
-```
-## Session N handoff: <title>
-Date:
-Session goal:
-Completed:
-  -
-Not completed, and why:
-  -
-Files touched:
-  -
-Decisions made and the reasoning:
-  -
-Known issues introduced:
-  -
-Next session starts with:
-```
+**What exists (Sessions 1 to 5, all committed, tests 29 green).** `anim.js` owns the tween queue and `hitStop`. `camera.js` is the director: `save`, `flyIn`, `flyOut`, `track`, `shake`, `apply`, plus the cut-in key light. `attacks.js` holds one beat per weapon type (sword, lance, axe share a melee routine; bow, anima, staff have their own). `effects.js` holds one trail ribbon, one burst quad, one flare light and 14 motes, built at mount and hidden when idle. `playEvents` groups a strike run by unit pair, flies in once before and out once after; a non-instant heal gets its own cut-in. World health bars are camera-facing billboards. `BattleHud.jsx` is the cut-in panel, driven by `g.cutIn` on the game state.
 
----
+**Camera framing.** Midpoint of the pair, camera perpendicular to the attack axis on the side the orbit camera already favours. `BASE_DIST` 2.0 plus 0.6 per tile of separation. Look target 0.42 above ground. `ELEVATION` 0.28 rise per unit of distance, about 16 degrees against the orbit's 48. `CINE_FOV` 50 against the orbit's 30: the fov widening is what sells the rush. Fly in 340ms ease-out, fly out 520ms ease-in-out. Projectile tracking leans the look target 40% toward the arrow or bolt with a 90ms lag.
 
-## Session 1 handoff: camera director and the attack beat
-Date: 2026-09-18
-Session goal: fly the camera in on a committed attack, hold through the whole exchange, return to the grid. Cinematics toggle in the pause menu.
-Completed:
-  - `src/view/anim.js`: `tween` moved out of scene.js, plus `stepTweens(dtMs)`, `resetTweens()`, `easeOutCubic`, `easeInOutQuad`. The queue is module-level so camera.js can schedule tweens without importing the scene. scene.js still drives it from `frame()` and resets it on unmount.
-  - `src/view/camera.js`: `createDirector({ isEnabled })` returning `{ save, flyIn, flyOut, shake, apply, enabled, active }`. `apply(camera, orbitPose)` is the hook the frame loop calls every tick. Idle: passes the orbit pose through. Active: lerps position, target and fov between the saved orbit pose and the cinematic pose by an eased 0..1 mix. Shake is a separate decaying tween that translates camera and target together, so it composes with a fly.
-  - Framing: midpoint of the pair, camera pushed out perpendicular to the attack axis on whichever side the orbit camera already favours, distance 2.0 + 0.6 per tile of separation, look target 0.42 above the ground midpoint, elevation about 16 degrees, fov 50. Fly in 340ms ease-out, fly out 520ms ease-in-out.
-  - `playEvents` groups a contiguous run of `strike` events plus any trailing `death` and `levelUp` for the same pair, flies in once before, out once after. The old switch is now `playEvent(e)`, unchanged inside.
-  - Cinematics toggle in the pause menu Battle group, default on, persisted in localStorage under `tactical-rpg-cinematics`. Off skips the director entirely; every strike plays from the orbit camera as before.
-  - Field manual's Menu entry mentions the toggle.
-  - Verified headlessly: turn 1 enemy phase produced a hit-then-counter-miss exchange; frames show the fly-in, the hold through the counter, the blend out, and the orbit view restored. `npm test` 29 green, lint unchanged at 53 pre-existing warnings and 0 errors, `npm run build` clean.
-Not completed, and why:
-  - `shake` is implemented but nothing calls it yet. Session 3 owns screen shake by weapon might.
-  - No framing tuning beyond "clearly working", per the plan. With the squad clustered on turn 1 a third unit often sits in the near corner of the frame.
-Files touched:
-  - `ashfen/src/view/anim.js` (new)
-  - `ashfen/src/view/camera.js` (new)
-  - `ashfen/src/view/scene.js`
-  - `ashfen/src/ui/App.jsx`
-  - `ashfen/src/ui/PauseMenu.jsx`
-  - `ashfen/src/ui/HelpOverlay.jsx`
-Decisions made and the reasoning:
-  - The director does not own the camera outright. The frame loop still computes the orbit pose every tick and the director blends against it. Fly-in leaves from the pose saved at the first strike; fly-out returns toward the live orbit pose, so a Rotate 90 pressed mid-exchange lands without a pop when the director hands back.
-  - The strike run is bounded by the unit pair, not just by event type. `runEnemyPhase` concatenates every enemy's events, so two enemies already adjacent to their targets would otherwise produce one cut-in that holds through the second exchange off camera.
-  - `enabled` is a getter that reads the setting on every flyIn rather than a value captured at mount, so the toggle applies to the next attack without a remount.
-  - Setting lives in the `cam` state next to `post` and `res` and is persisted, unlike the music toggles, because turning camera motion off is an accessibility choice that should survive relaunching the installed PWA.
-Known issues introduced:
-  - None found. Per-strike pacing (lunge 300ms, sleep 260 or 380) is unchanged, so an exchange is about 0.9s longer end to end from the two flies.
-Next session starts with:
-  - Session 2, `src/view/attacks.js`: absorb `lunge()` into a per-weapon-type beat table. The cut-in camera now makes the bow and tome lunge visibly wrong at range 2.
-  - Headless check recipe: `npx vite --port 5199` in `ashfen/`, then a Playwright script using the npx-cached package with `executablePath` pointing at the cached `chromium_headless_shell` and args `--use-angle=swiftshader --enable-unsafe-swiftshader`. Set `tactical-rpg-onboarded=1` in localStorage, click Begin, then Menu and End turn. Turn 1's enemy phase already produces an exchange.
+**Materials.** Blade, helm, trim and plume are `MeshStandardMaterial` with metalness 0.7, roughness 0.4. Everything else stays Lambert. Key light `DirectionalLight` at 0xfff1d6, intensity 1.1 times the fly mix. `uLevels` blends from the setting up to 64 with the mix; `POST_FRAG` skips quantising at 63 and above.
 
----
+**Decisions the code does not explain.**
+- The director blends against the live orbit pose every tick rather than owning the camera. A Rotate 90 pressed mid-exchange lands without a pop on hand-back.
+- The strike run is bounded by unit pair, not event type. `runEnemyPhase` concatenates every enemy's events, so two adjacent enemies would otherwise share one cut-in.
+- The cinematics toggle is persisted in localStorage (`tactical-rpg-cinematics`) unlike the music toggles, because turning camera motion off is an accessibility choice that should survive relaunching the PWA.
+- Beats are absolute pose keyframes lerped from and to NEUTRAL, not deltas. `animUnit` overwrites the same rotation fields each frame, so additive poses would fight it.
+- `play()` waits 150ms before the windup when the attacker has more than about 30 degrees left to turn. A windup that starts mid-spin reads as flailing.
+- Hit-stop is a time scale: `stepTweens` returns the animation time that actually elapsed and `animUnit` and the effects run on that. The camera keeps real time. 70ms on a hit, 120ms on a crit, plus a 280ms hold before fly-out on any crit.
+- Shake is `mt * 0.005` amplitude for `120 + mt * 14` ms, 1.8x on a crit, and follows the cinematics toggle. Hit-stop and the recoil nudge play regardless.
+- The trail is sampled per frame after `animUnit`, not computed from the pose curve. Fewer samples at low fps give a shorter ribbon, never a wrong one.
+- The flare and the key light are added at mount at intensity 0. Adding a light on demand recompiles every lit material, a hitch better paid once. Both now sit in every Lambert shader; if mobile profiling flags them, merge into one light that moves.
+- The key light is aimed as a mirror of the camera off the blade's narrow face at contact (`KEY_TWIST` 0.3 matches the melee strike torso yaw, `KEY_TILT` 0.36 keeps it above the horizon). Placed high and to the side, the blade never caught anything.
+- Intensity 1.1, down from 1.6: with no tone mapping, 1.6 turned Kaelen's helm into a flat white slab in the near corner of frame.
+- Roughness 0.4, not the plan's 0.35: on flat boxes a tighter lobe lit a whole face or nothing, popping like a facet.
+- Posterisation blends off rather than switching, so the bands dissolve as the camera closes in instead of snapping off on frame one.
 
-## Session 2 handoff: per-class attack behaviour
-Date: 2026-09-18
-Session goal: replace the one-size lunge with a beat per weapon type, so bows and tomes stop lunging at range 2 under the cut-in camera.
-Completed:
-  - `src/view/attacks.js`: `createAttackPlayer({ scene, director })` returning `play(src, tgt, { onImpact })`. A beat owns the attacker's limbs from windup to recovery and fires `onImpact` at the frame of contact; scene.js does flash, floater, sound and hp there. Beats are keyed by `WEAPONS[k].type`: sword, lance and axe share one melee routine with different keyframes and phase durations (axe: 200ms windup, 260ms recover; sword: 90/170; lance thrusts with the weapon rotated along the forearm). Bow draws, holds, looses an arrow that flies with a shallow arc. Anima forms a bolt in the casting hand, throws it, bursts it at the target. Staff raises, the target tints green and lifts a touch, then settles.
-  - The old `lunge()` in scene.js is gone; melee is the table's first three entries, not a second path.
-  - `meshes.js`: `buildArrow()` (box shaft, cone head, box fletching, +z forward) and `buildBolt()` (emissive octahedron, transparent for the burst fade). Built once by the attack player and reused, never allocated per strike.
-  - `camera.js`: `director.track(vec3 | null)`. The look target leans 40% of the way toward a tracked point with a 90ms exponential lag, so the camera pans with the arrow or bolt and eases back when it lands. `apply(camera, orbit, dtMs)` now takes dt for that smoothing.
-  - `scene.js`: `animUnit` has an `"attack"` state that leaves every part to attacks.js and only keeps position, offset and yaw current. The `strike` case calls `faceToward` then `attacks.play`; per-strike trailing sleep dropped from 260/380 to 100/240 because the recovery now sits between impact and the next strike. Non-instant `heal` events play the staff beat and get their own one-event cut-in via `exchangeEnd`, so the sixth beat is seen from the same camera as the other five. Instant heals (vulnerary, terrain) are untouched.
-  - Square-up: `play()` waits 150ms before the windup when the attacker still has more than about 30 degrees to turn, because a windup that starts mid-spin read as flailing on the first screenshots.
-  - Verified headlessly with a throwaway harness page (not committed, recipe in memory) that mounts the scene with fake React refs and drives real canvas taps: sword vs lance counter, axe vs axe counter, bow at range 2, fire at range 2, staff heal. All six beats play, every unit ends with zero offset, weapon back at 1.5 and body twist 0. `npm test` 29 green, lint unchanged at the pre-existing warnings, `npm run build` clean.
-Not completed, and why:
-  - No hit reaction on the defender beyond the existing flash. Session 3 owns hit-stop, shake and impact effects.
-  - The bow is held in the right hand with the same carry rotation as every other weapon, so the draw reads as "bow in front, string hand pulling" rather than a true side-on draw. Deliberate enough to pass the stop condition; a dedicated bow carry rotation is a five-minute tweak if it bothers you in play.
-Files touched:
-  - `ashfen/src/view/attacks.js` (new)
-  - `ashfen/src/view/meshes.js`
-  - `ashfen/src/view/camera.js`
-  - `ashfen/src/view/scene.js`
-  - `ashfen/CLAUDE.md` (local only, it is in `.git/info/exclude`)
-Decisions made and the reasoning:
-  - Beats are whole-pose keyframes, not deltas. animUnit overwrites the same rotation fields every frame in its other states, so an additive approach would fight it; absolute poses lerped from and to a NEUTRAL keyframe also guarantee a beat can never leave a limb somewhere odd.
-  - `onImpact` is a callback into scene.js rather than the beat resolving at impact and scene.js running the recovery, so the beat stays one readable async sequence and scene.js keeps every bit of game feedback in one place.
-  - `play()` restores whatever anim state the unit had before, so a player attacker still lands back in its ready pose after acting, exactly as before beats existed.
-  - The heal cut-in is a grouping change in `exchangeEnd`, not a new event type, in keeping with the ground rules.
-  - The staff beat tints from each material's `userData.baseEmissive` so k = 0 is exactly the resting look and nothing has to be remembered or restored.
-Known issues introduced:
-  - A half-turn square-up plus the longer beats makes an axe exchange about 0.4s longer than the lunge version. Feels right in the cut-in, may want trimming with cinematics off.
-Next session starts with:
-  - Session 3, effects and impact. `director.shake` still has no caller; the beat's `onImpact` is the natural place for hit-stop and shake, and `WEAPONS[k].mt` is already on `wep(src)`.
-  - Headless recipe is in memory (`headless-verify-recipe`) with the harness page inline; it drives real taps via a reconstructed orbit camera and exposes `window.H`.
+**Health bars and HUD (Session 5).**
+- The bar copies the camera quaternion, then `translateY(-0.34)` in its own local frame, which is screen-down. So it sits under the feet on screen from any pitch or yaw, and dips below ground level at steep pitches; with `depthTest: false` that never shows. Size is 0.48 by 0.085, down from the decal's 0.62 by 0.11. Upright and square-on, the old size read like a plank.
+- The HUD is driven by `g.cutIn` plus `tick()`, the same channel every other overlay uses, rather than by a React state the director owns. The director stays a plain object with no React in it, and the panel reads live HP from `g.units` the way the level-up card reads `g.levelUp`.
+- The forecast is taken once, before `flyIn`, so the panel shows the odds the exchange was rolled against and the numbers never move while the HP drains. A heal cut-in stores `amount` instead: `strikeCalc` on a staff has no `hit` and returns NaN.
+- `cutIn.closing` flips before `flyOut` and the object clears after it. The panel fades over the fly-out and the world bars come back at the same moment, so there is never a frame with neither.
+- The player's unit is always on the left of the panel, whichever side is attacking. Blue left, red right, every time.
+- Panel motion is opacity and transform only, with a `prefers-reduced-motion` override in the App style block.
 
----
+**Known issues carried forward.** A third unit in the near corner of the cut-in frame is common on turn 1 and now catches the key light on its helm. Standard materials and the two idle lights are still untested on a phone; the performance budget asked for that check before Session 5 and it has not happened. oxlint reports `react(refs)` warnings for every read of `g` during render, including the new HUD block; that pattern predates this plan.
 
-## Session 3 handoff: effects and impact
-Date: 2026-09-18
-Session goal: make a hit land. Hit-stop, screen shake by weapon might, a weapon trail, an impact burst per weapon type, staff motes, and the full stack on a crit.
-Completed:
-  - `src/view/anim.js`: `hitStop(ms)` holds animation time still. `stepTweens` drains the hold first and returns the animation time that actually elapsed; `frame()` feeds that to `animUnit` and the effects, so limbs, tweens, trail and burst all freeze together on the frame of contact. A shake or recoil queued at impact is a tween, so it waits out the freeze and starts when it lifts. 70ms on a hit, 120ms on a crit. Overlapping holds keep the longer one.
-  - `src/view/effects.js` (new): `createEffects({ scene })` returning `{ trailBegin, trailEnd, burst, flare, motes, update }`. One trail ribbon (16 samples, indexed quads, world-space vertices rewritten per frame, `TRAIL_FRAG`), one billboarded burst quad (`IMPACT_FRAG`, random roll per burst), one point light for the fire flare, one `Points` cloud of 14 motes. All built once at mount and hidden when idle, so no draw calls outside a beat. `update(dtMs, camera)` runs after `animUnit` so the trail samples the weapon where it is drawn this frame.
-  - `src/view/shaders.js`: `TRAIL_FRAG` (alpha squared along the length, `uLen` so the tail reaches zero however few frames the swing took, `uFade` after the swing, `uGain` for crits) and `IMPACT_FRAG` (six-point core that collapses and whitens, ring that expands, both fading with `uT`). Both additive, both reuse `TILE_VERT`.
-  - `src/view/attacks.js`: `play(src, tgt, { hit, crit, onImpact })`. Melee beats record the trail from the grip to the tip through the strike phase only (per-weapon `trail` span in `MELEE`), colour from the palette's `blade`, pulled 60% toward gold and gain 1.7 on a crit. Physical hits burst white at the target's chest, fire bursts orange and flares the point light, staff starts motes as the staff comes up. Missed shots aim past the target's shoulder and the arrow or bolt carries on past under the recovery; a missed bolt fizzles instead of bursting.
-  - `src/view/scene.js`: the strike handler calls `hitStop`, `director.shake(mt * 0.005, 120 + mt * 14)` (crit: 1.8x), and `nudge()` for a 0.12 tile recoil (crit 0.22) or a 0.16 tile lean away on a miss. Shake follows the cinematics toggle because it is camera motion; hit-stop and recoil play regardless. A crit anywhere in an exchange holds 280ms before the camera lets go. `animUnit` runs on frozen time; the camera keeps real time.
-  - Verified headlessly (harness page plus a Playwright driver, both throwaway) for axe crit with counter, sword hit with counter, bow hit, bow miss, fire hit, fire miss and a staff heal. Added a `?slow` switch to the harness that steps the frame clock a fixed 16ms per render so the trail could be seen with a full set of samples. `npm test` 29 green, lint unchanged at 53 pre-existing warnings and 0 errors, `npm run build` clean.
-Not completed, and why:
-  - No sound changes. The crit and hit sounds already exist and land on the same frame as the effects.
-  - Melee misses show the lean-away and the number only. A proper sidestep dodge would want a keyframe of its own on the defender, which is Session 5 territory once bodies differ by class.
-Files touched:
-  - `ashfen/src/view/effects.js` (new)
-  - `ashfen/src/view/anim.js`
-  - `ashfen/src/view/shaders.js`
-  - `ashfen/src/view/attacks.js`
-  - `ashfen/src/view/scene.js`
-Decisions made and the reasoning:
-  - Hit-stop is a time scale, not a pause flag. Returning the effective dt from `stepTweens` means nothing else has to know about the freeze, and any future thing driven off that dt freezes for free.
-  - Effects sample from the frame loop rather than from inside a tween callback. Tweens step before `animUnit` places the root, so a trail sampled there would lag a frame; sampling after `animUnit` with `updateWorldMatrix` gives the ribbon's leading edge exactly on the blade.
-  - The trail is sampled per frame rather than computed from the pose curve. Fewer samples at a low frame rate make a shorter ribbon, never a wrong one, and the shader's `uLen` keeps the fade correct either way.
-  - The flare is a real point light rather than an emissive tint, because `flash()` already owns the emissive channel on a hit and the two would fight. It is added once at mount at intensity 0: adding a light on demand recompiles every lit material, a hitch better paid once than mid-exchange.
-  - The burst and motes draw without depth testing. The contact point is inside the target's body more often than not, and half the mote cloud starts inside it too.
-  - Miss handling is in the beat, not a new event. The event already says hit or miss; the beat just aims differently.
-Known issues introduced:
-  - The `PointLight` adds one light to every Lambert shader permanently, a small per-fragment cost even when idle. Session 4's key light will want the same treatment; if two idle lights show up in mobile profiling, merge them into one light that moves.
-  - The crit hold plus hit-stop makes a crit exchange about 0.4s longer than before. Intended.
-Next session starts with:
-  - Session 4, materials. Switch `blade`, `helm`, `trim`, `plume` to `MeshStandardMaterial`, add the key light on fly-in, decide what to do about `uLevels` banding. The flare light in effects.js is a working example of a light living in the scene at intensity 0.
-  - Headless recipe is in memory (`headless-verify-recipe`), now with the slow-motion switch and the scenario driver.
-
----
-
-## Session 4 handoff: materials
-Date: 2026-09-18
-Session goal: make metal read as metal under the cut-in camera. Standard materials on the metal parts, a key light tied to the fly, a sharper face, and a deliberate answer to posterisation banding.
-Completed:
-  - `meshes.js`: a second material maker `MM()` next to `M()` in `buildUnitMesh`. Blade (sword blade, axe head, lance tip), helm, trim (belt, tome edge) and plume (plume, sword guard, staff orb) are `MeshStandardMaterial` with metalness 0.7 and roughness 0.4, from one `METAL` constant. The arrow head in `buildArrow` uses the same. Cloth, skin, hair, grip, bow limb, string and face stay Lambert. `parts` names are unchanged, so `animUnit` and `attacks.js` are untouched.
-  - `faceTexture` draws in the same 32 unit grid scaled by `FACE_S = 2` to a 64px canvas, with a helper `R()` so every stroke is in the old coordinates. Added a fringe shadow, side hair, a lower catchlight, a nose line and a jaw shade, all sub-32px strokes that the old texture had no room for. Still nearest filtered.
-  - `camera.js`: the director owns the key light. `createDirector({ isEnabled, scene })` adds one `DirectionalLight` plus its target at mount, intensity 0, no shadow. `framePair` aims it and `apply` sets `intensity = KEY_INTENSITY * mix`, so it fades up with the fly and down with the release. New getter `director.mix`.
-  - `scene.js`: `uLevels` rides the mix from the setting up to 64 (`POST_FRAG` skips quantising at 63 and above). The grid keeps its posterised look; the cut-in gets smooth gradients.
-  - Verified headlessly with the harness page and the Session 3 driver, sword hit with counter and axe crit with counter, both in slow motion. The sword blade goes white at the top of its arc and the guard glints gold, the axe head shows a lit facet, a helm two tiles from the lens shows a smooth specular gradient with no banding, and the new face reads at cut-in distance. `npm test` 29 green, lint at the same 53 pre-existing warnings and 0 errors, `npm run build` clean.
-Not completed, and why:
-  - Idle-frame profiling on a phone. Two lights now sit in every Lambert shader at intensity 0 (the flare from Session 3 and this key). Both are directional-or-point at zero, which is cheap, but the plan's performance budget says check after Session 4 and that needs a device.
-Files touched:
-  - `ashfen/src/view/meshes.js`
-  - `ashfen/src/view/camera.js`
-  - `ashfen/src/view/scene.js`
-Decisions made and the reasoning:
-  - The key light is aimed, not just placed. From the cut-in camera a box blade is seen edge-on: its wide faces sweep the vertical plane of the swing and the face turned to the lens is the narrow side, whose normal is the framing `perp` rotated by the body's yaw. The melee beats finish the strike with the torso twisted about 0.3 rad, so the light sits where a mirror on that face would show the camera at contact (`L = 2(N.V)N - V`), tilted so it lands above the horizon. The first pass put it high and to the side and the blade never caught anything; this version makes the glint a property of the pose rather than luck.
-  - Intensity 1.1, down from a first try at 1.6. With no tone mapping anything over 1.0 clips, and Kaelen's near-white helm went to a flat white slab when he stood in the near corner of the frame.
-  - Roughness 0.4 rather than the plan's 0.35. On flat six-sided boxes a tighter lobe lights a whole face or nothing, which read as a facet popping on and off. 0.4 spreads it into a gradient across the face.
-  - Posterisation: blend, not a switch. Levels at 40 or 50 mid-fly give finer bands, so the effect dissolves as the camera closes in rather than snapping off on the first frame. Reading `director.mix` in the frame loop was the smallest way to do it; the post pass already ran per frame.
-  - The key light lives in the director rather than effects.js because it is part of the shot, not of a beat: it follows the framing and the fly timing, nothing a weapon type decides.
-  - Metal parts lose 70 percent of their ambient diffuse under Standard, so helms sit a touch darker on the grid than before. Judged correct: the grid view now has a small value contrast between cloth and metal where before it had none.
-Known issues introduced:
-  - A unit standing in the near corner of the cut-in frame catches the key light on its helm as a large soft highlight. Session 1 already flagged the near-corner unit as a framing problem; this makes it a little more visible.
-  - Standard materials cost more per fragment than Lambert. Only around a quarter of each unit's parts changed and the effect at 400x240 is small, but it is untested on a phone.
-Next session starts with:
-  - Session 5, class silhouettes, is the remaining item. Or run the mobile profiling check the performance budget asks for after Sessions 3 and 4 first. Either way, headless recipe is in memory (`headless-verify-recipe`); note that ImageMagick's `montage` fails on this machine with a font error, so build contact sheets with `magick ... +append` and `-append` instead.
+**At the end of every session:** append anything decided and why, but only where
+the reasoning isn't obvious from the code. Tuned values, things tried and
+rejected, deliberate choices that look like bugs. Not a changelog.

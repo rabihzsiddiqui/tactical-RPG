@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { MW, MH, CX, CZ, cell, lvlH, walkable } from "../core/map.js";
 import { ROSTER, makeUnit } from "../core/data.js";
 import { tracePath, reachTiles } from "../core/path.js";
-import { wep } from "../core/combat.js";
+import { wep, forecastOf } from "../core/combat.js";
 import { threatSet } from "../core/ai.js";
 import { K, man, clamp, sleep } from "../core/util.js";
 import {
@@ -44,6 +44,11 @@ export function newGame() {
     units: ROSTER.map(makeUnit),
     turn: 1, phase: "player", status: "playing",
     sel: null, danger: false, inspect: null, forecast: null,
+    /* the attack cut-in in progress, or null. { srcId, tgtId, kind, f,
+       closing }: `f` is the forecast at the moment the camera flew in,
+       `closing` flips true for the fly-out so the HUD can fade while the
+       world bars come back. See playEvents. */
+    cutIn: null,
     /* n:-1 is a sentinel meaning "no banner shown yet". App.jsx sets the
        real first banner from the title card's Begin button, in the same
        click that unlocks audio, so the sting and the banner's entrance
@@ -370,8 +375,17 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     while (d < -Math.PI) d += Math.PI * 2;
     root.rotation.y += d * Math.min(1, dt * 12);
 
-    u.view.hpBar.group.visible = true;
-    u.view.hpBar.group.position.set(root.position.x, lvlH(u.x, u.y) + 0.12, root.position.z + 0.62);
+    /* the bar is a billboard: it copies the camera's rotation so its face
+       is always square to the lens, then slides down its own local y,
+       which is screen-down, so it sits under the feet on screen from any
+       orbit angle. A world offset would drift out from under the unit as
+       the camera turned. Hidden during a cut-in, where the battle HUD
+       shows the same numbers, and back the moment the camera lets go. */
+    const bar = u.view.hpBar.group;
+    bar.visible = !g.cutIn || g.cutIn.closing;
+    bar.position.set(root.position.x, lvlH(u.x, u.y) + 0.12, root.position.z);
+    bar.quaternion.copy(camera.quaternion);
+    bar.translateY(-0.34);
     u.view.hpBar.fill.scale.x = Math.max(0.001, HP_BAR_W * (u.hp / u.maxHp));
     u.view.readyRing.position.set(root.position.x, lvlH(u.x, u.y) + 0.05, root.position.z);
     if (g.tutorial && u.lord) {
@@ -588,6 +602,17 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         const first = events[i];
         const src = g.units.find((z) => z.id === first.srcId);
         const tgt = g.units.find((z) => z.id === first.tgtId);
+        /* the battle HUD reads this. The forecast is taken once, here,
+           before any strike lands: the numbers on the panel are the odds
+           the exchange was rolled against, and they stay put while the
+           HP drains under them. A heal has no forecast, the panel shows
+           the amount instead. */
+        g.cutIn = {
+          srcId: src.id, tgtId: tgt.id, kind: first.type, closing: false,
+          f: first.type === "strike" ? forecastOf(src, tgt) : null,
+          amount: first.type === "heal" ? first.amount : 0,
+        };
+        tick();
         await director.flyIn(src, tgt);
         let crit = false;
         for (; i < end; i++) {
@@ -596,7 +621,11 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         }
         /* a crit earns a held beat before the camera lets go */
         if (crit) await sleep(280);
+        g.cutIn.closing = true;
+        tick();
         await director.flyOut();
+        g.cutIn = null;
+        tick();
       } else {
         await playEvent(events[i++]);
       }

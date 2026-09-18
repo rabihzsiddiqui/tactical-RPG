@@ -13,6 +13,7 @@ import { C, MONO, SERIF, PHASE_BANNER_MS } from "./theme.js";
 import { Card, Eyebrow, Pill, Btn } from "./primitives.jsx";
 import UnitCard from "./UnitCard.jsx";
 import Forecast from "./Forecast.jsx";
+import BattleHud from "./BattleHud.jsx";
 import ActionMenu from "./ActionMenu.jsx";
 import OnboardingCard from "./OnboardingCard.jsx";
 import TitleCard from "./TitleCard.jsx";
@@ -211,6 +212,14 @@ export default function App() {
           100%{transform:translate(-50%,-34px);opacity:0} }
         @keyframes popIn { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
         @keyframes hintPulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
+        @keyframes hudIn { 0%{transform:translateY(10px);opacity:0} 100%{transform:translateY(0);opacity:1} }
+        .bhud { animation: hudIn .22s ease-out; transition: opacity .3s ease-in, transform .3s ease-in; }
+        .bhud.closing { opacity: 0; transform: translateY(10px); }
+        .bhud-fill { transition: width .22s ease-out; }
+        @media (prefers-reduced-motion: reduce) {
+          .bhud { animation: none; transition: none; }
+          .bhud-fill { transition: none; }
+        }
       `}</style>
 
       {!began && <TitleCard onBegin={onBegin} onHelp={() => openHelp()} />}
@@ -291,6 +300,16 @@ export default function App() {
               style={{ display: fc ? "block" : "none", width: 260, zIndex: 22 }}>
               {fc && <Forecast fc={fc} onAttack={api.confirmAttack} onCancel={api.cancelForecast} />}
             </div>
+
+            {/* battle HUD: sits along the bottom edge of the canvas for the
+                length of a cut-in. Above the damage numbers, below the
+                forecast and the level-up card, which can pop mid-exchange */}
+            {g.cutIn && (
+              <div className="absolute flex items-end justify-center"
+                style={{ top: 0, left: 0, right: 0, height: "min(58vh, 430px)", paddingBottom: 8, zIndex: 20, pointerEvents: "none" }}>
+                <BattleHud cut={g.cutIn} units={g.units} />
+              </div>
+            )}
 
             {/* phase banner */}
             {g.banner.n >= 0 && (

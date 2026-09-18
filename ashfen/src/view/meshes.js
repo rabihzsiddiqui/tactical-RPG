@@ -290,11 +290,15 @@ export function buildBridge(tiles = 1) {
   return g;
 }
 
-/* a small ground-flat health bar: a dark backing plate plus a team-colored
-   fill that scales from the left edge. Unlit (MeshBasicMaterial) so it
-   reads consistently regardless of scene lighting. */
-export const HP_BAR_W = 0.62;
-const HP_BAR_H = 0.11;
+/* a small health bar: a dark backing plate plus a team-colored fill that
+   scales from the left edge. Unlit (MeshBasicMaterial) so it reads
+   consistently regardless of scene lighting. The planes stand upright in
+   local space and animUnit turns the group to face the camera every frame,
+   so the bar keeps its shape at any orbit angle instead of foreshortening
+   into a line at low pitch. Smaller than the old floor decal was: seen
+   square-on, the same width reads about a third larger. */
+export const HP_BAR_W = 0.48;
+const HP_BAR_H = 0.085;
 
 export function buildHealthBar(fillHex) {
   const group = new THREE.Group();
@@ -303,7 +307,6 @@ export function buildHealthBar(fillHex) {
     new THREE.PlaneGeometry(HP_BAR_W, HP_BAR_H),
     new THREE.MeshBasicMaterial({ color: 0x1c1c1c, transparent: true, depthWrite: false, depthTest: false })
   );
-  back.rotation.x = -Math.PI / 2;
   back.renderOrder = 10;
   group.add(back);
 
@@ -311,7 +314,6 @@ export function buildHealthBar(fillHex) {
   fillGeo.translate(0.5, 0, 0.001); // pivot at the left edge, nudged up to avoid z-fighting with `back`
   const fill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: fillHex, transparent: true, depthWrite: false, depthTest: false }));
   fill.renderOrder = 11;
-  fill.rotation.x = -Math.PI / 2;
   fill.position.x = -HP_BAR_W / 2;
   group.add(fill);
 
