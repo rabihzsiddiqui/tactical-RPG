@@ -48,3 +48,39 @@ export const WATER_FRAG = `
     c=mix(c, vec3(0.36,0.60,0.66), step(0.80,w));
     gl_FragColor=vec4(c,1.0);
   }`;
+
+/* attack effects, see effects.js. Both use TILE_VERT for the vertex stage
+   and additive blending, so alpha here is how much light the effect adds.
+
+   TRAIL_FRAG: the weapon trail ribbon. uv.x runs from the newest sample
+   (0) to the oldest; uLen is how much of that range holds real samples,
+   so the alpha reaches zero exactly at the tail however few frames the
+   swing took. uFade drops the whole ribbon out after the swing and uGain
+   lifts it for a crit. */
+export const TRAIL_FRAG = `
+  precision mediump float;
+  uniform vec3 uColor; uniform float uFade; uniform float uLen; uniform float uGain;
+  varying vec2 vUv;
+  void main(){
+    float along = clamp(1.0 - vUv.x / max(uLen, 0.001), 0.0, 1.0);
+    float across = 1.0 - abs(vUv.y - 0.5) * 1.2;
+    float a = along * along * across * uFade * 0.85 * uGain;
+    gl_FragColor = vec4(uColor, a);
+  }`;
+
+/* IMPACT_FRAG: the burst quad at the point of contact. uT runs 0 to 1
+   over the burst's life: a six-point core that collapses and whitens at
+   the centre, and a ring that expands out of it, both fading with uT. */
+export const IMPACT_FRAG = `
+  precision mediump float;
+  uniform float uT; uniform vec3 uColor; varying vec2 vUv;
+  void main(){
+    vec2 p = (vUv - 0.5) * 2.0;
+    float d = length(p);
+    float star = 0.62 + 0.38 * abs(sin(atan(p.y, p.x) * 3.0));
+    float core = smoothstep(0.7 * star, 0.0, d / max(1.0 - uT * 0.6, 0.05)) * (1.0 - uT);
+    float r = 0.2 + uT * 0.8;
+    float ring = smoothstep(0.12, 0.0, abs(d - r)) * (1.0 - uT) * 0.7;
+    vec3 c = mix(uColor, vec3(1.0), core * 0.5);
+    gl_FragColor = vec4(c, core + ring);
+  }`;

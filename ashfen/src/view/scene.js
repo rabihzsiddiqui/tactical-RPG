@@ -21,9 +21,10 @@ import { buildTerrain, buildUnitMesh, buildTree, buildKeep, buildBridge, buildHe
 import {
   POST_VERT, POST_FRAG, TILE_VERT, TILE_FRAG, RING_FRAG, WATER_VERT, WATER_FRAG,
 } from "./shaders.js";
-import { tween, stepTweens, resetTweens } from "./anim.js";
+import { tween, stepTweens, resetTweens, hitStop, easeOutCubic, easeInOutQuad } from "./anim.js";
 import { createDirector } from "./camera.js";
 import { createAttackPlayer } from "./attacks.js";
+import { createEffects } from "./effects.js";
 import { C } from "../ui/theme.js";
 import {
   playUnitSelect, playActionSelect, playBack, playNextTurn, playCritHit, playMiss, playNoDamage, playDeath,
@@ -267,10 +268,13 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      attack cut-in. See playEvents for when a cut-in starts. */
   const director = createDirector({ isEnabled: () => camRef.current.cinematics !== false });
 
-  /* ---- attack beats ----
+  /* ---- attack beats and their effects ----
      one beat per weapon type, see attacks.js. The player adds its two
-     projectile meshes to the scene once and reuses them. */
-  const attacks = createAttackPlayer({ scene, director });
+     projectile meshes to the scene once and reuses them. effects.js owns
+     the trail, burst, flare and motes the same way; frame() steps them
+     after animUnit so they see this frame's poses. */
+  const effects = createEffects({ scene });
+  const attacks = createAttackPlayer({ scene, director, effects });
   const orbit = { pos: new THREE.Vector3(), target: new THREE.Vector3(0, 0.4, 0), fov: 30 };
 
   /* ---- screen projection ---- */
@@ -396,6 +400,20 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     const hex = crit ? 0xffd45a : 0xff5a5a;
     u.view.mats.forEach((m) => m.emissive && m.emissive.setHex(hex));
     setTimeout(() => u.view.mats.forEach((m) => m.emissive && m.emissive.setHex(m.userData.baseEmissive ?? 0)), crit ? 260 : 160);
+  }
+
+  /* slides a unit `amount` tiles along (dx, dz) and eases it back: out in
+     the first quarter, home over the rest. Recoil on a hit, a lean away
+     on a miss. It is a tween, so one queued at the frame of contact waits
+     out the hit-stop and starts the moment the freeze lifts. Skipped on
+     any frame the unit's own beat owns its offset, which can happen when
+     a counter starts while the recoil is still settling. */
+  function nudge(u, dx, dz, amount, ms) {
+    return tween(ms, (k) => {
+      if (u.anim.state === "attack") return;
+      const s = k < 0.25 ? easeOutCubic(k / 0.25) : 1 - easeInOutQuad((k - 0.25) / 0.75);
+      u.anim.offset.set(dx * amount * s, 0, dz * amount * s);
+    });
   }
 
   async function die(u) {
@@ -571,7 +589,13 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         const src = g.units.find((z) => z.id === first.srcId);
         const tgt = g.units.find((z) => z.id === first.tgtId);
         await director.flyIn(src, tgt);
-        for (; i < end; i++) await playEvent(events[i]);
+        let crit = false;
+        for (; i < end; i++) {
+          crit = crit || (events[i].type === "strike" && events[i].hit && events[i].crit);
+          await playEvent(events[i]);
+        }
+        /* a crit earns a held beat before the camera lets go */
+        if (crit) await sleep(280);
         await director.flyOut();
       } else {
         await playEvent(events[i++]);
@@ -595,23 +619,38 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         const src = g.units.find((z) => z.id === e.srcId);
         const tgt = g.units.find((z) => z.id === e.tgtId);
         faceToward(src, tgt);
+        const crit = e.hit && e.crit;
+        const mt = wep(src).mt;
+        /* attacker-to-target on the ground, for the recoil and the dodge */
+        const ddx = tgt.x - src.x, ddz = tgt.y - src.y;
+        const dl = Math.hypot(ddx, ddz) || 1;
         /* the beat owns the attacker from windup to recovery and fires
            onImpact at the frame of contact, so the feedback below lands
            on the hit rather than after the whole motion */
         await attacks.play(src, tgt, {
+          hit: e.hit, crit,
           onImpact: () => {
             if (!e.hit) {
               floater(tgt, "miss", C.parchDim);
               playMiss();
+              nudge(tgt, ddx / dl, ddz / dl, 0.16, 260);
             } else {
               tgt.hp = e.hpAfter;
-              flash(tgt, e.crit);
-              floater(tgt, e.dmg + (e.crit ? "!" : ""), e.crit ? C.gold : C.redLite);
+              flash(tgt, crit);
+              floater(tgt, e.dmg + (crit ? "!" : ""), crit ? C.gold : C.redLite);
+              /* impact, in the order the eye reads it: the scene holds on
+                 the frame of contact, then the screen jolts and the target
+                 recoils together. Shake scales with weapon might, so an
+                 axe lands harder than a sword and a staff not at all. It
+                 follows the cinematics toggle because it is camera motion. */
+              hitStop(crit ? 120 : 70);
+              if (director.enabled) director.shake(mt * 0.005 * (crit ? 1.8 : 1), 120 + mt * 14);
+              nudge(tgt, ddx / dl, ddz / dl, crit ? 0.22 : 0.12, 220);
               // crit always gets its own sound, even on a killing or 0-damage
               // blow. finalHit is for a *non-crit* kill specifically; a
               // crit that also kills still gets Death.wav right after, from
               // the "death" event below
-              if (e.crit) playCritHit();
+              if (crit) playCritHit();
               else if (e.hpAfter <= 0) playFinalHit();
               else if (e.dmg === 0) playNoDamage();
               else playAttackHit();
@@ -622,7 +661,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         /* the recovery already sits between impact and here, so this is
            shorter than the old post-lunge pause and the pacing per strike
            comes out about the same */
-        await sleep(e.crit ? 240 : 100);
+        await sleep(crit ? 240 : 100);
         break;
       }
       case "death": {
@@ -643,6 +682,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
            the target glows. The number and sound land at its peak. */
         const src = g.units.find((z) => z.id === e.srcId);
         await attacks.play(src, tgt, {
+          hit: true, crit: false,
           onImpact: () => {
             tgt.hp += e.amount;
             floater(tgt, "+" + e.amount, C.green);
@@ -998,7 +1038,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     const o = camRef.current;
     if (o.res !== lastRes) applyRes();
 
-    stepTweens(dt * 1000);
+    /* animation time: equals dt except while a hit-stop drains, when it
+       is zero. Units and effects run on it; the camera keeps real time */
+    const animDt = stepTweens(dt * 1000) / 1000;
 
     const pit = THREE.MathUtils.degToRad(o.pitch);
     const yaw = THREE.MathUtils.degToRad(o.yaw);
@@ -1023,7 +1065,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     waterMat.uniforms.uTime.value = t;
     postMat.uniforms.uLevels.value = o.levels;
 
-    g.units.forEach((u) => animUnit(u, dt));
+    g.units.forEach((u) => animUnit(u, animDt));
+    effects.update(animDt * 1000, camera);
 
     if (g.sel) {
       const u = g.units.find((z) => z.id === g.sel.id);

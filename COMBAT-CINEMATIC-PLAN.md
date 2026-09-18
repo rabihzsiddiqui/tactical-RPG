@@ -334,3 +334,38 @@ Known issues introduced:
 Next session starts with:
   - Session 3, effects and impact. `director.shake` still has no caller; the beat's `onImpact` is the natural place for hit-stop and shake, and `WEAPONS[k].mt` is already on `wep(src)`.
   - Headless recipe is in memory (`headless-verify-recipe`) with the harness page inline; it drives real taps via a reconstructed orbit camera and exposes `window.H`.
+
+---
+
+## Session 3 handoff: effects and impact
+Date: 2026-09-18
+Session goal: make a hit land. Hit-stop, screen shake by weapon might, a weapon trail, an impact burst per weapon type, staff motes, and the full stack on a crit.
+Completed:
+  - `src/view/anim.js`: `hitStop(ms)` holds animation time still. `stepTweens` drains the hold first and returns the animation time that actually elapsed; `frame()` feeds that to `animUnit` and the effects, so limbs, tweens, trail and burst all freeze together on the frame of contact. A shake or recoil queued at impact is a tween, so it waits out the freeze and starts when it lifts. 70ms on a hit, 120ms on a crit. Overlapping holds keep the longer one.
+  - `src/view/effects.js` (new): `createEffects({ scene })` returning `{ trailBegin, trailEnd, burst, flare, motes, update }`. One trail ribbon (16 samples, indexed quads, world-space vertices rewritten per frame, `TRAIL_FRAG`), one billboarded burst quad (`IMPACT_FRAG`, random roll per burst), one point light for the fire flare, one `Points` cloud of 14 motes. All built once at mount and hidden when idle, so no draw calls outside a beat. `update(dtMs, camera)` runs after `animUnit` so the trail samples the weapon where it is drawn this frame.
+  - `src/view/shaders.js`: `TRAIL_FRAG` (alpha squared along the length, `uLen` so the tail reaches zero however few frames the swing took, `uFade` after the swing, `uGain` for crits) and `IMPACT_FRAG` (six-point core that collapses and whitens, ring that expands, both fading with `uT`). Both additive, both reuse `TILE_VERT`.
+  - `src/view/attacks.js`: `play(src, tgt, { hit, crit, onImpact })`. Melee beats record the trail from the grip to the tip through the strike phase only (per-weapon `trail` span in `MELEE`), colour from the palette's `blade`, pulled 60% toward gold and gain 1.7 on a crit. Physical hits burst white at the target's chest, fire bursts orange and flares the point light, staff starts motes as the staff comes up. Missed shots aim past the target's shoulder and the arrow or bolt carries on past under the recovery; a missed bolt fizzles instead of bursting.
+  - `src/view/scene.js`: the strike handler calls `hitStop`, `director.shake(mt * 0.005, 120 + mt * 14)` (crit: 1.8x), and `nudge()` for a 0.12 tile recoil (crit 0.22) or a 0.16 tile lean away on a miss. Shake follows the cinematics toggle because it is camera motion; hit-stop and recoil play regardless. A crit anywhere in an exchange holds 280ms before the camera lets go. `animUnit` runs on frozen time; the camera keeps real time.
+  - Verified headlessly (harness page plus a Playwright driver, both throwaway) for axe crit with counter, sword hit with counter, bow hit, bow miss, fire hit, fire miss and a staff heal. Added a `?slow` switch to the harness that steps the frame clock a fixed 16ms per render so the trail could be seen with a full set of samples. `npm test` 29 green, lint unchanged at 53 pre-existing warnings and 0 errors, `npm run build` clean.
+Not completed, and why:
+  - No sound changes. The crit and hit sounds already exist and land on the same frame as the effects.
+  - Melee misses show the lean-away and the number only. A proper sidestep dodge would want a keyframe of its own on the defender, which is Session 5 territory once bodies differ by class.
+Files touched:
+  - `ashfen/src/view/effects.js` (new)
+  - `ashfen/src/view/anim.js`
+  - `ashfen/src/view/shaders.js`
+  - `ashfen/src/view/attacks.js`
+  - `ashfen/src/view/scene.js`
+Decisions made and the reasoning:
+  - Hit-stop is a time scale, not a pause flag. Returning the effective dt from `stepTweens` means nothing else has to know about the freeze, and any future thing driven off that dt freezes for free.
+  - Effects sample from the frame loop rather than from inside a tween callback. Tweens step before `animUnit` places the root, so a trail sampled there would lag a frame; sampling after `animUnit` with `updateWorldMatrix` gives the ribbon's leading edge exactly on the blade.
+  - The trail is sampled per frame rather than computed from the pose curve. Fewer samples at a low frame rate make a shorter ribbon, never a wrong one, and the shader's `uLen` keeps the fade correct either way.
+  - The flare is a real point light rather than an emissive tint, because `flash()` already owns the emissive channel on a hit and the two would fight. It is added once at mount at intensity 0: adding a light on demand recompiles every lit material, a hitch better paid once than mid-exchange.
+  - The burst and motes draw without depth testing. The contact point is inside the target's body more often than not, and half the mote cloud starts inside it too.
+  - Miss handling is in the beat, not a new event. The event already says hit or miss; the beat just aims differently.
+Known issues introduced:
+  - The `PointLight` adds one light to every Lambert shader permanently, a small per-fragment cost even when idle. Session 4's key light will want the same treatment; if two idle lights show up in mobile profiling, merge them into one light that moves.
+  - The crit hold plus hit-stop makes a crit exchange about 0.4s longer than before. Intended.
+Next session starts with:
+  - Session 4, materials. Switch `blade`, `helm`, `trim`, `plume` to `MeshStandardMaterial`, add the key light on fly-in, decide what to do about `uLevels` banding. The flare light in effects.js is a working example of a light living in the scene at intensity 0.
+  - Headless recipe is in memory (`headless-verify-recipe`), now with the slow-motion switch and the scenario driver.

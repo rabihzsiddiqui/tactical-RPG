@@ -8,10 +8,16 @@
 
    A beat is an async function that owns the attacker's limbs from start
    to finish. It calls ctx.onImpact() at the exact frame of contact so
-   scene.js can do the hit feedback (flash, floater, sound, hp) there, and
-   the recovery plays after. While a beat runs the unit's anim state is
-   "attack", which tells animUnit in scene.js to leave the parts alone and
-   only keep position, offset and yaw up to date.
+   scene.js can do the hit feedback (flash, floater, sound, hp, hit-stop,
+   shake) there, and the recovery plays after. ctx.hit and ctx.crit are
+   known before the beat starts, so a beat can swing a brighter trail for
+   a crit or send an arrow past the shoulder on a miss. While a beat runs
+   the unit's anim state is "attack", which tells animUnit in scene.js to
+   leave the parts alone and only keep position, offset and yaw up to
+   date.
+
+   The effects (trail, burst, flare, motes) live in effects.js. A beat
+   only says when and where; the effects module owns the meshes.
 
    Poses are absolute part rotations, not deltas, because animUnit
    overwrites the same fields every frame in its other states. Lerping
@@ -19,7 +25,7 @@
    odd: the last keyframe of every beat is NEUTRAL. */
 
 import * as THREE from "three";
-import { WEAPONS } from "../core/data.js";
+import { WEAPONS, PALS } from "../core/data.js";
 import { tween, easeOutCubic, easeInOutQuad } from "./anim.js";
 import { buildArrow, buildBolt } from "./meshes.js";
 
@@ -35,20 +41,21 @@ const NEUTRAL = { arm: 0, armL: 0, wep: CARRY, twist: 0, lift: 0, off: 0, stance
    and strike are full poses; the phase durations give each weapon its
    weight. Sword is quick both ways, lance is a straight thrust with the
    weapon rotated along the arm, axe is a long overhead windup and a
-   slow recover. */
+   slow recover. trail is the span of the weapon, in its own local y, that
+   the ribbon follows through the strike: grip to tip, see meshes.js. */
 const MELEE = {
   sword: {
-    windupMs: 90, strikeMs: 110, recoverMs: 170,
+    windupMs: 90, strikeMs: 110, recoverMs: 170, trail: { base: 0.05, tip: 0.47 },
     windup: { arm: -2.4, armL: 0.3, wep: CARRY, twist: -0.35, lift: 0.01, off: -0.05, stance: 0.15 },
     strike: { arm: -0.9, armL: -0.4, wep: 2.3, twist: 0.3, lift: -0.01, off: 0.34, stance: 0.35 },
   },
   lance: {
-    windupMs: 120, strikeMs: 130, recoverMs: 200,
+    windupMs: 120, strikeMs: 130, recoverMs: 200, trail: { base: 0.1, tip: 0.76 },
     windup: { arm: -1.2, armL: 0.2, wep: Math.PI, twist: -0.12, lift: 0, off: -0.08, stance: 0.1 },
     strike: { arm: -1.7, armL: -0.2, wep: Math.PI, twist: 0.08, lift: -0.02, off: 0.4, stance: 0.4 },
   },
   axe: {
-    windupMs: 200, strikeMs: 120, recoverMs: 260,
+    windupMs: 200, strikeMs: 120, recoverMs: 260, trail: { base: 0.05, tip: 0.47 },
     windup: { arm: -2.8, armL: 0.4, wep: CARRY, twist: -0.5, lift: 0.03, off: -0.06, stance: 0.1 },
     strike: { arm: -0.7, armL: -0.5, wep: 2.4, twist: 0.35, lift: -0.03, off: 0.3, stance: 0.35 },
   },
@@ -64,17 +71,48 @@ const CAST_PUSH = { arm: -1.0, armL: -1.5, wep: CARRY, twist: 0.05, lift: 0, off
 const STAFF_RAISE = { arm: -2.4, armL: 0.15, wep: 2.2, twist: 0, lift: 0.02, off: 0, stance: 0 };
 
 const GREEN = new THREE.Color(0x5fd07a);
+const GOLD = new THREE.Color(0xffe08a);
+const SPARK = 0xfff2dc;   // physical impact: white, warmed a touch so it sits in the palette
+const EMBER = 0xff8a2a;   // anima impact and flare
+const MISS_SIDESTEP = 0.3; // how far past the shoulder a missed shot passes, in tiles
 const scratchCol = new THREE.Color();
 
-export function createAttackPlayer({ scene, director }) {
+export function createAttackPlayer({ scene, director, effects }) {
   const arrow = buildArrow();
   const bolt = buildBolt();
   scene.add(arrow, bolt);
 
   const dir = new THREE.Vector3();    // attacker to target, ground plane, unit length
+  const perp = new THREE.Vector3();   // dir turned 90 degrees, for missed shots
   const from = new THREE.Vector3();
   const to = new THREE.Vector3();
+  const contact = new THREE.Vector3();
   const cur = {};
+
+  /* where a melee blow lands: the target's chest, pulled a little toward
+     the attacker so the burst sits on the near surface */
+  function contactPoint(tgt) {
+    contact.copy(tgt.view.root.position).addScaledVector(dir, -0.12);
+    contact.y += 0.45;
+    return contact;
+  }
+
+  /* trail colour is the palette's blade colour; a crit pulls it toward
+     gold and the gain lifts it, so the swing itself says crit before the
+     number does */
+  function trailColor(src, crit) {
+    scratchCol.setHex(PALS[src.pal].blade);
+    if (crit) scratchCol.lerp(GOLD, 0.6);
+    return scratchCol;
+  }
+
+  /* on a miss a shot aims past the target's shoulder instead of at it,
+     and the impact frame is when it draws level */
+  function aimShot(tgt, lift, hit) {
+    to.copy(tgt.view.root.position);
+    to.y += lift;
+    if (!hit) to.addScaledVector(perp, MISS_SIDESTEP);
+  }
 
   function applyPose(u, pose) {
     const p = u.view.parts;
@@ -127,7 +165,10 @@ export function createAttackPlayer({ scene, director }) {
 
   async function melee(src, tgt, ctx, spec) {
     await blend(src, NEUTRAL, spec.windup, spec.windupMs, easeInOutQuad);
+    effects.trailBegin(src.view.parts.weapon, spec.trail.base, spec.trail.tip, trailColor(src, ctx.crit), ctx.crit ? 1.7 : 1);
     await blend(src, spec.windup, spec.strike, spec.strikeMs, easeOutCubic);
+    effects.trailEnd();
+    if (ctx.hit) effects.burst(contactPoint(tgt), SPARK, ctx.crit ? 0.85 : 0.55);
     ctx.onImpact();
     await blend(src, spec.strike, NEUTRAL, spec.recoverMs, easeInOutQuad);
   }
@@ -138,21 +179,28 @@ export function createAttackPlayer({ scene, director }) {
     await tween(110, () => {});
     from.copy(src.view.root.position).addScaledVector(dir, 0.22);
     from.y += 0.58;
-    to.copy(tgt.view.root.position);
-    to.y += 0.48;
+    aimShot(tgt, 0.48, ctx.hit);
     const dist = from.distanceTo(to);
     blend(src, BOW_FULL, BOW_LOOSE, 70, easeOutCubic);
     arrow.lookAt(to);
     await fly(arrow, 80 + dist * 70, 0.08 + dist * 0.03);
+    if (ctx.hit) effects.burst(to, SPARK, ctx.crit ? 0.7 : 0.45);
     ctx.onImpact();
+    if (!ctx.hit) {
+      /* the arrow carries on past and drops out of frame under the recovery */
+      from.copy(to);
+      to.addScaledVector(dir, 0.9);
+      to.y -= 0.3;
+      arrow.lookAt(to);
+      fly(arrow, 130, 0);
+    }
     await blend(src, BOW_LOOSE, NEUTRAL, 220, easeInOutQuad);
   }
 
   async function anima(src, tgt, ctx) {
     from.copy(src.view.root.position).addScaledVector(dir, 0.26);
     from.y += 0.56;
-    to.copy(tgt.view.root.position);
-    to.y += 0.5;
+    aimShot(tgt, 0.5, ctx.hit);
     const dist = from.distanceTo(to);
     bolt.material.opacity = 1;
     bolt.position.copy(from);
@@ -168,25 +216,42 @@ export function createAttackPlayer({ scene, director }) {
     await tween(90, (k) => { bolt.scale.setScalar(1 + Math.sin(k * Math.PI) * 0.2); bolt.rotation.y += 0.25; });
     blend(src, CAST_OPEN, CAST_PUSH, 90, easeOutCubic);
     await fly(bolt, 110 + dist * 60, 0, () => { bolt.rotation.y += 0.35; bolt.rotation.x += 0.2; });
+    if (ctx.hit) {
+      effects.burst(to, EMBER, ctx.crit ? 1.2 : 0.9);
+      effects.flare(to, EMBER, ctx.crit ? 2.4 : 1.6);
+    }
     ctx.onImpact();
-    /* burst: the bolt swells and fades at the point of contact while the
-       caster recovers underneath it */
-    bolt.position.copy(to);
-    bolt.visible = true;
-    await Promise.all([
-      tween(150, (k) => {
-        bolt.scale.setScalar(1 + k * 1.6);
-        bolt.material.opacity = 1 - k;
-      }),
-      blend(src, CAST_PUSH, NEUTRAL, 240, easeInOutQuad),
-    ]);
+    if (ctx.hit) {
+      /* the bolt swells and fades at the point of contact while the
+         caster recovers underneath it */
+      bolt.position.copy(to);
+      bolt.visible = true;
+      await Promise.all([
+        tween(150, (k) => {
+          bolt.scale.setScalar(1 + k * 1.6);
+          bolt.material.opacity = 1 - k;
+        }),
+        blend(src, CAST_PUSH, NEUTRAL, 240, easeInOutQuad),
+      ]);
+    } else {
+      /* a missed bolt fizzles out past the target instead of bursting */
+      from.copy(to);
+      to.addScaledVector(dir, 0.8);
+      to.y -= 0.2;
+      await Promise.all([
+        fly(bolt, 160, 0, (k) => { bolt.material.opacity = 1 - k; bolt.scale.setScalar(1 - k * 0.6); }),
+        blend(src, CAST_PUSH, NEUTRAL, 240, easeInOutQuad),
+      ]);
+    }
     bolt.visible = false;
     bolt.scale.setScalar(1);
   }
 
-  /* no lunge, no projectile, no shake. The staff comes up, the target
-     lights green and lifts a touch, then everything settles. */
+  /* no lunge, no projectile, no shake, no burst. The staff comes up, the
+     target lights green and lifts a touch while motes drift up off it,
+     then everything settles. */
   async function staff(src, tgt, ctx) {
+    effects.motes(tgt.view.root.position);
     await Promise.all([
       blend(src, NEUTRAL, STAFF_RAISE, 240, easeOutCubic),
       tween(240, (k) => tint(tgt, GREEN, easeOutCubic(k) * 0.55)),
@@ -211,16 +276,18 @@ export function createAttackPlayer({ scene, director }) {
     staff,
   };
 
-  /* plays the attacker's beat against the target. ctx.onImpact fires once
-     at the moment of contact. Restores whatever anim state the unit was
-     in before, so a player unit that attacked from its ready pose lands
-     back in it exactly as it did before beats existed. */
+  /* plays the attacker's beat against the target. ctx is { hit, crit,
+     onImpact }; onImpact fires once at the moment of contact. Restores
+     whatever anim state the unit was in before, so a player unit that
+     attacked from its ready pose lands back in it exactly as it did
+     before beats existed. */
   async function play(src, tgt, ctx) {
     const type = WEAPONS[src.weaponKey].type;
     const beat = BEATS[type] || BEATS.sword;
     dir.subVectors(tgt.view.root.position, src.view.root.position);
     dir.y = 0;
     if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1); else dir.normalize();
+    perp.set(-dir.z, 0, dir.x);
     const was = src.anim.state;
     src.anim.state = "attack";
     try {
