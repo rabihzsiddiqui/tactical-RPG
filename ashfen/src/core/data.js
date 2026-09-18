@@ -28,6 +28,37 @@ export const PALS = {
   boss: { tunic: 0x7a2228, trim: 0xc8a04a, cape: 0x4d1418, pants: 0x3d3130, boot: 0x2f211c, skin: "#b9805e", eye: "#1b1210", hair: "#1f1310", helm: 0x6d4a44, plume: 0xc8a04a, blade: 0xe4dcd2, grip: 0x4a3324 },
 };
 
+/* class silhouettes: what buildUnitMesh in src/view/meshes.js changes
+   about the body per class. Pure data, no Three.js here. A class with no
+   entry gets SILHOUETTE_DEFAULT, which is the body every unit had before
+   the table existed. Fields:
+     bulk      torso width, shoulder spread, limb thickness; 1 is the old body
+     helm      band | full | circlet | hood | veil | hat | cap | horned | none
+     cape      cloth panel hanging off the back
+     plate     torso in the helm metal instead of tunic cloth
+     sleeves   false bares the arms in skin
+     pauldrons shoulder plates fixed to the torso, not the arms
+     robe      skirt from the belt to the boots, covers the legs
+     quiver    tilted arrow case on the back
+     shield    held on the off hand, swings with the arm */
+export const SILHOUETTE_DEFAULT = {
+  bulk: 1, helm: "band", cape: true, plate: false, sleeves: true,
+  pauldrons: false, robe: false, quiver: false, shield: false,
+};
+
+export const SILHOUETTES = {
+  Lord:      { bulk: 1.0,  helm: "circlet" },
+  Knight:    { bulk: 1.3,  helm: "full",   cape: false, plate: true, pauldrons: true, shield: true },
+  Fighter:   { bulk: 1.2,  helm: "none",   cape: false, sleeves: false, pauldrons: true },
+  Archer:    { bulk: 0.9,  helm: "hood",   cape: false, quiver: true },
+  Mage:      { bulk: 0.9,  helm: "hat",    robe: true },
+  Cleric:    { bulk: 0.9,  helm: "veil",   cape: false, robe: true },
+  Warlord:   { bulk: 1.35, helm: "horned", plate: true, pauldrons: true },
+  Soldier:   { bulk: 1.1,  helm: "cap",    cape: false, shield: true },
+  Brigand:   { bulk: 1.2,  helm: "none",   cape: false, sleeves: false },
+  Mercenary: { bulk: 1.0,  helm: "none",   cape: false, pauldrons: true },
+};
+
 export const ROSTER = [
   { name: "Kaelen", cls: "Lord", pal: "lord", team: "player", x: 4, y: 8, mov: 5, lvl: 5, weapon: "shamshir", lord: true,
     stats: { hp: 20, str: 7, mag: 0, skl: 8, spd: 9, lck: 7, def: 6, res: 2 },

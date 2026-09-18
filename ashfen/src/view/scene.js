@@ -210,7 +210,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
 
   /* ---- unit views ---- */
   for (const u of g.units) {
-    const v = buildUnitMesh(u.pal, u.weaponKey);
+    const v = buildUnitMesh(u.pal, u.weaponKey, u.cls);
     v.root.position.set(u.x - CX, lvlH(u.x, u.y), u.y - CZ);
     v.root.rotation.y = u.team === "player" ? 0 : Math.PI;
     scene.add(v.root);

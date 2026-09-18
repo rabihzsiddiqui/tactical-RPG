@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 import { MW, MH, CX, CZ, cell, inB } from "../core/map.js";
-import { WEAPONS, PALS } from "../core/data.js";
+import { WEAPONS, PALS, SILHOUETTES, SILHOUETTE_DEFAULT } from "../core/data.js";
 
 export function buildTerrain() {
   const pos = [], nrm = [], col = [];
@@ -82,8 +82,19 @@ function faceTexture(P) {
 
 const METAL = { metalness: 0.7, roughness: 0.4 }; // 0.35 made the highlight a hard-edged facet on these flat boxes
 
-export function buildUnitMesh(palKey, weaponKey) {
+/* bulk scales the torso, shoulder spread and limb thickness. Width grows
+   with it in full, depth at about a third of the rate: a 1.3 Knight is
+   noticeably wider than a Lord from the cut-in camera without turning into
+   a cube from the orbit. Limbs thicken by the square root so they stay
+   limbs. Every part name in `parts` is read by animUnit and attacks.js,
+   and the pivots (arms at the shoulder, legs at the hip, weapon in the
+   right hand) are unchanged, so the pose keyframes work on every body. */
+export function buildUnitMesh(palKey, weaponKey, clsKey) {
   const P = PALS[palKey];
+  const S = { ...SILHOUETTE_DEFAULT, ...(SILHOUETTES[clsKey] || {}) };
+  const B = S.bulk, limb = Math.sqrt(B);
+  const bw = 0.3 * B;                  // torso width
+  const bd = 0.19 * (0.7 + 0.3 * B);   // torso depth
   const mats = [];
   const M = (hex) => {
     const m = new THREE.MeshLambertMaterial({ color: hex });
@@ -99,25 +110,54 @@ export function buildUnitMesh(palKey, weaponKey) {
     mats.push(m);
     return m;
   };
+  const box = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
 
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.26, 0.19), M(P.tunic));
+  const torso = box(bw, 0.26, bd, S.plate ? MM(P.helm) : M(P.tunic));
   torso.position.y = 0.4;
   body.add(torso);
-  const belt = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.21), MM(P.trim));
+  const belt = box(bw + 0.02, 0.05, bd + 0.02, MM(P.trim));
   belt.position.y = 0.3;
   body.add(belt);
-  const cape = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.34, 0.04), M(P.cape));
-  cape.position.set(0, 0.36, -0.11);
-  body.add(cape);
+  if (S.cape) {
+    const cape = box(bw, 0.34, 0.04, M(P.cape));
+    cape.position.set(0, 0.36, -(bd / 2 + 0.015));
+    body.add(cape);
+  }
+  /* the robe hangs from the belt to just above the boots. The legs stay
+     underneath and still swing on a walk; the boots show below the hem */
+  if (S.robe) {
+    const skirt = box(bw + 0.04, 0.27, bd + 0.05, M(P.tunic));
+    skirt.position.y = 0.165;
+    const hem = box(bw + 0.05, 0.03, bd + 0.06, M(P.trim));
+    hem.position.y = 0.045;
+    body.add(skirt, hem);
+  }
+  if (S.pauldrons) {
+    for (const sx of [-1, 1]) {
+      const pad = box(0.13 * limb, 0.07, 0.15 * limb, MM(P.helm));
+      pad.position.set(sx * (bw / 2 + 0.035 * limb), 0.535, 0);
+      body.add(pad);
+    }
+  }
+  if (S.quiver) {
+    const q = new THREE.Group();
+    q.position.set(0.09, 0.46, -(bd / 2 + 0.05));
+    q.rotation.z = -0.4;
+    q.add(box(0.075, 0.3, 0.075, M(P.grip)));
+    const fletch = box(0.09, 0.05, 0.09, M(0xe8e2cf));
+    fletch.position.y = 0.17;
+    q.add(fletch);
+    body.add(q);
+  }
 
-  const legGeo = new THREE.BoxGeometry(0.1, 0.24, 0.11); legGeo.translate(0, -0.12, 0);
-  const bootGeo = new THREE.BoxGeometry(0.12, 0.07, 0.15); bootGeo.translate(0, -0.255, 0.02);
+  const legGeo = new THREE.BoxGeometry(0.1 * limb, 0.24, 0.11 * limb); legGeo.translate(0, -0.12, 0);
+  const bootGeo = new THREE.BoxGeometry(0.12 * limb, 0.07, 0.15); bootGeo.translate(0, -0.255, 0.02);
   const mkLeg = (sx) => {
     const g = new THREE.Group();
-    g.position.set(sx * 0.08, 0.28, 0);
+    g.position.set(sx * 0.08 * B, 0.28, 0);
     g.add(new THREE.Mesh(legGeo, M(P.pants)));
     g.add(new THREE.Mesh(bootGeo, M(P.boot)));
     body.add(g);
@@ -125,18 +165,26 @@ export function buildUnitMesh(palKey, weaponKey) {
   };
   const legL = mkLeg(-1), legR = mkLeg(1);
 
-  const armGeo = new THREE.BoxGeometry(0.085, 0.22, 0.095); armGeo.translate(0, -0.11, 0);
+  const armW = 0.085 * limb;
+  const armGeo = new THREE.BoxGeometry(armW, 0.22, 0.095 * limb); armGeo.translate(0, -0.11, 0);
   const handGeo = new THREE.BoxGeometry(0.095, 0.07, 0.1); handGeo.translate(0, -0.245, 0);
   const skinHex = new THREE.Color(P.skin).getHex();
   const mkArm = (sx) => {
     const g = new THREE.Group();
-    g.position.set(sx * 0.19, 0.5, 0);
-    g.add(new THREE.Mesh(armGeo, M(P.tunic)));
+    g.position.set(sx * (bw / 2 + 0.04 * limb), 0.5, 0);
+    g.add(new THREE.Mesh(armGeo, M(S.sleeves ? P.tunic : skinHex)));
     g.add(new THREE.Mesh(handGeo, M(skinHex)));
     body.add(g);
     return g;
   };
   const armL = mkArm(-1), armR = mkArm(1);
+  if (S.shield) {
+    const shield = box(0.05, 0.24, 0.2, MM(P.helm));
+    shield.position.set(-(armW / 2 + 0.03), -0.13, 0.03);
+    const boss = box(0.02, 0.1, 0.08, MM(P.trim));
+    boss.position.set(-(armW / 2 + 0.06), -0.13, 0.03);
+    armL.add(shield, boss);
+  }
 
   // weapon shape follows the equipped type
   const w = WEAPONS[weaponKey];
@@ -196,15 +244,101 @@ export function buildUnitMesh(palKey, weaponKey) {
   );
   head.position.y = 0.16;
   headG.add(head);
-  const helm = new THREE.Mesh(new THREE.BoxGeometry(0.37, 0.11, 0.33), MM(P.helm));
-  helm.position.y = 0.29;
-  headG.add(helm);
-  const plume = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.2), MM(P.plume));
-  plume.position.set(0, 0.4, -0.03);
-  headG.add(plume);
+  buildHelm(S.helm, headG, P, M, MM, box);
 
   root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return { root, parts: { body, headG, armL, armR, legL, legR, weapon }, mats };
+}
+
+/* headwear, in the head group's frame: the head box spans y 0 to 0.32 and
+   the eyes sit between 0.11 and 0.18, so anything that covers the face
+   stops at 0.19. Four-sided cones are pyramids, turned 45 degrees so a
+   flat face points forward like the head does. */
+function buildHelm(style, headG, P, M, MM, box) {
+  const plume = () => {
+    const p = box(0.06, 0.13, 0.2, MM(P.plume));
+    p.position.set(0, 0.4, -0.03);
+    headG.add(p);
+  };
+  const band = () => {
+    const h = box(0.37, 0.11, 0.33, MM(P.helm));
+    h.position.y = 0.29;
+    headG.add(h);
+  };
+  /* a cloth cap, two side panels framing the face, and a panel down the
+     back of the neck. Without the sides it read as a flat beret. */
+  const hood = (hex, drop) => {
+    const mat = M(hex);
+    const cap = box(0.38, 0.15, 0.36, mat);
+    cap.position.set(0, 0.275, -0.02);
+    for (const sx of [-1, 1]) {
+      const side = box(0.03, 0.24, 0.26, mat);
+      side.position.set(sx * 0.185, 0.12, -0.05);
+      headG.add(side);
+    }
+    const drape = box(0.32, drop, 0.05, mat);
+    drape.position.set(0, 0.19 - drop / 2, -0.19);
+    headG.add(cap, drape);
+  };
+  const pyramid = (r, h, mat) => {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(r, h, 4), mat);
+    c.rotation.y = Math.PI / 4;
+    return c;
+  };
+  switch (style) {
+    case "band": band(); plume(); break;
+    case "horned": {
+      band(); plume();
+      for (const sx of [-1, 1]) {
+        const horn = pyramid(0.035, 0.2, MM(P.plume));
+        horn.position.set(sx * 0.2, 0.37, 0);
+        horn.rotation.z = -sx * 0.7;
+        headG.add(horn);
+      }
+      break;
+    }
+    case "full": {
+      const cap = box(0.38, 0.17, 0.34, MM(P.helm));
+      cap.position.y = 0.275;
+      headG.add(cap);
+      for (const sx of [-1, 1]) {
+        const cheek = box(0.03, 0.2, 0.22, MM(P.helm));
+        cheek.position.set(sx * 0.185, 0.13, -0.02);
+        headG.add(cheek);
+      }
+      plume();
+      break;
+    }
+    case "circlet": {
+      const ring = box(0.36, 0.035, 0.32, MM(P.trim));
+      ring.position.y = 0.28;
+      const gem = box(0.05, 0.05, 0.02, MM(P.plume));
+      gem.position.set(0, 0.28, 0.165);
+      headG.add(ring, gem);
+      break;
+    }
+    case "hood": hood(P.cape, 0.2); break;
+    case "veil": hood(P.trim, 0.32); break;
+    case "hat": {
+      const brim = box(0.5, 0.03, 0.5, M(P.cape));
+      brim.position.y = 0.335;
+      const cone = pyramid(0.19, 0.36, M(P.cape));
+      cone.position.y = 0.52;
+      const trim = box(0.3, 0.04, 0.3, MM(P.trim));
+      trim.position.y = 0.36;
+      headG.add(brim, cone, trim);
+      break;
+    }
+    case "cap": {
+      const dome = pyramid(0.24, 0.16, MM(P.helm));
+      dome.position.y = 0.39;
+      const rim = box(0.4, 0.03, 0.38, MM(P.helm));
+      rim.position.y = 0.31;
+      headG.add(dome, rim);
+      break;
+    }
+    default: break;
+  }
 }
 
 export function buildTree() {
