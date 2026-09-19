@@ -4,11 +4,23 @@ import { cell, lvlH, walkable, inB, CLIMB } from "./map.js";
 import { WEAPONS } from "./data.js";
 import { K, DIRS } from "./util.js";
 
-export function moveField(unit, units) {
+/* tiles a unit cannot step onto. Every other living unit blocks, ally or
+   enemy, so a walker routes around its own team instead of ghosting
+   through it. `open` leaves one tile enterable: fieldFrom measures from a
+   target's own tile, which has to be reachable for the field to mean
+   anything. */
+function blockedTiles(unit, units, open) {
   const blocked = new Set();
-  units.forEach((u) => {
-    if (u.hp > 0 && u.team !== unit.team) blocked.add(K(u.x, u.y));
-  });
+  for (const u of units) {
+    if (u.hp <= 0 || u.id === unit.id) continue;
+    if (open && u.x === open.x && u.y === open.y) continue;
+    blocked.add(K(u.x, u.y));
+  }
+  return blocked;
+}
+
+export function moveField(unit, units) {
+  const blocked = blockedTiles(unit, units);
   const dist = new Map([[K(unit.x, unit.y), 0]]);
   const prev = new Map();
   const q = [[unit.x, unit.y, 0]];
@@ -33,10 +45,7 @@ export function moveField(unit, units) {
 }
 
 export function fieldFrom(sx, sy, unit, units) {
-  const blocked = new Set();
-  units.forEach((u) => {
-    if (u.hp > 0 && u.team !== unit.team && !(u.x === sx && u.y === sy)) blocked.add(K(u.x, u.y));
-  });
+  const blocked = blockedTiles(unit, units, { x: sx, y: sy });
   const dist = new Map([[K(sx, sy), 0]]);
   const q = [[sx, sy, 0]];
   while (q.length) {
