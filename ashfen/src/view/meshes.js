@@ -73,7 +73,11 @@ function faceTexture(P) {
   x.fillStyle = "#ffffff"; R(7, 15, 2, 2); R(22, 15, 2, 2);
   x.fillStyle = "rgba(255,255,255,0.35)"; R(6.5, 19.5, 1.5, 1); R(21.5, 19.5, 1.5, 1); // lower catchlight
   x.fillStyle = "rgba(0,0,0,0.28)"; R(14, 26, 4, 1);
-  x.fillStyle = "rgba(0,0,0,0.10)"; R(12, 22, 8, 0.5); R(2, 28, 28, 4); // nose line, jaw shade
+  /* nose line only. There used to be a jaw shade here as well, a 28 wide
+     band across the bottom four rows, and at this resolution a dark block
+     under the mouth reads as stubble rather than as the underside of a
+     jaw. Every face wore it, so every character looked bearded. */
+  x.fillStyle = "rgba(0,0,0,0.10)"; R(12, 22, 8, 0.5);
   const t = new THREE.CanvasTexture(c);
   t.magFilter = THREE.NearestFilter;
   t.minFilter = THREE.NearestFilter;
