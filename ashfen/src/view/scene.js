@@ -20,6 +20,7 @@ import {
 import { buildTerrain, buildUnitMesh, buildTree, buildKeep, buildBridge, buildHealthBar, buildShoreField, HP_BAR_W } from "./meshes.js";
 import {
   POST_VERT, POST_FRAG, TILE_VERT, TILE_FRAG, RING_FRAG, WATER_VERT, WATER_FRAG,
+  FALL_VERT, FALL_FRAG,
 } from "./shaders.js";
 import { tween, stepTweens, resetTweens, hitStop, easeOutCubic, easeInOutQuad } from "./anim.js";
 import { createDirector } from "./camera.js";
@@ -127,6 +128,45 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     },
   });
   const waterGeo = new THREE.PlaneGeometry(1, 1, 6, 6);
+
+  /* the waterfalls. Where a run of water tiles reaches the edge of the
+     map the river has nowhere left to go, so it pours off into open air.
+     FALL_TOP is flush with the banks rather than with the water surface:
+     the surface rolls, and a lip set at its rest height would show a gap
+     under the crest of a swell. FALL_H hangs the sheet past the bottom
+     of the terrain skirt, where FALL_FRAG has already faded it out.
+
+     One quad per run of adjacent edge tiles, not one per tile, so a wide
+     river falls as a single sheet. Each stands 0.01 outside the terrain's
+     own edge face; sharing that plane exactly would z-fight. */
+  const FALL_TOP = 0, FALL_H = 2.6;
+  const fallMat = new THREE.ShaderMaterial({
+    vertexShader: FALL_VERT, fragmentShader: FALL_FRAG,
+    uniforms: { uTime: { value: 0 }, uTop: { value: FALL_TOP }, uHeight: { value: FALL_H } },
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  });
+  const addFall = (len, px, pz, ry) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(len, FALL_H), fallMat);
+    m.position.set(px, FALL_TOP - FALL_H / 2, pz);
+    m.rotation.y = ry;
+    scene.add(m);
+  };
+  for (const [ex, n] of [[0, -1], [MW - 1, 1]]) {
+    for (let y = 0; y < MH; y++) {
+      if (!cell(ex, y).water || (y > 0 && cell(ex, y - 1).water)) continue;
+      let len = 1;
+      while (y + len < MH && cell(ex, y + len).water) len++;
+      addFall(len, ex - CX + n * 0.51, y - CZ + (len - 1) / 2, (n * Math.PI) / 2);
+    }
+  }
+  for (const [ey, n] of [[0, -1], [MH - 1, 1]]) {
+    for (let x = 0; x < MW; x++) {
+      if (!cell(x, ey).water || (x > 0 && cell(x - 1, ey).water)) continue;
+      let len = 1;
+      while (x + len < MW && cell(x + len, ey).water) len++;
+      addFall(len, x - CX + (len - 1) / 2, ey - CZ + n * 0.51, n > 0 ? 0 : Math.PI);
+    }
+  }
 
   const pickGeo = new THREE.PlaneGeometry(1, 1);
   const pickMat = new THREE.MeshBasicMaterial({ visible: false });
@@ -245,7 +285,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       m.userData.baseEmissive = POP_EMISSIVE;
     });
 
-    const hpBar = buildHealthBar(0x5fc25a);
+    /* green for the company, red for whoever is shooting at it, so a
+       glance at the board tells you whose bar is whose */
+    const hpBar = buildHealthBar(u.team === "player" ? 0x5fc25a : 0xd94f45);
     scene.add(hpBar.group);
     u.view.hpBar = hpBar;
 
@@ -1150,6 +1192,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     ringMat.uniforms.uTime.value = t;
     readyRingMat.uniforms.uTime.value = t;
     waterMat.uniforms.uTime.value = t;
+    fallMat.uniforms.uTime.value = t;
     /* posterisation eases off during a cut-in. POST_FRAG quantises the
        frame to uLevels steps and skips the step entirely at 63 and above.
        At grid distance the banding is the look; at cut-in distance it

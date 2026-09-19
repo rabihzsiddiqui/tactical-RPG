@@ -123,7 +123,17 @@ export const WATER_FRAG = `
     float e = d + wob*0.030;
     float collar = 1.0 - step(0.055, e);
     float arc = step(0.125, e) * (1.0 - step(0.155, e));
-    float foam = clamp(collar + arc*0.6, 0.0, 1.0);
+
+    /* the lip. Water that reaches the edge of the map has nothing to
+       meet, it just goes over, so the last strip before the drop churns
+       white the way the top of a fall does. The shore field cannot say
+       this: off-map counts as water there, on purpose, so that a river
+       leaving the map does not foam against the boundary like a bank. */
+    vec2 tc = vPos.xz + uOrigin;
+    float edge = min(min(tc.x, uSize.x - tc.x), min(tc.y, uSize.y - tc.y));
+    float lip = 1.0 - step(0.16 + wob*0.02, edge);
+
+    float foam = clamp(collar + arc*0.6 + lip, 0.0, 1.0);
 
     /* glints: a product of two fast sines makes a drifting diamond
        lattice, of which only the crests survive the step */
@@ -133,6 +143,65 @@ export const WATER_FRAG = `
     c = mix(c, vec3(0.93,0.99,1.0), foam);
     c = mix(c, vec3(1.0), glint*0.85);
     gl_FragColor = vec4(c,1.0);
+  }`;
+
+/* the waterfall: what the river does when it runs out of map. One quad
+   per run of edge water tiles, standing in the open air just outside the
+   terrain's own edge face, built in scene.js.
+
+   FALL_VERT hands the fragment stage world space rather than uv, so a
+   quad that spans several tiles gets one continuous pattern instead of
+   the same tile repeated. vSpan is the sum of world x and z: the quad
+   stands on one of the two, so whichever axis it spans is the one that
+   varies, and the same shader serves all four map edges. No uniform is
+   shared with the fragment stage, which is what keeps the two precision
+   declarations from having to agree. */
+export const FALL_VERT = `
+  varying vec3 vPos; varying float vSpan;
+  void main(){
+    vec4 wp = modelMatrix*vec4(position,1.);
+    vPos = wp.xyz; vSpan = wp.x + wp.z;
+    gl_Position = projectionMatrix*viewMatrix*wp;
+  }`;
+/* FALL_FRAG. The sheet is cut into vertical ribbons, each carrying its
+   own offset so the fall does not read as one scrolling texture, and
+   each ribbon carries dashes that scroll down it. The dash phase grows
+   with the square of the drop, so the dashes stretch as they go and the
+   water looks like it is picking up speed. The lip churns solid white,
+   and past halfway the sheet shreds into separate falling chunks and
+   thins out into nothing rather than ending on a cut line.
+
+   No precision qualifier: world positions here run to a few tens of
+   units and mediump would quantise the ribbon phases into steps you can
+   see. uTop is the world height of the lip, uHeight the drop. */
+export const FALL_FRAG = `
+  uniform float uTime; uniform float uTop; uniform float uHeight;
+  varying vec3 vPos; varying float vSpan;
+  void main(){
+    float t = clamp((uTop - vPos.y)/uHeight, 0.0, 1.0);
+    float drop = t*uHeight;
+
+    float lane = floor(vSpan*6.0);
+    float off = fract(sin(lane*12.9898)*43758.5453);
+    float seam = step(0.88, fract(vSpan*6.0));
+
+    /* each lane runs at its own rate and starts at its own offset, or
+       every streak in the sheet would break at the same height and the
+       fall would read as a ladder */
+    float ph = drop*(0.85 + off*0.5) + drop*drop*0.10 - uTime*(1.5 + off*0.6) + off*7.0;
+    float streak = 1.0 - step(0.55, fract(ph));
+
+    vec3 c = vec3(0.55,0.88,0.93);
+    c = mix(c, vec3(0.97,1.00,1.00), streak);
+    c = mix(c, vec3(0.26,0.62,0.78), seam);
+
+    float crest = 1.0 - step(0.07, t);
+    c = mix(c, vec3(1.0), crest);
+
+    float body = 1.0 - smoothstep(0.62, 1.0, t);
+    float chunk = 1.0 - step(0.42, fract(ph*0.5 + 0.3));
+    float shred = mix(1.0, chunk, smoothstep(0.45, 0.90, t));
+    gl_FragColor = vec4(c, clamp(body*shred + crest, 0.0, 1.0));
   }`;
 
 /* attack effects, see effects.js. Both use TILE_VERT for the vertex stage
