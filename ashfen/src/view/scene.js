@@ -23,7 +23,7 @@ import {
 } from "./shaders.js";
 import { tween, stepTweens, resetTweens, hitStop, easeOutCubic, easeInOutQuad } from "./anim.js";
 import { createDirector } from "./camera.js";
-import { createAttackPlayer } from "./attacks.js";
+import { createAttackPlayer, CARRY } from "./attacks.js";
 import { createEffects } from "./effects.js";
 import { C } from "../ui/theme.js";
 import {
@@ -31,6 +31,11 @@ import {
   playFinalHit, playLevelUp, playAttackHit, playHeal, playPlayerPhase, playEnemyPhase as playEnemyPhaseSfx,
   playVictory, playThreatCheck, playZoomIn, stopMusic,
 } from "./audio.js";
+
+/* the ready stance's weapon.rotation.x. CARRY holds the weapon across the
+   hand; this cants it forward off the knuckles so the blade, haft or
+   staff rises in front of the shoulder rather than over it. */
+const READY_WEP = 1.05;
 
 export const RES = [
   { label: "400x240 (3DS)", h: 240 },
@@ -315,6 +320,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       p.armL.rotation.x = -s * 0.55;
       p.armR.rotation.x = s * 0.55;
       p.armR.rotation.z = 0;
+      p.weapon.rotation.x = CARRY;
       p.body.position.y = Math.abs(Math.cos(a.phase)) * 0.035;
 
       const W = a.walk;
@@ -347,12 +353,20 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       /* attacks.js owns every part while a beat plays; only position,
          offset and yaw below are still ours */
     } else if (a.state === "ready") {
+      /* guard stance. The old pose swung the arm up and across the chest
+         (rotation.x -2.15, rotation.z -0.3), which parked the blade
+         inside the unit's own head: the hand ended up at head height and
+         inboard of the shoulder, and anything long in the hand went up
+         through the skull. Now the elbow goes out instead of up, the
+         weapon is canted forward off the hand, and the whole span sits
+         forward of the face at every length from a sword to a lance. */
       a.phase += dt * 3;
       p.legL.rotation.x = 0.16;
       p.legR.rotation.x = -0.16;
-      p.armR.rotation.x = -2.15 + Math.sin(a.phase) * 0.05;
-      p.armR.rotation.z = -0.3;
-      p.armL.rotation.x = 0.25;
+      p.armR.rotation.x = -0.45 + Math.sin(a.phase) * 0.04;
+      p.armR.rotation.z = 0.26;
+      p.armL.rotation.x = 0.22;
+      p.weapon.rotation.x = READY_WEP;
       p.body.position.y = 0.015 + Math.sin(a.phase) * 0.01;
     } else {
       a.phase += dt * 1.9;
@@ -362,6 +376,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       p.armL.rotation.x = s * 0.07;
       p.armR.rotation.x = -s * 0.07;
       p.armR.rotation.z = 0;
+      p.weapon.rotation.x = CARRY;
       p.body.position.y = s * 0.014;
     }
 
@@ -858,6 +873,12 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
 
   function finishGlue() {
+    /* the unit that just acted goes back to its idle breathing. Its own
+       attack beat restores whatever state it started the beat in, which
+       is "ready", so without this it holds the guard pose for the rest of
+       the turn (and through the enemy phase) with nothing selected. */
+    const acted = g.sel && g.units.find((z) => z.id === g.sel.id);
+    if (acted && acted.anim.state === "ready") acted.anim.state = "idle";
     g.sel = null;
     g.forecast = null;
     paintSel();

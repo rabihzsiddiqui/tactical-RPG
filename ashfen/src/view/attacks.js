@@ -29,7 +29,7 @@ import { WEAPONS, PALS } from "../core/data.js";
 import { tween, easeOutCubic, easeInOutQuad } from "./anim.js";
 import { buildArrow, buildBolt } from "./meshes.js";
 
-const CARRY = 1.5; // weapon.rotation.x as built in meshes.js: held across the hand
+export const CARRY = 1.5; // weapon.rotation.x as built in meshes.js: held across the hand
 
 /* arm/armL: rotation.x of each arm, negative swings forward and up.
    wep: weapon.rotation.x, CARRY is perpendicular to the forearm, PI is

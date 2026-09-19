@@ -82,6 +82,25 @@ function faceTexture(P) {
 
 const METAL = { metalness: 0.7, roughness: 0.4 }; // 0.35 made the highlight a hard-edged facet on these flat boxes
 
+/* an axe bit. A plain box read as a shovel from every angle: same
+   thickness front and back, same height at the edge as at the haft. This
+   takes a box and moves the front face's vertices only, pinching them
+   thin in x (`thin`) and spreading them in y (`flare`), which gives the
+   wedge cross-section and the flared profile that say "axe" in
+   silhouette. Box faces keep their own vertices, so recomputing normals
+   leaves the flat-shaded look alone. */
+function axeBit(w, h, d, thin, flare, mat) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    if (pos.getZ(i) <= 0) continue;
+    pos.setX(i, pos.getX(i) * thin);
+    pos.setY(i, pos.getY(i) * flare);
+  }
+  g.computeVertexNormals();
+  return new THREE.Mesh(g, mat);
+}
+
 /* bulk scales the torso, shoulder spread and limb thickness. Width grows
    with it in full, depth at about a third of the rate: a 1.3 Knight is
    noticeably wider than a Lord from the cut-in camera without turning into
@@ -209,11 +228,19 @@ export function buildUnitMesh(palKey, weaponKey, clsKey) {
     edge.position.z = -0.03;
     weapon.add(tome, edge);
   } else if (w.type === "axe") {
+    /* single-bit axe: the haft runs through the eye and the blade hangs
+       off the front (+z), which is the way the swing travels, so the edge
+       leads. The old head was a flat slab bolted to the side of the haft
+       in x, side-on to its own arc. */
     const haft = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.46, 0.035), M(P.grip));
     haft.position.y = 0.22;
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.19), MM(P.blade));
-    head.position.set(0.06, 0.38, 0);
-    weapon.add(haft, head);
+    const collar = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.12, 0.055), MM(P.trim));
+    collar.position.y = 0.37;
+    const bit = axeBit(0.055, 0.15, 0.2, 0.16, 1.95, MM(P.blade));
+    bit.position.set(0, 0.37, 0.1);
+    const poll = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.07), MM(P.blade));
+    poll.position.set(0, 0.37, -0.06);
+    weapon.add(haft, collar, bit, poll);
   } else if (w.type === "lance") {
     const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.62, 0.03), M(P.grip));
     shaft.position.y = 0.3;
