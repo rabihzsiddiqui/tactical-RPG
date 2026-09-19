@@ -13,9 +13,9 @@ export const MAP = [
   "~~~bb~~~bb~~",
   "...%....%...",
   "..%....%.%..",
-  "...,,,,,....",
-  "..,,....,,..",
-  "T..........T",
+  ".%.,,,,,..%.",
+  "..,,...%,,..",
+  "T.%......%.T",
 ];
 export const MW = 12, MH = 10;
 export const CX = (MW - 1) / 2, CZ = (MH - 1) / 2;
@@ -61,7 +61,15 @@ export const TYPES = {
      Four more sit north of the river. Two are the far ends of the two
      bridges, so a crossing does not end on bare ground under the sniper
      and the keep, and two are out on the flanks the hills do not cover,
-     which gives the north half something growing on it besides conifers. */
+     which gives the north half something growing on it besides conifers.
+
+     The last five are in the player's own half, which had nothing but the
+     two corner woods and was reading as bare margin around a busy middle.
+     They sit out at the edges and along the bottom rather than around the
+     start tiles: the point is to carry the planting out to the sides of
+     the board, not to hand the company free cover on turn one. None of
+     them is on the road, which is cleared ground, or under a unit's
+     starting tile. */
   "%": { name: "Brush", h: 0, cost: 2, def: 1, avo: 20, heal: 0, top: 0x5f8a46, side: 0x6b5a3e, bush: true },
   "^": { name: "Hill", h: 0.3, cost: 2, def: 1, avo: 20, heal: 0, top: 0x7ba055, side: 0x7d6b4c },
   "*": { name: "Ridge", h: 0.6, cost: 2, def: 2, avo: 30, heal: 0, top: 0x8e9270, side: 0x8a8068 },
