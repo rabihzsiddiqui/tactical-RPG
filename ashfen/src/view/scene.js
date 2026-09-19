@@ -217,7 +217,11 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   for (const u of g.units) {
     const v = buildUnitMesh(u.pal, u.weaponKey, u.cls);
     v.root.position.set(u.x - CX, lvlH(u.x, u.y), u.y - CZ);
-    v.root.rotation.y = u.team === "player" ? 0 : Math.PI;
+    /* everyone starts facing south, toward the camera. Yaw 0 is south and
+       Math.PI is north, the same mapping the "face" event uses below.
+       Enemies used to spawn at Math.PI, which pointed them off the top of
+       the board, away from the company they are there to fight. */
+    v.root.rotation.y = 0;
     scene.add(v.root);
     u.view = v;
     u.anim = { state: "idle", phase: Math.random() * 6.28, targetYaw: v.root.rotation.y, walk: null, offset: new THREE.Vector3() };
