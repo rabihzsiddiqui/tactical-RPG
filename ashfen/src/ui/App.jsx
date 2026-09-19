@@ -202,8 +202,20 @@ export default function App() {
       paddingRight: "calc(env(safe-area-inset-right, 0px) + 12px)",
       paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
       paddingLeft: "calc(env(safe-area-inset-left, 0px) + 12px)",
-    }} className="w-full">
+    }} className="w-full ashfen">
       <style>{`
+        /* height of the map viewport, shared by the canvas and every overlay
+           sized to it. Phones and small tablets keep the old value so the
+           cards below the map stay within a thumb's reach. From 1024px up
+           the map grows with the window instead: 250px is the header, the
+           hint line, the button row and the page padding, so the viewport
+           takes whatever is left and the page still fits one screen. The
+           62vw term is for a tall narrow window, an iPad held upright: a
+           portrait map only wastes the height it gains. */
+        .ashfen { --view-h: min(58vh, 430px); }
+        @media (min-width: 1024px) {
+          .ashfen { --view-h: clamp(430px, min(calc(100vh - 250px), 62vw), 880px); }
+        }
         @keyframes bannerIn { 0%{transform:translateX(-40px) scale(0.94);opacity:0}
           100%{transform:translateX(0) scale(1);opacity:1} }
         @keyframes bannerOut { 0%{transform:translateX(0) scale(1);opacity:1}
@@ -225,7 +237,7 @@ export default function App() {
       {!began && <TitleCard onBegin={onBegin} onHelp={() => openHelp()} />}
       {help && <HelpOverlay startTab={help} onClose={closeHelp} />}
 
-      <div className="mx-auto" style={{ maxWidth: 980 }}>
+      <div className="mx-auto" style={{ maxWidth: "min(100%, 1440px)" }}>
         <div className="flex items-end justify-between flex-wrap gap-2 mb-2">
           <div>
             <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.22em", color: C.gold }}>
@@ -252,7 +264,7 @@ export default function App() {
             <div
               ref={mountRef}
               style={{
-                width: "100%", height: "min(58vh, 430px)", minHeight: 220,
+                width: "100%", height: "var(--view-h)", minHeight: 220,
                 border: "2px solid #2f3746", background: "#9fc3d8", overflow: "hidden", touchAction: "none",
               }}
             />
@@ -262,7 +274,7 @@ export default function App() {
                 so it never covers the under-map row where Resume actually lives */}
             {paused && g.status === "playing" && (
               <div className="absolute" style={{
-                top: 0, left: 0, right: 0, height: "min(58vh, 430px)",
+                top: 0, left: 0, right: 0, height: "var(--view-h)",
                 zIndex: 45, background: "rgba(10,12,18,0.4)", cursor: "default",
               }} />
             )}
@@ -306,7 +318,7 @@ export default function App() {
                 forecast and the level-up card, which can pop mid-exchange */}
             {g.cutIn && (
               <div className="absolute flex items-end justify-center"
-                style={{ top: 0, left: 0, right: 0, height: "min(58vh, 430px)", paddingBottom: 8, zIndex: 20, pointerEvents: "none" }}>
+                style={{ top: 0, left: 0, right: 0, height: "var(--view-h)", paddingBottom: 8, zIndex: 20, pointerEvents: "none" }}>
                 <BattleHud cut={g.cutIn} units={g.units} />
               </div>
             )}
@@ -314,7 +326,7 @@ export default function App() {
             {/* phase banner */}
             {g.banner.n >= 0 && (
               <PhaseBanner key={g.banner.n} side={g.banner.side} text={g.banner.text}
-                top="calc(min(58vh, 430px) * 0.44)" />
+                top="calc(var(--view-h) * 0.44)" />
             )}
 
             {/* level up */}

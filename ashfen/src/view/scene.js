@@ -38,6 +38,19 @@ import {
    staff rises in front of the shoulder rather than over it. */
 const READY_WEP = 1.05;
 
+/* orbit zoom, in world units of vertical frame coverage: the map is 10
+   tiles deep, so 22 sees the whole field with room to spare and 4.5 is
+   about two tiles, close enough to read a unit's face. The wheel and the
+   pinch both scale the current value rather than adding to it, so a notch
+   moves the same apparent amount whether the camera is near or far. */
+const ZOOM_MIN = 4.5, ZOOM_MAX = 22, ZOOM_STEP = 1.18;
+
+/* the board's bounding box, in world units around the orbit target, with a
+   little padding for the health bars and rings that hang off a unit. The
+   floor of the river is -0.35 and a unit standing on the keep tops out
+   near 2.3. fitDist() below keeps this box inside the frame. */
+const BOARD = { x: MW / 2 + 0.3, z: MH / 2 + 0.3, yLo: -0.6, yHi: 2.5 };
+
 export const RES = [
   { label: "400x240 (3DS)", h: 240 },
   { label: "640x384", h: 384 },
@@ -1064,7 +1077,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     if (pointers.size >= 2) {
       const d = pinchDistance();
       if (pinchDist > 0) {
-        setCam((c) => ({ ...c, zoom: clamp(c.zoom - (d - pinchDist) * 0.05, 6, 22) }));
+        setCam((c) => ({ ...c, zoom: clamp(c.zoom * (pinchDist / Math.max(d, 1)), ZOOM_MIN, ZOOM_MAX) }));
       }
       pinchDist = d;
       return;
@@ -1100,7 +1113,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
   function onWheel(e) {
     e.preventDefault();
-    setCam((c) => ({ ...c, zoom: clamp(c.zoom + Math.sign(e.deltaY) * 0.7, 6, 22) }));
+    const k = e.deltaY > 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+    setCam((c) => ({ ...c, zoom: clamp(c.zoom * k, ZOOM_MIN, ZOOM_MAX) }));
   }
   cv.addEventListener("pointerdown", onDown);
   cv.addEventListener("pointermove", onMove);
@@ -1167,6 +1181,36 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
 
   /* ---- loop ---- */
   let raf = 0, prevT = performance.now();
+  /* the orbit distance at which BOARD exactly fills the frame.
+
+     The camera always looks at `orbit.target`, so work in the camera's own
+     axes around that point: `dir` points from the target out to the camera,
+     `right` and `up` span the screen. A corner at camera-space (x, y) and
+     depth d is inside the frustum when |y| <= d*tanV and |x| <= d*tanH, and
+     d is the orbit distance minus how far the corner already lies along
+     `dir`. Solving each of those for the distance and taking the largest
+     over the eight corners is the closed-form fit: no iteration, and it
+     tracks a pitch drag or a Rotate 90 on the frame it happens. */
+  function fitDist(pit, yaw, fov, aspect) {
+    const sy = Math.sin(yaw), cy = Math.cos(yaw), sp = Math.sin(pit), cp = Math.cos(pit);
+    const dir = [cp * sy, sp, cp * cy];
+    const right = [cy, 0, -sy];
+    const up = [-sp * sy, cp, -sp * cy];
+    const tanV = Math.tan(THREE.MathUtils.degToRad(fov) / 2), tanH = tanV * aspect;
+    let need = 0;
+    for (const cx of [-BOARD.x, BOARD.x]) {
+      for (const cz of [-BOARD.z, BOARD.z]) {
+        for (const cyv of [BOARD.yLo - orbit.target.y, BOARD.yHi - orbit.target.y]) {
+          const along = cx * dir[0] + cyv * dir[1] + cz * dir[2];
+          const sx = Math.abs(cx * right[0] + cyv * right[1] + cz * right[2]);
+          const sv = Math.abs(cx * up[0] + cyv * up[1] + cz * up[2]);
+          need = Math.max(need, along + Math.max(sv / tanV, sx / tanH));
+        }
+      }
+    }
+    return need;
+  }
+
   function frame(now) {
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - prevT) / 1000);
@@ -1180,8 +1224,16 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
 
     const pit = THREE.MathUtils.degToRad(o.pitch);
     const yaw = THREE.MathUtils.degToRad(o.yaw);
-    const dist = (o.zoom / 2) / Math.tan(THREE.MathUtils.degToRad(o.fov) / 2);
     camera.aspect = VW / VH;
+    /* `zoom` is how much of the field the player asked to see, measured in
+       world units of frame height. A wide canvas fits the board sideways
+       long before it fills that height, and the surplus was sky, so the
+       ask is capped at the distance that just frames the board. Pulling
+       back further only shrinks the map, never shows more of it. */
+    const dist = Math.min(
+      (o.zoom / 2) / Math.tan(THREE.MathUtils.degToRad(o.fov) / 2),
+      fitDist(pit, yaw, o.fov, camera.aspect)
+    );
     camera.far = dist + 80;
     orbit.pos.set(
       Math.cos(pit) * Math.sin(yaw) * dist,
