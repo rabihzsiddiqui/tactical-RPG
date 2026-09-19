@@ -28,9 +28,9 @@ import { createAttackPlayer, CARRY } from "./attacks.js";
 import { createEffects } from "./effects.js";
 import { C } from "../ui/theme.js";
 import {
-  playUnitSelect, playActionSelect, playBack, playNextTurn, playCritHit, playMiss, playNoDamage, playDeath,
+  playUnitSelect, playActionSelect, playBack, playCritHit, playMiss, playNoDamage, playDeath,
   playFinalHit, playLevelUp, playAttackHit, playHeal, playPlayerPhase, playEnemyPhase as playEnemyPhaseSfx,
-  playVictory, playThreatCheck, playZoomIn, stopMusic,
+  playVictory, playThreatCheck, playZoomIn, playDefeat, stopMusic,
 } from "./audio.js";
 
 /* the ready stance's weapon.rotation.x. CARRY holds the weapon across the
@@ -866,7 +866,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         // status itself is applied by applyResolve once every event above
         // has played; this just fires the win/lose sound and cuts the music
         if (e.result === "win") playVictory();
-        else playNextTurn(); // Defeat has no dedicated stinger yet
+        else playDefeat();
         stopMusic();
         break;
     }

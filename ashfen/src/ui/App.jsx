@@ -9,7 +9,7 @@ import {
 } from "../view/audio.js";
 import { forecastOf } from "../core/combat.js";
 import { LEVEL_NAME } from "../core/map.js";
-import { C, MONO, SERIF, PHASE_BANNER_MS } from "./theme.js";
+import { C, MONO, SERIF, DISPLAY, PHASE_BANNER_MS } from "./theme.js";
 import { Card, Eyebrow, Pill, Btn } from "./primitives.jsx";
 import UnitCard from "./UnitCard.jsx";
 import Forecast from "./Forecast.jsx";
@@ -359,8 +359,19 @@ export default function App() {
             {g.status !== "playing" && (
               <div className="absolute flex flex-col items-center justify-center gap-3"
                 style={{ inset: 0, zIndex: 35, background: "rgba(10,12,18,0.78)" }}>
-                <div style={{ fontSize: 32, color: g.status === "win" ? C.gold : C.redLite }}>
-                  {g.status === "win" ? "Victory!" : "Defeat"}
+                {/* same treatment as the phase banner: Cinzel, Roman capitals,
+                    tracked out. The end screen is the other moment the game
+                    speaks in its own voice, so it should not be in the body
+                    serif the panels use. The tracking is added after the last
+                    letter as well, which would push the word a hair left of
+                    centre, so it comes back off the right edge, the same
+                    trick PhaseBanner uses. */}
+                <div style={{
+                  fontFamily: DISPLAY, fontWeight: 600, fontSize: 40, lineHeight: 1,
+                  textTransform: "uppercase", letterSpacing: "0.18em", marginRight: "-0.18em",
+                  color: g.status === "win" ? C.gold : C.redLite,
+                }}>
+                  {g.status === "win" ? "Victory" : "Defeat"}
                 </div>
                 <Btn light strong on={restart}>Restart</Btn>
               </div>

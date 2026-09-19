@@ -26,7 +26,8 @@
    Backing out of the action menu or the forecast (both routed through
    scene.js's backToMove) plays back.wav instead. Phase banners use their
    own sourced stingers, one per banner text (playerphase/enemyphase.wav;
-   a Defeat banner has no dedicated asset yet and falls back to Next Turn.wav).
+   a Defeat banner has no stinger of its own; the loss itself is voiced by
+   defeat.wav off the "end" event, below).
    Victory/Defeat no longer get a banner event at all (see game.js's
    checkEnd), so their sound plays from the "end" event instead (see
    scene.js's playEvents). The field manual has its own pair: HelpPage.wav
@@ -85,6 +86,7 @@ const SFX_FILES = {
   menu: "/audio/Menu.wav",
   drag: "/audio/Drag.wav",
   zoomIn: "/audio/zoomin.wav",
+  defeat: "/audio/defeat.wav",
 };
 
 // four interchangeable takes for a plain (non-crit) landed hit, picked at
@@ -180,6 +182,7 @@ export const playThreatCheck = () => playSfx("threatCheck");
 export const playMenu = () => playSfx("menu");
 export const playDrag = () => playSfx("drag");
 export const playZoomIn = () => playSfx("zoomIn");
+export const playDefeat = () => playSfx("defeat");
 
 /* the pause menu's volume sliders, both taking 0 to 1. Safe to call before
    the audio context exists: the level is remembered here and getContext
