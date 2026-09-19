@@ -97,7 +97,27 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x9fc3d8);
-  scene.fog = new THREE.Fog(0x9fc3d8, 16, 40);
+  /* no distance fog, and the board is darker for it. A linear fog ramps
+     every ground pixel toward the sky colour by camera distance, and the
+     posteriser downstream cut that ramp into contour bands lying straight
+     across the board, holding still while you orbited because they belong
+     to the camera and not to the map. Removing the ramp is the only fix
+     that leaves no trace; dithering the quantiser also works but lays a
+     chequer over every flat surface.
+
+     Do not read this as the fog having been decorative. Fog(0x9fc3d8,
+     16, 40) mixes toward the *sky*, which is far brighter than any
+     terrain tone, so it was working as a brightener more than as a haze:
+     it lifted the back of the board from about 37 to 64 out of 255 and
+     the middle from 29 to 43, and that front-to-back ramp was most of
+     what read as depth. The near edge barely moved. So the board now
+     sits darker and flatter than it used to, deliberately.
+
+     If that wants correcting, correct it in the palette, not here. Tile
+     colour is constant per face, so lightening TYPES in core/map.js (or
+     giving it a per-row ramp) cannot band. Ambient is a weak lever by
+     comparison: 1.55 to 2.2 moves the far band only 37 to 40, because
+     what was lost is a gradient and ambient lifts everything evenly. */
   const camera = new THREE.PerspectiveCamera(30, 1.6, 0.5, 120);
 
   /* tuned for this map specifically (Ashfen Pass's terrain palette skews
@@ -320,12 +340,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const postMat = new THREE.ShaderMaterial({
     vertexShader: POST_VERT, fragmentShader: POST_FRAG,
-    uniforms: {
-      tDiffuse: { value: rt.texture }, uLevels: { value: 32 }, uVignette: { value: 0.04 }, uRush: { value: 0 },
-      /* the low-res buffer's size, so POST_FRAG's dither cell lands one
-         per rendered pixel. applyRes keeps it in step with rt. */
-      uRes: { value: new THREE.Vector2(400, 240) },
-    },
+    uniforms: { tDiffuse: { value: rt.texture }, uLevels: { value: 32 }, uVignette: { value: 0.04 }, uRush: { value: 0 } },
     depthTest: false,
   });
   postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat));
@@ -335,9 +350,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     const p = RES[camRef.current.res];
     lastRes = camRef.current.res;
     const h = p.h === 0 ? VH : p.h;
-    const w = Math.max(64, Math.round(h * (VW / VH))), rh = Math.max(48, h);
-    rt.setSize(w, rh);
-    postMat.uniforms.uRes.value.set(w, rh);
+    rt.setSize(Math.max(64, Math.round(h * (VW / VH))), Math.max(48, h));
   }
   function resize() {
     const r = mount.getBoundingClientRect();
