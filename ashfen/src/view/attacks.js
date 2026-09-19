@@ -87,6 +87,8 @@ export function createAttackPlayer({ scene, director, effects }) {
   const from = new THREE.Vector3();
   const to = new THREE.Vector3();
   const contact = new THREE.Vector3();
+  const tangent = new THREE.Vector3(); // flight-path direction, for aiming the arrow
+  const aimAt = new THREE.Vector3();
   const cur = {};
 
   /* where a melee blow lands: the target's chest, pulled a little toward
@@ -147,16 +149,34 @@ export function createAttackPlayer({ scene, director, effects }) {
     }
   }
 
+  /* points a mesh whose nose is its local +z along the flight path at
+     progress k. The path is the straight line plus a sine hump, so its
+     tangent is (to - from) with the hump's slope added in y. Aiming at
+     position + tangent, rather than at `to`, is what keeps the head down
+     as the shot falls instead of holding one fixed angle the whole way. */
+  function aimAlongPath(mesh, k, arc) {
+    tangent.subVectors(to, from);
+    tangent.y += Math.PI * Math.cos(k * Math.PI) * arc;
+    aimAt.copy(mesh.position).add(tangent);
+    mesh.lookAt(aimAt);
+  }
+
   /* a projectile flying from `from` to `to`. Height is the arc peak above
-     the straight line. The director follows it so the camera pans with
-     the shot, which is most of what makes a range-2 attack read. */
-  async function fly(mesh, ms, arc, onFrame) {
-    mesh.visible = true;
+     the straight line. `aim` turns the mesh to follow the path, for the
+     arrow, whose shape has a direction; the bolt is a lump and tumbles
+     instead. The director follows it so the camera pans with the shot,
+     which is most of what makes a range-2 attack read. */
+  async function fly(mesh, ms, arc, onFrame, aim) {
     mesh.position.copy(from);
+    /* orient before the first frame is drawn, so the shot never shows a
+       frame still pointing wherever the last one ended */
+    if (aim) aimAlongPath(mesh, 0, arc);
+    mesh.visible = true;
     director.track(mesh.position);
     await tween(ms, (k) => {
       mesh.position.lerpVectors(from, to, k);
       mesh.position.y += Math.sin(k * Math.PI) * arc;
+      if (aim) aimAlongPath(mesh, k, arc);
       if (onFrame) onFrame(k);
     });
     director.track(null);
@@ -182,8 +202,7 @@ export function createAttackPlayer({ scene, director, effects }) {
     aimShot(tgt, 0.48, ctx.hit);
     const dist = from.distanceTo(to);
     blend(src, BOW_FULL, BOW_LOOSE, 70, easeOutCubic);
-    arrow.lookAt(to);
-    await fly(arrow, 80 + dist * 70, 0.08 + dist * 0.03);
+    await fly(arrow, 80 + dist * 70, 0.08 + dist * 0.03, null, true);
     if (ctx.hit) effects.burst(to, SPARK, ctx.crit ? 0.7 : 0.45);
     ctx.onImpact();
     if (!ctx.hit) {
@@ -191,8 +210,7 @@ export function createAttackPlayer({ scene, director, effects }) {
       from.copy(to);
       to.addScaledVector(dir, 0.9);
       to.y -= 0.3;
-      arrow.lookAt(to);
-      fly(arrow, 130, 0);
+      fly(arrow, 130, 0, null, true);
     }
     await blend(src, BOW_LOOSE, NEUTRAL, 220, easeInOutQuad);
   }

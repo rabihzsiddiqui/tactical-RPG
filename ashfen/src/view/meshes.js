@@ -108,6 +108,37 @@ function axeBit(w, h, d, thin, flare, mat) {
   return new THREE.Mesh(g, mat);
 }
 
+/* the Shamshir's curved blade, a short stack of box segments swept along
+   an arc so the low-poly look holds. The arc lies in the y-z plane, which
+   is the plane the swing travels through, and bends away from +z, putting
+   the convex side, the edge, on the leading face. baseY is where the
+   blade leaves the guard; the point lands near y = 0.48, the same reach
+   as the straight blade, so the trail span in attacks.js still fits. */
+function curvedBlade(mat, baseY) {
+  const g = new THREE.Group();
+  const SEGS = 5, SWEEP = 0.62, LEN = 0.36;
+  const R = LEN / SWEEP;
+  for (let i = 0; i < SEGS; i++) {
+    const a = ((i + 0.5) * SWEEP) / SEGS;
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(0.015, LEN / SEGS + 0.012, 0.05 - 0.004 * i), mat);
+    seg.position.set(0, baseY + R * Math.sin(a), R * (Math.cos(a) - 1));
+    seg.rotation.x = -a;
+    g.add(seg);
+  }
+  /* the point carries on along the tangent at the end of the arc, and is
+     squashed in x so it stays as thin as the blade it finishes */
+  const point = new THREE.Mesh(new THREE.ConeGeometry(0.026, 0.1, 4), mat);
+  point.scale.set(0.45, 1, 1);
+  point.position.set(
+    0,
+    baseY + R * Math.sin(SWEEP) + 0.05 * Math.cos(SWEEP),
+    R * (Math.cos(SWEEP) - 1) - 0.05 * Math.sin(SWEEP)
+  );
+  point.rotation.x = -SWEEP;
+  g.add(point);
+  return g;
+}
+
 /* bulk scales the torso, shoulder spread and limb thickness. Width grows
    with it in full, depth at about a third of the rate: a 1.3 Knight is
    noticeably wider than a Lord from the cut-in camera without turning into
@@ -274,12 +305,29 @@ export function buildUnitMesh(palKey, weaponKey, clsKey) {
     tip.position.y = 0.68;
     weapon.add(shaft, tip);
   } else {
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.42, 0.015), MM(P.blade));
-    blade.position.y = 0.26;
-    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.04), MM(P.plume));
+    /* swords. The blade is thin across x and wide across z so its edge
+       leads: the melee beat turns the arm and the weapon about x, which
+       carries the blade through the y-z plane, and the narrow side is the
+       one facing that way. Built the other way round, the way it was, it
+       swung flat-on and cut with the side of the blade. The quillons run
+       across z with it, in the plane of the flat, as a crossguard does. */
+    const bladeMat = MM(P.blade);
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 0.16), MM(P.plume));
     guard.position.y = 0.05;
     const grip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.1, 0.04), M(P.grip));
-    weapon.add(blade, guard, grip);
+    weapon.add(guard, grip);
+    if (weaponKey === "shamshir") {
+      /* Kaelen's personal blade is a sabre, so it reads as its own weapon
+         next to the mercenary's straight iron sword */
+      weapon.add(curvedBlade(bladeMat, 0.06));
+      const pommel = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.04, 0.045), MM(P.plume));
+      pommel.position.y = -0.06;
+      weapon.add(pommel);
+    } else {
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.42, 0.045), bladeMat);
+      blade.position.y = 0.26;
+      weapon.add(blade);
+    }
   }
   weapon.rotation.x = 1.5;
   armR.add(weapon);
