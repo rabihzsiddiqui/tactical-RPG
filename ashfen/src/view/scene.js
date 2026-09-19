@@ -327,7 +327,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
        three.js bakes `transparent` into the compiled shader program, so a
        material switched to transparent after it has compiled keeps writing
        alpha 1 and every later opacity change silently does nothing: that
-       is why the acted dim and the death fade below never actually showed.
+       is why the death fade and the cut-in veil never actually showed.
        Flipping it at runtime instead would mean a recompile per material
        in the middle of an exchange, the same hitch the cut-in key light is
        added at mount to avoid. Setting it here, before the first render,
@@ -648,12 +648,14 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      so core/game.js never sees sel/inspect/forecast/danger/banner/levelUp */
   const coreState = () => ({ units: g.units, turn: g.turn, phase: g.phase, status: g.status, log: g.log });
 
-  /* a unit's on-screen alpha comes from two independent things: a player
-     unit that has already acted sits at 0.55, and a bystander the cut-in
-     has faded out of a projectile's way sits wherever its veil is. Both
-     write through here, so neither can clobber the other's value. */
+  /* a unit's on-screen alpha is the cut-in veil and nothing else. Having
+     acted used to drop a player unit to 0.55 as well, but a translucent
+     soldier reads as a ghost or a rendering fault rather than as a turn
+     already spent, and it fought with the veil for the same channel. The
+     blue ring below already carries that state: it is lit under everyone
+     who can still move, so its absence is what marks a unit as done. */
   function applyUnitAlpha(u) {
-    const a = (u.team === "player" && u.acted ? 0.55 : 1) * u.view.veil;
+    const a = u.view.veil;
     u.view.mats.forEach((m) => { m.opacity = a; });
     /* the blue "hasn't acted" ring is its own mesh on the ground, so it
        would otherwise stay lit under a unit that has faded out. It is
