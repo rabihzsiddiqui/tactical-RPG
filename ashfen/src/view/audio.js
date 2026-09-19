@@ -84,6 +84,7 @@ const SFX_FILES = {
   threatCheck: "/audio/ThreatCheck.wav",
   menu: "/audio/Menu.wav",
   drag: "/audio/Drag.wav",
+  zoomIn: "/audio/zoomin.wav",
 };
 
 // four interchangeable takes for a plain (non-crit) landed hit, picked at
@@ -178,6 +179,7 @@ export const playHelp = () => playSfx("help");
 export const playThreatCheck = () => playSfx("threatCheck");
 export const playMenu = () => playSfx("menu");
 export const playDrag = () => playSfx("drag");
+export const playZoomIn = () => playSfx("zoomIn");
 
 /* the pause menu's volume sliders, both taking 0 to 1. Safe to call before
    the audio context exists: the level is remembered here and getContext

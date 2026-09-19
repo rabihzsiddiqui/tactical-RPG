@@ -29,7 +29,7 @@ import { C } from "../ui/theme.js";
 import {
   playUnitSelect, playActionSelect, playBack, playNextTurn, playCritHit, playMiss, playNoDamage, playDeath,
   playFinalHit, playLevelUp, playAttackHit, playHeal, playPlayerPhase, playEnemyPhase as playEnemyPhaseSfx,
-  playVictory, playThreatCheck, stopMusic,
+  playVictory, playThreatCheck, playZoomIn, stopMusic,
 } from "./audio.js";
 
 export const RES = [
@@ -613,6 +613,12 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
           amount: first.type === "heal" ? first.amount : 0,
         };
         tick();
+        /* the rush of the camera getting there. Fired beside flyIn rather
+           than inside it, so camera.js stays camera work only, and from
+           inside this branch so the cinematics toggle silences the sound
+           along with the move it belongs to. The sample outlasts the 300ms
+           fly on purpose: it carries its tail over the first strikes. */
+        playZoomIn();
         await director.flyIn(src, tgt, {
           others: g.units.filter((z) => z !== src && z !== tgt && z.hp > 0 && z.view).map((z) => z.view.root.position),
         });
