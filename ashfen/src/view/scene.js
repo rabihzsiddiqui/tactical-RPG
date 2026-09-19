@@ -320,6 +320,19 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     scene.add(v.root);
     u.view = v;
     u.anim = { state: "idle", phase: Math.random() * 6.28, targetYaw: v.root.rotation.y, walk: null, offset: new THREE.Vector3() };
+    /* 0..1, how much of this unit the cut-in is letting you see. Only the
+       veil tween in playEvents moves it; everything else reads it. */
+    v.veil = 1;
+    /* units live in the transparent pass from the start, at full opacity.
+       three.js bakes `transparent` into the compiled shader program, so a
+       material switched to transparent after it has compiled keeps writing
+       alpha 1 and every later opacity change silently does nothing: that
+       is why the acted dim and the death fade below never actually showed.
+       Flipping it at runtime instead would mean a recompile per material
+       in the middle of an exchange, the same hitch the cut-in key light is
+       added at mount to avoid. Setting it here, before the first render,
+       costs nothing and every fade afterwards is one uniform. */
+    v.mats.forEach((m) => { m.transparent = true; });
     v.mats.forEach((m) => {
       if (!m.emissive) return;
       m.emissive.setHex(POP_EMISSIVE);
@@ -501,7 +514,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
        the camera turned. Hidden during a cut-in, where the battle HUD
        shows the same numbers, and back the moment the camera lets go. */
     const bar = u.view.hpBar.group;
-    bar.visible = !g.cutIn || g.cutIn.closing;
+    bar.visible = (!g.cutIn || g.cutIn.closing) && u.view.veil > 0.5;
     bar.position.set(root.position.x, lvlH(u.x, u.y) + 0.12, root.position.z);
     bar.quaternion.copy(camera.quaternion);
     bar.translateY(-0.34);
@@ -550,7 +563,6 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
 
   async function die(u) {
-    u.view.mats.forEach((m) => { m.transparent = true; });
     await tween(420, (k) => {
       u.view.root.position.y = lvlH(u.x, u.y) - k * 0.5;
       u.view.mats.forEach((m) => (m.opacity = 1 - k));
@@ -636,13 +648,25 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      so core/game.js never sees sel/inspect/forecast/danger/banner/levelUp */
   const coreState = () => ({ units: g.units, turn: g.turn, phase: g.phase, status: g.status, log: g.log });
 
+  /* a unit's on-screen alpha comes from two independent things: a player
+     unit that has already acted sits at 0.55, and a bystander the cut-in
+     has faded out of a projectile's way sits wherever its veil is. Both
+     write through here, so neither can clobber the other's value. */
+  function applyUnitAlpha(u) {
+    const a = (u.team === "player" && u.acted ? 0.55 : 1) * u.view.veil;
+    u.view.mats.forEach((m) => { m.opacity = a; });
+    /* the blue "hasn't acted" ring is its own mesh on the ground, so it
+       would otherwise stay lit under a unit that has faded out. It is
+       restored by the syncUnitVisuals call after the veil comes back. */
+    if (u.view.veil < 1) u.view.readyRing.visible = false;
+  }
+
   /* replaces the per-unit dim (acted) / restore (fresh turn) and the blue
      "hasn't acted yet" ring, both driven off the same acted flag */
   function syncUnitVisuals() {
     for (const u of g.units) {
       if (u.hp <= 0) continue;
-      const dim = u.team === "player" && u.acted;
-      u.view.mats.forEach((m) => { m.transparent = dim; m.opacity = dim ? 0.55 : 1; });
+      applyUnitAlpha(u);
 
       const isSelected = g.sel && g.sel.id === u.id;
       u.view.readyRing.visible = g.phase === "player" && g.status === "playing"
@@ -713,6 +737,46 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     return j;
   }
 
+  const VEIL_RADIUS = 0.55;  // tiles from the shot line before a unit counts as in the way
+  const VEIL_END = 0.15;     // keeps the two fighters themselves out of the test
+  const VEIL_OUT_MS = 220;   // finishes inside the 300ms fly-in
+  const VEIL_IN_MS = 260;
+
+  /* the units standing on the line a projectile is about to fly down.
+     Measured flat, since a projectile's arc is vertical and only its
+     ground track can run into a bystander, and against tile coordinates
+     rather than live mesh positions, which are mid-animation here.
+
+     There is no check for whether the weapon is ranged: a melee exchange
+     happens between neighbouring tiles, so there is no room between them
+     for anyone to stand and this comes back empty on its own. */
+  function inTheWay(src, tgt) {
+    const dx = tgt.x - src.x, dz = tgt.y - src.y;
+    const len2 = dx * dx + dz * dz;
+    if (len2 < 1e-6) return [];
+    return g.units.filter((u) => {
+      if (u === src || u === tgt || u.hp <= 0 || !u.view) return false;
+      const t = ((u.x - src.x) * dx + (u.y - src.y) * dz) / len2;
+      if (t <= VEIL_END || t >= 1 - VEIL_END) return false;
+      const ox = src.x + dx * t - u.x, oz = src.y + dz * t - u.y;
+      return ox * ox + oz * oz < VEIL_RADIUS * VEIL_RADIUS;
+    });
+  }
+
+  /* fades a set of units to `to` over `ms`. Runs alongside the camera fly
+     rather than before it, so the bystanders clear the shot on the way in
+     and are back by the time the board is on screen again. */
+  function veilTo(units, to, ms) {
+    if (!units.length) return Promise.resolve();
+    const from = units.map((u) => u.view.veil);
+    return tween(ms, (k) => {
+      units.forEach((u, i) => {
+        u.view.veil = from[i] + (to - from[i]) * k;
+        applyUnitAlpha(u);
+      });
+    });
+  }
+
   async function playEvents(events) {
     let i = 0;
     while (i < events.length) {
@@ -738,9 +802,18 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
            along with the move it belongs to. The sample outlasts the 300ms
            fly on purpose: it carries its tail over the first strikes. */
         playZoomIn();
-        await director.flyIn(src, tgt, {
-          others: g.units.filter((z) => z !== src && z !== tgt && z.hp > 0 && z.view).map((z) => z.view.root.position),
-        });
+        /* who stands on the left of the frame. A heal reads as the healer
+           acting on someone, so the staff user takes the left; a strike
+           reads from the company's side, so the player's unit takes it,
+           whether it is the one swinging or the one being swung at. Two
+           enemies never fight each other, so the last term is only ever a
+           fallback. */
+        const leftIsSource = first.type === "heal" || src.team === "player" || tgt.team !== "player";
+        const blocked = inTheWay(src, tgt);
+        await Promise.all([
+          director.flyIn(src, tgt, { leftIsSource }),
+          veilTo(blocked, 0, VEIL_OUT_MS),
+        ]);
         let crit = false;
         for (; i < end; i++) {
           crit = crit || (events[i].type === "strike" && events[i].hit && events[i].crit);
@@ -750,7 +823,10 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         if (crit) await sleep(280);
         g.cutIn.closing = true;
         tick();
-        await director.flyOut();
+        await Promise.all([director.flyOut(), veilTo(blocked, 1, VEIL_IN_MS)]);
+        /* the veil is back at 1, so this is what relights the ready rings
+           applyUnitAlpha put out */
+        if (blocked.length) syncUnitVisuals();
         g.cutIn = null;
         tick();
       } else {

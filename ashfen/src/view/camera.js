@@ -27,9 +27,6 @@ const OVER_START = 0.5;    // fraction of the fly-in at which the overshoot hump
 const OVER_PUSH = 0.1;     // fraction of the framing distance the camera carries past the frame at the hump's peak
 const OVER_FOV = 4;        // degrees of extra fov at that peak
 const RUSH_PEAK = 4;       // initial slope of easeOutQuart: the fly's top speed in fly-lengths per fly-duration
-const FRAME_SPREAD = 0.9;  // half-width of the cut-in frame per unit of depth, tan(CINE_FOV / 2) times a 1.4 aspect
-const UNIT_RADIUS = 0.3;   // how far past the frame edge a bystander still shows a shoulder
-const BACK_WEIGHT = 0.3;   // a bystander behind the fighters counts this much of one in front, fading out over a second framing distance
 const TRACK_WEIGHT = 0.4;  // how far the look target leans toward a tracked projectile
 const TRACK_LAG_MS = 90;   // smoothing time constant for that lean, so a spawn or despawn never pops
 const KEY_INTENSITY = 1.1; // peak of the cut-in key light, reached at mix = 1; higher clips the helms white
@@ -38,7 +35,6 @@ const KEY_TWIST = 0.3;     // body yaw at the moment of contact in the melee bea
 const KEY_TILT = 0.36;     // lifts the aim so the light sits above the horizon, not raking up from below
 const GROUND_CLEAR = 0.32; // how far above solid ground the cut-in lens has to stay
 const GROUND_STEPS = 5;    // ground samples between the lens and the look target
-const TERRAIN_WEIGHT = 2.5; // cost per world unit the ground would force the lens to climb; a tile-step is about one bystander
 
 /* the top of the solid ground at a world position, for keeping the lens out
    of it. Tile tops rather than walkable heights: a bridge's deck is what a
@@ -97,7 +93,6 @@ export function createDirector({ isEnabled, scene }) {
   const axis = new THREE.Vector3();
   const mid = new THREE.Vector3();
   const perp = new THREE.Vector3();
-  const toCam = new THREE.Vector3();
   const pos = new THREE.Vector3();
   const target = new THREE.Vector3();
   const jitter = new THREE.Vector3();
@@ -107,19 +102,28 @@ export function createDirector({ isEnabled, scene }) {
   const wantLean = new THREE.Vector3(); // where the lean is heading this frame
   const flyDir = new THREE.Vector3();   // unit vector along the fly-in, orbit pose to cinematic pose
   const prevPos = new THREE.Vector3();  // camera position last frame, before shake, for the rush measure
-  const candPos = new THREE.Vector3();  // a candidate camera position while choosing a side
-  const viewDir = new THREE.Vector3();  // candidate view direction, camera to look target
-  const rel = new THREE.Vector3();      // a bystander's offset from the candidate camera
 
   function save() {
     copyPose(saved, base);
   }
 
   /* framing: midpoint of the pair, camera pushed out perpendicular to the
-     attack axis so neither unit hides the other, on whichever side the
-     orbit camera already favours so the rush never swings the long way
-     round. Distance grows with separation so a bow shot at range 2 fits
-     the same frame as a sword at range 1. */
+     attack axis so neither unit hides the other. Distance grows with
+     separation so a bow shot at range 2 fits the same frame as a sword at
+     range 1.
+
+     Which side of the axis the lens takes decides who stands left, and
+     that is no longer the camera's call to make: the player's unit reads
+     left in every exchange, and the healer reads left in every heal, so
+     the pair always occupies the frame the same way round and the board
+     never mirrors itself between one cut-in and the next. `leftIsSource`
+     carries that decision in from scene.js, which is the only place that
+     knows a unit's team.
+
+     The geometry: with perp = (-axis.z, 0, axis.x), the camera's own right
+     vector, cross(up, pos - target), comes out parallel to `axis` itself,
+     so the attacker sits left and the defender right. Negating perp swaps
+     them. */
   function framePair(aPos, dPos, opts) {
     axis.subVectors(dPos, aPos);
     axis.y = 0;
@@ -128,28 +132,12 @@ export function createDirector({ isEnabled, scene }) {
     mid.addVectors(aPos, dPos).multiplyScalar(0.5);
 
     perp.set(-axis.z, 0, axis.x);
-    toCam.subVectors(base.pos, mid);
-    if (perp.dot(toCam) < 0) perp.negate();
+    if (opts.leftIsSource === false) perp.negate();
 
     const dist = (opts.dist ?? BASE_DIST) + sep * DIST_PER_TILE;
     frameDist = dist;
     cine.target.copy(mid);
     cine.target.y += LOOK_LIFT;
-
-    /* with the camera this low and this close, a bystander on the near
-       side of the pair is not a shoulder in the corner, it is a wall
-       across a third of the frame, and rising ground is the same problem
-       without a face on it. So both sides of the axis are scored and the
-       orbit side only keeps its claim when the far side is no clearer.
-       The far side means a longer fly, which the rush blur covers, and it
-       can swap which fighter stands left; the HUD keeps the player's unit
-       on the left regardless. Scored unconditionally now: the old guard
-       skipped it whenever nobody else was on the board, which is exactly
-       when the terrain term matters most. */
-    const near = clutter(perp, dist, opts.others);
-    perp.negate();
-    const far = clutter(perp, dist, opts.others);
-    if (far >= near) perp.negate();
 
     cine.pos.copy(cine.target).addScaledVector(perp, dist);
     cine.pos.y += dist * ELEVATION;
@@ -180,37 +168,6 @@ export function createDirector({ isEnabled, scene }) {
     keyV.subVectors(cine.pos, cine.target).normalize();
     key.position.copy(keyN).multiplyScalar(2 * keyN.dot(keyV)).sub(keyV).multiplyScalar(3).add(cine.target);
     key.target.position.copy(cine.target);
-  }
-
-  /* how much of the frame bystanders would fill from the camera on `side`.
-     Each unit between the camera and the look target adds its overlap
-     with the view cone, weighted toward the camera end where a unit
-     looms largest. A unit behind the look target counts less, the
-     fighters cover most of it, and less again the further back it
-     stands, so a clean backdrop still wins a tie. */
-  function clutter(side, dist, others) {
-    candPos.copy(cine.target).addScaledVector(side, dist);
-    candPos.y += dist * ELEVATION;
-    viewDir.subVectors(cine.target, candPos);
-    const len = viewDir.length();
-    viewDir.divideScalar(len);
-    /* ground is charged for exactly what it costs: how far the clamp in
-       framePair would have to lift the lens to clear it. A side with
-       nothing in the way charges zero, so the downhill side of a step
-       wins by default, and the lift it saves is framing it keeps. */
-    const climb = highestGround(candPos, cine.target) + GROUND_CLEAR - candPos.y;
-    let score = Math.max(0, climb) * TERRAIN_WEIGHT;
-    for (const p of others || []) {
-      rel.subVectors(p, candPos);
-      const depth = rel.dot(viewDir);
-      if (depth <= 0.05 || depth >= 2 * len) continue;
-      const lateral = rel.addScaledVector(viewDir, -depth).length();
-      const reach = depth * FRAME_SPREAD + UNIT_RADIUS;
-      if (lateral >= reach) continue;
-      const overlap = 1 - lateral / reach;
-      score += depth < len ? overlap * (1 - depth / len) : overlap * BACK_WEIGHT * (2 - depth / len);
-    }
-    return score;
   }
 
   /* ease-out quart on the way in: the camera starts at top speed and
