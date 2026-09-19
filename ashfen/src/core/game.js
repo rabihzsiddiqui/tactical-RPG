@@ -7,7 +7,7 @@
 import { cell } from "./map.js";
 import { WEAPONS } from "./data.js";
 import { simulateCombat, expFor, levelUp } from "./combat.js";
-import { moveField, tracePath } from "./path.js";
+import { moveField, routeTo } from "./path.js";
 import { planFor } from "./ai.js";
 
 const cloneUnit = (u) => ({ ...u });
@@ -172,8 +172,7 @@ export function runEnemyPhase(state, rng = Math.random) {
     if (!plan) continue;
 
     if (plan.x !== e.x || plan.y !== e.y) {
-      const { prev } = moveField(e, cur.units);
-      const path = tracePath(prev, e.x, e.y, plan.x, plan.y);
+      const path = routeTo(moveField(e, cur.units), e.x, e.y, plan.x, plan.y);
       if (path.length) {
         const from = { x: e.x, y: e.y };
         e.x = plan.x; e.y = plan.y;

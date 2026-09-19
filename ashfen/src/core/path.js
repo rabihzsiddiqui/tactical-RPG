@@ -4,44 +4,79 @@ import { cell, lvlH, walkable, inB, CLIMB } from "./map.js";
 import { WEAPONS } from "./data.js";
 import { K, DIRS } from "./util.js";
 
-/* tiles a unit cannot step onto. Every other living unit blocks, ally or
-   enemy, so a walker routes around its own team instead of ghosting
-   through it. `open` leaves one tile enterable: fieldFrom measures from a
-   target's own tile, which has to be reachable for the field to mean
-   anything. */
-function blockedTiles(unit, units, open) {
+/* tiles nobody can walk onto: the mover's enemies, who really do bar the
+   way. Allies never land here, they stay passable so a crowded formation
+   can never shrink anyone's range. `skip` leaves one tile open, since
+   fieldFrom measures from a target's own occupied tile. */
+function blockedTiles(unit, units, skip) {
   const blocked = new Set();
   for (const u of units) {
-    if (u.hp <= 0 || u.id === unit.id) continue;
-    if (open && u.x === open.x && u.y === open.y) continue;
+    if (u.hp <= 0 || u.team === unit.team) continue;
+    if (skip && u.x === skip.x && u.y === skip.y) continue;
     blocked.add(K(u.x, u.y));
   }
   return blocked;
 }
 
-export function moveField(unit, units) {
-  const blocked = blockedTiles(unit, units);
-  const dist = new Map([[K(unit.x, unit.y), 0]]);
+/* tiles a walk should route around if it can: every other living unit,
+   teammates included. Only ever a preference, never a wall. */
+function occupiedTiles(unit, units) {
+  const taken = new Set();
+  for (const u of units) {
+    if (u.hp > 0 && u.id !== unit.id) taken.add(K(u.x, u.y));
+  }
+  return taken;
+}
+
+/* priced high enough that any way around a body wins over stepping on it,
+   yet only ever added to the ordering cost. The movement budget is checked
+   against the real terrain cost, so a detour price can push a route around
+   someone but can never put a tile out of reach. */
+const BODY_DETOUR = 100;
+
+/* one Dijkstra, shared by both fields moveField returns. `avoid` tiles
+   still cost their real terrain cost toward `mov`; they just sort last. */
+function search(unit, blocked, avoid) {
+  const here = K(unit.x, unit.y);
+  const order = new Map([[here, 0]]);
+  const dist = new Map([[here, 0]]);
   const prev = new Map();
   const q = [[unit.x, unit.y, 0]];
   while (q.length) {
     q.sort((a, b) => a[2] - b[2]);
     const [x, y, c] = q.shift();
-    if (c > (dist.get(K(x, y)) ?? 1e9)) continue;
+    if (c > (order.get(K(x, y)) ?? 1e9)) continue;
     for (const [dx, dy] of DIRS) {
       const nx = x + dx, ny = y + dy;
       if (!inB(nx, ny) || !walkable(nx, ny) || blocked.has(K(nx, ny))) continue;
       if (Math.abs(lvlH(nx, ny) - lvlH(x, y)) > CLIMB) continue;
-      const nc = c + cell(nx, ny).cost;
-      if (nc > unit.mov) continue;
-      if (nc < (dist.get(K(nx, ny)) ?? 1e9)) {
-        dist.set(K(nx, ny), nc);
+      const nd = dist.get(K(x, y)) + cell(nx, ny).cost;
+      if (nd > unit.mov) continue;
+      const nc = c + cell(nx, ny).cost + (avoid.has(K(nx, ny)) ? BODY_DETOUR : 0);
+      if (nc < (order.get(K(nx, ny)) ?? 1e9)) {
+        order.set(K(nx, ny), nc);
+        dist.set(K(nx, ny), nd);
         prev.set(K(nx, ny), K(x, y));
         q.push([nx, ny, nc]);
       }
     }
   }
   return { dist, prev };
+}
+
+/* `dist`/`prev` are the plain shortest routes: terrain and enemies only,
+   which is what the move overlay and every reachability test read.
+   `prevAround` is the same field re-run with a detour price on occupied
+   tiles, and it is only ever used to pick which way the walk animates.
+   It can cover fewer tiles than `dist` (a tile whose only affordable
+   approach is over a teammate has no way around), which is exactly what
+   routeTo's fallback is for. */
+export function moveField(unit, units) {
+  const blocked = blockedTiles(unit, units);
+  const none = new Set();
+  const { dist, prev } = search(unit, blocked, none);
+  const { prev: prevAround } = search(unit, blocked, occupiedTiles(unit, units));
+  return { dist, prev, prevAround };
 }
 
 export function fieldFrom(sx, sy, unit, units) {
@@ -77,7 +112,7 @@ export function standable(dist, unit, units) {
 
 export function reachTiles(unit, units) {
   const w = WEAPONS[unit.weaponKey];
-  const { dist, prev } = moveField(unit, units);
+  const { dist, prev, prevAround } = moveField(unit, units);
   const stand = standable(dist, unit, units);
   const atk = new Set();
   for (const k of stand) {
@@ -90,7 +125,7 @@ export function reachTiles(unit, units) {
       }
     }
   }
-  return { dist, prev, stand: new Set(stand), atk };
+  return { dist, prev, prevAround, stand: new Set(stand), atk };
 }
 
 export function tracePath(prev, sx, sy, tx, ty) {
@@ -106,4 +141,13 @@ export function tracePath(prev, sx, sy, tx, ty) {
     cur = p;
   }
   return path;
+}
+
+/* the route to actually walk, given a field from moveField or reachTiles.
+   Prefers the way around other units and falls back to the plain shortest
+   route, which is the only one that reaches a tile whose cheapest
+   approach is straight over somebody. */
+export function routeTo(field, sx, sy, tx, ty) {
+  const around = tracePath(field.prevAround, sx, sy, tx, ty);
+  return around.length ? around : tracePath(field.prev, sx, sy, tx, ty);
 }

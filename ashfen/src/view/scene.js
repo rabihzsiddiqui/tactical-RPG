@@ -9,7 +9,7 @@
 import * as THREE from "three";
 import { MW, MH, CX, CZ, cell, lvlH, walkable } from "../core/map.js";
 import { ROSTER, makeUnit } from "../core/data.js";
-import { tracePath, reachTiles } from "../core/path.js";
+import { routeTo, reachTiles } from "../core/path.js";
 import { wep, forecastOf } from "../core/combat.js";
 import { threatSet } from "../core/ai.js";
 import { K, man, clamp, sleep } from "../core/util.js";
@@ -871,8 +871,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
 
   function select(u) {
     playUnitSelect();
-    const { stand, atk, dist, prev } = reachTiles(u, g.units);
-    g.sel = { id: u.id, ox: u.x, oy: u.y, stand, atk, dist, prev, mode: "move", targets: null };
+    const { stand, atk, dist, prev, prevAround } = reachTiles(u, g.units);
+    g.sel = { id: u.id, ox: u.x, oy: u.y, stand, atk, dist, prev, prevAround, mode: "move", targets: null };
     g.inspect = u.id;
     g.forecast = null;
     g.tutorial = false;
@@ -921,7 +921,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   async function moveUnitTo(u, tx, ty) {
     const unitId = u.id;
     busy = true;
-    const path = tracePath(g.sel.prev, g.sel.ox, g.sel.oy, tx, ty);
+    const path = routeTo(g.sel, g.sel.ox, g.sel.oy, tx, ty);
     releaseAll();
     ring.visible = false;
     tick();

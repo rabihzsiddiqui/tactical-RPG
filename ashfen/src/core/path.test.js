@@ -1,60 +1,79 @@
 import { describe, test, expect } from "vitest";
-import { moveField, tracePath, standable } from "./path.js";
+import { moveField, routeTo, standable } from "./path.js";
 import { K } from "./util.js";
 
-/* all fixtures sit on map rows 5 ("............") and 6 ("..T......T..")
-   around x=4..7, where every tile is Plain at cost 1, so terrain never
-   enters the numbers below. */
+/* fixtures sit on map rows 5 ("............") and 6 ("..T......T..")
+   around x=4..7, all Plain at cost 1, so terrain never enters the numbers
+   below. Row 4 is River, impassable, which is what boxes a unit in. */
 const unit = (over = {}) => ({ id: "u", team: "player", x: 4, y: 5, hp: 20, mov: 4, weaponKey: "ironSword", ...over });
 
-describe("moveField blocking", () => {
-  test("an ally's tile is not reachable", () => {
+describe("range is blind to allies", () => {
+  test("an ally does not cost a teammate any reach", () => {
     const u = unit();
     const ally = unit({ id: "a", x: 5, y: 5 });
-    const { dist } = moveField(u, [u, ally]);
-    expect(dist.has(K(5, 5))).toBe(false);
+    const solo = moveField(u, [u]).dist;
+    const crowded = moveField(u, [u, ally]).dist;
+    expect(crowded.get(K(6, 5))).toBe(solo.get(K(6, 5)));
+    expect([...crowded.keys()].sort()).toEqual([...solo.keys()].sort());
   });
 
-  test("an enemy's tile is not reachable", () => {
+  test("an ally's own tile stays in range, just not standable", () => {
+    const u = unit();
+    const ally = unit({ id: "a", x: 5, y: 5 });
+    const units = [u, ally];
+    const { dist } = moveField(u, units);
+    expect(dist.get(K(5, 5))).toBe(1);
+    expect(standable(dist, u, units)).not.toContain(K(5, 5));
+  });
+
+  test("an enemy still blocks outright", () => {
     const u = unit();
     const foe = unit({ id: "e", team: "enemy", x: 5, y: 5 });
     const { dist } = moveField(u, [u, foe]);
     expect(dist.has(K(5, 5))).toBe(false);
   });
+});
 
-  test("a dead unit stops blocking", () => {
+describe("the walk routes around bodies", () => {
+  test("a route past an ally detours instead of stepping on it", () => {
+    const u = unit();
+    const ally = unit({ id: "a", x: 5, y: 5 });
+    const path = routeTo(moveField(u, [u, ally]), 4, 5, 6, 5);
+    expect(path).toEqual([{ x: 4, y: 6 }, { x: 5, y: 6 }, { x: 6, y: 6 }, { x: 6, y: 5 }]);
+  });
+
+  test("with nobody in the way it takes the straight line", () => {
+    const u = unit();
+    const path = routeTo(moveField(u, [u]), 4, 5, 6, 5);
+    expect(path).toEqual([{ x: 5, y: 5 }, { x: 6, y: 5 }]);
+  });
+
+  test("a dead unit is not something to walk around", () => {
     const u = unit();
     const corpse = unit({ id: "a", x: 5, y: 5, hp: 0 });
-    const { dist } = moveField(u, [u, corpse]);
-    expect(dist.get(K(5, 5))).toBe(1);
+    const path = routeTo(moveField(u, [u, corpse]), 4, 5, 6, 5);
+    expect(path).toEqual([{ x: 5, y: 5 }, { x: 6, y: 5 }]);
   });
 
-  test("a tile past an ally costs the detour, not the straight line", () => {
-    const u = unit();
+  test("it walks over a teammate when the detour does not fit the budget", () => {
+    /* mov 2 pays for the two straight steps but not the four-step detour */
+    const u = unit({ mov: 2 });
     const ally = unit({ id: "a", x: 5, y: 5 });
-    const { dist } = moveField(u, [u, ally]);
-    expect(dist.get(K(6, 5))).toBe(4);
+    const field = moveField(u, [u, ally]);
+    expect(field.dist.get(K(6, 5))).toBe(2);
+    expect(routeTo(field, 4, 5, 6, 5)).toEqual([{ x: 5, y: 5 }, { x: 6, y: 5 }]);
   });
 
-  test("the traced path walks around an ally instead of through it", () => {
-    const u = unit();
-    const ally = unit({ id: "a", x: 5, y: 5 });
-    const { prev } = moveField(u, [u, ally]);
-    const path = tracePath(prev, 4, 5, 6, 5);
-    expect(path).toEqual([{ x: 4, y: 6 }, { x: 5, y: 6 }, { x: 6, y: 6 }, { x: 6, y: 5 }]);
-    expect(path.some((p) => p.x === ally.x && p.y === ally.y)).toBe(false);
-  });
-
-  test("a unit walled in by its own team can only stand where it already is", () => {
+  test("a unit ringed by teammates still reaches the tiles behind them", () => {
     const u = unit({ x: 5, y: 5 });
-    const wall = [
+    const units = [
+      u,
       unit({ id: "a1", x: 4, y: 5 }),
       unit({ id: "a2", x: 6, y: 5 }),
       unit({ id: "a3", x: 5, y: 6 }),
     ];
-    /* (5,4) is River, impassable on its own, so the three allies close the box */
-    const units = [u, ...wall];
-    const { dist } = moveField(u, units);
-    expect(standable(dist, u, units)).toEqual([K(5, 5)]);
+    const field = moveField(u, units);
+    expect(field.dist.get(K(7, 5))).toBe(2);
+    expect(routeTo(field, 5, 5, 7, 5)).toEqual([{ x: 6, y: 5 }, { x: 7, y: 5 }]);
   });
 });
