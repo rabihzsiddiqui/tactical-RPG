@@ -82,6 +82,9 @@ function faceTexture(P) {
 
 const METAL = { metalness: 0.7, roughness: 0.4 }; // 0.35 made the highlight a hard-edged facet on these flat boxes
 
+// helms that wrap the whole skull, so the hair shell below would never be seen
+const ENCLOSING_HELMS = new Set(["full", "hood", "veil"]);
+
 /* an axe bit. A plain box read as a shovel from every angle: same
    thickness front and back, same height at the edge as at the haft. This
    takes a box and moves the front face's vertices only, pinching them
@@ -210,12 +213,31 @@ export function buildUnitMesh(palKey, weaponKey, clsKey) {
   const weapon = new THREE.Group();
   weapon.position.set(0, -0.25, 0.02);
   if (w.type === "bow") {
-    const limb = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.018, 5, 10, Math.PI * 1.25), M(P.grip));
-    limb.rotation.z = Math.PI / 2;
-    weapon.add(limb);
-    const string = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.36, 0.008), M(0xe8e2cf));
-    string.position.z = 0.1;
-    weapon.add(string);
+    /* the stave curves in the plane the shot travels through, up and
+       forward, with the tips and the string behind the grip where the
+       draw happens. The old one curved up and sideways, across its own
+       shot, and its string floated 0.1 in front of the whole thing
+       attached to nothing, which is why it read as two loose sticks.
+
+       A torus arc always starts at angle 0, so the half circle comes out
+       centred on +y with its tips on +x and -x. Two geometry rotations
+       put the centre on +z and the tips above and below it, and the
+       translate straddles the hand: belly half a radius ahead of the
+       fist, string half a radius behind it. Sliding the whole bow back
+       so the grip sat on the stave itself was truer to a real bow and
+       buried the string in the archer's chest. */
+    const R = 0.19;
+    const arc = new THREE.TorusGeometry(R, 0.016, 5, 10, Math.PI);
+    arc.rotateZ(Math.PI / 2);
+    arc.rotateY(Math.PI / 2);
+    arc.translate(0, 0, -R / 2);
+    const stave = new THREE.Mesh(arc, M(P.grip));
+    const string = new THREE.Mesh(new THREE.BoxGeometry(0.008, R * 2, 0.008), M(0xe8e2cf));
+    string.position.z = -R / 2;
+    // the riser bridges fist to stave, so the bow reads as held rather than hovering
+    const riser = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.12), M(P.boot));
+    riser.position.z = 0.045;
+    weapon.add(stave, string, riser);
   } else if (w.staff) {
     const rod = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.5, 0.03), M(P.grip));
     rod.position.y = 0.24;
@@ -271,6 +293,20 @@ export function buildUnitMesh(palKey, weaponKey, clsKey) {
   );
   head.position.y = 0.16;
   headG.add(head);
+  /* hair over the skull. The head box wears hair on its top and back
+     faces and the face texture paints a fringe and sideburns, but its
+     two side faces are bare skin, so any unit whose helm does not
+     enclose the head (a circlet, a band, a wizard's brim) went bald in
+     profile. This shell sits a hair's breadth proud of the head and
+     covers the skull down to the temples. Its own front face stays
+     inside the head box, so the painted fringe is never doubled up.
+     Helms that already enclose the head skip it: it would be invisible
+     under the dome and only risk poking out past a cheek guard. */
+  if (!ENCLOSING_HELMS.has(S.helm)) {
+    const hair = box(0.352, 0.1725, 0.312, hairMat);
+    hair.position.set(0, 0.24125, -0.012);
+    headG.add(hair);
+  }
   buildHelm(S.helm, headG, P, M, MM, box);
 
   root.traverse((o) => { if (o.isMesh) o.castShadow = true; });

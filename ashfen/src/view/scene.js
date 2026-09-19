@@ -774,6 +774,21 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     }
   }
 
+  /* the ready stance belongs to the selection, so exactly one unit can be
+     in it. Every path that changes who is selected goes through here,
+     including `setReady(null)` for nobody: tapping empty ground, tapping
+     straight onto a different unit (which never touched the old one's
+     pose and left it standing guard all turn), and finishing an action.
+     Sweeping the roster rather than tracking the last one means a future
+     path that forgets to call this can only fail by leaving the stance
+     off, never by stranding it on. */
+  function setReady(u) {
+    for (const z of g.units) {
+      if (z !== u && z.anim.state === "ready") z.anim.state = "idle";
+    }
+    if (u) u.anim.state = "ready";
+  }
+
   function select(u) {
     playUnitSelect();
     const { stand, atk, dist, prev } = reachTiles(u, g.units);
@@ -781,17 +796,14 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     g.inspect = u.id;
     g.forecast = null;
     g.tutorial = false;
-    u.anim.state = "ready";
+    setReady(u);
     paintSel();
     syncUnitVisuals();
     tick();
   }
 
   function clearSel() {
-    if (g.sel) {
-      const u = g.units.find((z) => z.id === g.sel.id);
-      if (u && u.anim.state === "ready") u.anim.state = "idle";
-    }
+    setReady(null);
     g.sel = null;
     g.forecast = null;
     paintSel();
@@ -841,7 +853,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   async function commitMove(u, tx, ty) {
     playActionSelect();
     const nu = await moveUnitTo(u, tx, ty);
-    nu.anim.state = "ready";
+    setReady(nu);
     g.sel.mode = "action";
     g.sel.targets = validTargets(nu);
     paintSel();
@@ -853,7 +865,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   async function engageAttack(u, tile, target) {
     playActionSelect();
     const nu = await moveUnitTo(u, tile.x, tile.y);
-    nu.anim.state = "ready";
+    setReady(nu);
     g.sel.mode = "target";
     g.sel.targets = validTargets(nu);
     g.forecast = { attackerId: nu.id, targetId: target.id };
@@ -864,7 +876,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   async function engageHeal(u, tile, target) {
     playActionSelect();
     const nu = await moveUnitTo(u, tile.x, tile.y);
-    nu.anim.state = "ready";
+    setReady(nu);
     g.sel.mode = "targetHeal";
     g.sel.targets = validTargets(nu);
     paintSel();
@@ -877,8 +889,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
        attack beat restores whatever state it started the beat in, which
        is "ready", so without this it holds the guard pose for the rest of
        the turn (and through the enemy phase) with nothing selected. */
-    const acted = g.sel && g.units.find((z) => z.id === g.sel.id);
-    if (acted && acted.anim.state === "ready") acted.anim.state = "idle";
+    setReady(null);
     g.sel = null;
     g.forecast = null;
     paintSel();
