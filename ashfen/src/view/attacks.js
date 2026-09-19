@@ -34,8 +34,16 @@ export const CARRY = 1.5; // weapon.rotation.x as built in meshes.js: held acros
 /* arm/armL: rotation.x of each arm, negative swings forward and up.
    wep: weapon.rotation.x, CARRY is perpendicular to the forearm, PI is
    along it. twist: body yaw. lift: body rise. off: world-space slide
-   toward the target in tiles. stance: legs scissor by this much. */
-const NEUTRAL = { arm: 0, armL: 0, wep: CARRY, twist: 0, lift: 0, off: 0, stance: 0 };
+   toward the target in tiles. stance: legs scissor by this much.
+
+   aim: how much of the height difference between the two fighters this
+   pose points at, 0 for level and 1 for fully aimed. Every pose that is
+   addressing the target sets it to 1 and only NEUTRAL sets it to 0, so
+   the lean blends in with the windup and back out with the recovery like
+   any other field rather than snapping off at the end of a beat. On flat
+   ground the whole term is zero and none of it changes anything. */
+const NEUTRAL = { arm: 0, armL: 0, wep: CARRY, twist: 0, lift: 0, off: 0, stance: 0, aim: 0 };
+const LEAN_SHARE = 0.55; // of the aim angle the torso takes as a lean; the arms take the rest
 
 /* the three melee beats are one routine with different numbers. windup
    and strike are full poses; the phase durations give each weapon its
@@ -46,29 +54,29 @@ const NEUTRAL = { arm: 0, armL: 0, wep: CARRY, twist: 0, lift: 0, off: 0, stance
 const MELEE = {
   sword: {
     windupMs: 90, strikeMs: 110, recoverMs: 170, trail: { base: 0.05, tip: 0.47 },
-    windup: { arm: -2.4, armL: 0.3, wep: CARRY, twist: -0.35, lift: 0.01, off: -0.05, stance: 0.15 },
-    strike: { arm: -0.9, armL: -0.4, wep: 2.3, twist: 0.3, lift: -0.01, off: 0.34, stance: 0.35 },
+    windup: { arm: -2.4, armL: 0.3, wep: CARRY, twist: -0.35, lift: 0.01, off: -0.05, stance: 0.15, aim: 1 },
+    strike: { arm: -0.9, armL: -0.4, wep: 2.3, twist: 0.3, lift: -0.01, off: 0.34, stance: 0.35, aim: 1 },
   },
   lance: {
     windupMs: 120, strikeMs: 130, recoverMs: 200, trail: { base: 0.1, tip: 0.76 },
-    windup: { arm: -1.2, armL: 0.2, wep: Math.PI, twist: -0.12, lift: 0, off: -0.08, stance: 0.1 },
-    strike: { arm: -1.7, armL: -0.2, wep: Math.PI, twist: 0.08, lift: -0.02, off: 0.4, stance: 0.4 },
+    windup: { arm: -1.2, armL: 0.2, wep: Math.PI, twist: -0.12, lift: 0, off: -0.08, stance: 0.1, aim: 1 },
+    strike: { arm: -1.7, armL: -0.2, wep: Math.PI, twist: 0.08, lift: -0.02, off: 0.4, stance: 0.4, aim: 1 },
   },
   axe: {
     windupMs: 200, strikeMs: 120, recoverMs: 260, trail: { base: 0.05, tip: 0.47 },
-    windup: { arm: -2.8, armL: 0.4, wep: CARRY, twist: -0.5, lift: 0.03, off: -0.06, stance: 0.1 },
-    strike: { arm: -0.7, armL: -0.5, wep: 2.4, twist: 0.35, lift: -0.03, off: 0.3, stance: 0.35 },
+    windup: { arm: -2.8, armL: 0.4, wep: CARRY, twist: -0.5, lift: 0.03, off: -0.06, stance: 0.1, aim: 1 },
+    strike: { arm: -0.7, armL: -0.5, wep: 2.4, twist: 0.35, lift: -0.03, off: 0.3, stance: 0.35, aim: 1 },
   },
 };
 
 /* ranged poses. The weapon is always in the right hand, so for the bow
    the right arm holds and the left arm draws. */
-const BOW_DRAW = { arm: -1.55, armL: -1.35, wep: CARRY, twist: -0.4, lift: 0, off: 0, stance: 0.2 };
-const BOW_FULL = { arm: -1.55, armL: -1.0, wep: CARRY, twist: -0.45, lift: 0, off: -0.02, stance: 0.2 };
-const BOW_LOOSE = { arm: -1.55, armL: -0.6, wep: CARRY, twist: -0.3, lift: 0, off: 0.02, stance: 0.2 };
-const CAST_OPEN = { arm: -1.1, armL: -1.6, wep: CARRY, twist: 0.15, lift: 0.01, off: -0.03, stance: 0.1 };
-const CAST_PUSH = { arm: -1.0, armL: -1.5, wep: CARRY, twist: 0.05, lift: 0, off: 0.06, stance: 0.15 };
-const STAFF_RAISE = { arm: -2.4, armL: 0.15, wep: 2.2, twist: 0, lift: 0.02, off: 0, stance: 0 };
+const BOW_DRAW = { arm: -1.55, armL: -1.35, wep: CARRY, twist: -0.4, lift: 0, off: 0, stance: 0.2, aim: 1 };
+const BOW_FULL = { arm: -1.55, armL: -1.0, wep: CARRY, twist: -0.45, lift: 0, off: -0.02, stance: 0.2, aim: 1 };
+const BOW_LOOSE = { arm: -1.55, armL: -0.6, wep: CARRY, twist: -0.3, lift: 0, off: 0.02, stance: 0.2, aim: 1 };
+const CAST_OPEN = { arm: -1.1, armL: -1.6, wep: CARRY, twist: 0.15, lift: 0.01, off: -0.03, stance: 0.1, aim: 1 };
+const CAST_PUSH = { arm: -1.0, armL: -1.5, wep: CARRY, twist: 0.05, lift: 0, off: 0.06, stance: 0.15, aim: 1 };
+const STAFF_RAISE = { arm: -2.4, armL: 0.15, wep: 2.2, twist: 0, lift: 0.02, off: 0, stance: 0, aim: 1 };
 
 const GREEN = new THREE.Color(0x5fd07a);
 const GOLD = new THREE.Color(0xffe08a);
@@ -84,6 +92,8 @@ export function createAttackPlayer({ scene, director, effects }) {
 
   const dir = new THREE.Vector3();    // attacker to target, ground plane, unit length
   const perp = new THREE.Vector3();   // dir turned 90 degrees, for missed shots
+  let sep = 1;                        // ground distance between the pair in tiles, set in play()
+  let rise = 0;                       // how much higher the target stands, in world units, set in play()
   const from = new THREE.Vector3();
   const to = new THREE.Vector3();
   const contact = new THREE.Vector3();
@@ -116,17 +126,43 @@ export function createAttackPlayer({ scene, director, effects }) {
     if (!hit) to.addScaledVector(perp, MISS_SIDESTEP);
   }
 
+  /* the angle off level from the attacker to the target, positive when the
+     target stands higher. Measured over whatever ground is still between
+     the two after a lunge of `off` tiles, which is what makes a lunge
+     steepen its own aim as it closes. Exactly 0 when the pair is level, so
+     a fight on flat ground animates as it did before terrain could tilt
+     anything. The clamp stops a target almost directly overhead, which no
+     current map has but a future one might, from going vertical. */
+  function aimPitch(off) {
+    if (rise === 0) return 0;
+    return Math.atan2(rise, Math.max(0.35, sep - off));
+  }
+
   function applyPose(u, pose) {
     const p = u.view.parts;
-    p.armR.rotation.x = pose.arm;
+    /* the aim splits between a torso lean and the arms: back and up to
+       swing uphill, forward and down to chop into a target below. Doing it
+       all with the arm put the shoulder through the head at any real
+       angle, and doing it all with the torso left the blade level while
+       the body tipped. The legs hang off `body` too, but its pivot is the
+       ground line under the boots, so a lean rocks the feet instead of
+       lifting them. */
+    const pitch = pose.aim * aimPitch(pose.off);
+    const armPitch = pitch * (1 - LEAN_SHARE);
+    p.armR.rotation.x = pose.arm - armPitch;
     p.armR.rotation.z = 0;
-    p.armL.rotation.x = pose.armL;
+    p.armL.rotation.x = pose.armL - armPitch;
     p.weapon.rotation.x = pose.wep;
+    p.body.rotation.x = -pitch * LEAN_SHARE;
     p.body.rotation.y = pose.twist;
     p.body.position.y = pose.lift;
     p.legL.rotation.x = pose.stance;
     p.legR.rotation.x = -pose.stance;
-    u.anim.offset.set(dir.x * pose.off, 0, dir.z * pose.off);
+    /* the lunge follows the slope rather than sliding level into the
+       hillside: `off` tiles of the `sep` between them earns `off / sep` of
+       the height between them. Ungated by `aim`, because this is geometry
+       rather than styling, and zero at off 0 either way. */
+    u.anim.offset.set(dir.x * pose.off, (rise * pose.off) / sep, dir.z * pose.off);
   }
 
   /* one tween from pose a to pose b, shaped by `ease` */
@@ -303,8 +339,10 @@ export function createAttackPlayer({ scene, director, effects }) {
     const type = WEAPONS[src.weaponKey].type;
     const beat = BEATS[type] || BEATS.sword;
     dir.subVectors(tgt.view.root.position, src.view.root.position);
+    rise = dir.y;
     dir.y = 0;
-    if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1); else dir.normalize();
+    sep = dir.length();
+    if (sep < 1e-6) { dir.set(0, 0, 1); sep = 1; } else dir.divideScalar(sep);
     perp.set(-dir.z, 0, dir.x);
     const was = src.anim.state;
     src.anim.state = "attack";

@@ -48,8 +48,10 @@ const ZOOM_MIN = 4.5, ZOOM_MAX = 22, ZOOM_STEP = 1.18;
 /* the board's bounding box, in world units around the orbit target, with a
    little padding for the health bars and rings that hang off a unit. The
    floor of the river is -0.35 and a unit standing on the keep tops out
-   near 2.3. fitDist() below keeps this box inside the frame. */
-const BOARD = { x: MW / 2 + 0.3, z: MH / 2 + 0.3, yLo: -0.6, yHi: 2.5 };
+   near 1.7, the keep's own 0.6 plus a body. fitDist() below keeps this box
+   inside the frame; a yHi left at the old mound's 2.5 just pushed the
+   default zoom out over empty sky. */
+const BOARD = { x: MW / 2 + 0.3, z: MH / 2 + 0.3, yLo: -0.6, yHi: 1.9 };
 
 export const RES = [
   { label: "400x240 (3DS)", h: 240 },
@@ -420,7 +422,10 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       W.t += dt * 3.6;
       const k = Math.min(1, W.t);
       const h0 = lvlH(W.from.x, W.from.y), h1 = lvlH(W.to.x, W.to.y);
-      const arc = Math.abs(h1 - h0) > 0.2 ? Math.sin(k * Math.PI) * 0.12 : 0;
+      /* a step up or down onto a hill gets a small hop over it. The
+         threshold tracks the shallowest real step in map.js, a hill at
+         0.3, so it has to sit under that rather than on it. */
+      const arc = Math.abs(h1 - h0) > 0.1 ? Math.sin(k * Math.PI) * 0.09 : 0;
       root.position.set(
         W.from.x + (W.to.x - W.from.x) * k - CX,
         h0 + (h1 - h0) * k + arc,

@@ -13,6 +13,7 @@
    points plus a lerp of fov. */
 
 import * as THREE from "three";
+import { cell, inB, CX, CZ } from "../core/map.js";
 import { tween, easeOutQuart, easeInOutQuad } from "./anim.js";
 
 const CINE_FOV = 66;       // the orbit camera sits at 30; widening is what sells the rush over a zoom
@@ -35,6 +36,34 @@ const KEY_INTENSITY = 1.1; // peak of the cut-in key light, reached at mix = 1; 
 const KEY_COLOR = 0xfff1d6;
 const KEY_TWIST = 0.3;     // body yaw at the moment of contact in the melee beats, see attacks.js
 const KEY_TILT = 0.36;     // lifts the aim so the light sits above the horizon, not raking up from below
+const GROUND_CLEAR = 0.32; // how far above solid ground the cut-in lens has to stay
+const GROUND_STEPS = 5;    // ground samples between the lens and the look target
+const TERRAIN_WEIGHT = 2.5; // cost per world unit the ground would force the lens to climb; a tile-step is about one bystander
+
+/* the top of the solid ground at a world position, for keeping the lens out
+   of it. Tile tops rather than walkable heights: a bridge's deck is what a
+   lens can hit, not the riverbed beneath it, so whichever is higher wins.
+   Off the board reads as plain, which is only ever asked about a lens a
+   fraction of a tile past the edge. */
+function groundAt(wx, wz) {
+  const tx = Math.round(wx + CX), ty = Math.round(wz + CZ);
+  if (!inB(tx, ty)) return 0;
+  const t = cell(tx, ty);
+  return t.walk !== undefined && t.walk > t.h ? t.walk : t.h;
+}
+
+/* the tallest ground between a lens position and what it is looking at. One
+   sample under the lens is not enough on its own: the lens can sit over
+   clear plain with a ridge a third of a tile in front of it, which is the
+   shape of the old clip. */
+function highestGround(from, to) {
+  let hi = groundAt(from.x, from.z);
+  for (let i = 1; i <= GROUND_STEPS; i++) {
+    const k = i / (GROUND_STEPS + 1);
+    hi = Math.max(hi, groundAt(from.x + (to.x - from.x) * k, from.z + (to.z - from.z) * k));
+  }
+  return hi;
+}
 
 const makePose = () => ({ pos: new THREE.Vector3(), target: new THREE.Vector3(), fov: CINE_FOV });
 const copyPose = (dst, src) => { dst.pos.copy(src.pos); dst.target.copy(src.target); dst.fov = src.fov; };
@@ -109,19 +138,29 @@ export function createDirector({ isEnabled, scene }) {
 
     /* with the camera this low and this close, a bystander on the near
        side of the pair is not a shoulder in the corner, it is a wall
-       across a third of the frame. So both sides of the axis are scored
-       for clutter and the orbit side only keeps its claim when the far
-       side is no clearer. The far side means a longer fly, which the
-       rush blur covers, and it can swap which fighter stands left; the
-       HUD keeps the player's unit on the left regardless. */
-    if (opts.others && opts.others.length) {
-      const near = clutter(perp, dist, opts.others);
-      perp.negate();
-      const far = clutter(perp, dist, opts.others);
-      if (far >= near) perp.negate();
-    }
+       across a third of the frame, and rising ground is the same problem
+       without a face on it. So both sides of the axis are scored and the
+       orbit side only keeps its claim when the far side is no clearer.
+       The far side means a longer fly, which the rush blur covers, and it
+       can swap which fighter stands left; the HUD keeps the player's unit
+       on the left regardless. Scored unconditionally now: the old guard
+       skipped it whenever nobody else was on the board, which is exactly
+       when the terrain term matters most. */
+    const near = clutter(perp, dist, opts.others);
+    perp.negate();
+    const far = clutter(perp, dist, opts.others);
+    if (far >= near) perp.negate();
+
     cine.pos.copy(cine.target).addScaledVector(perp, dist);
     cine.pos.y += dist * ELEVATION;
+    /* and never inside the hill. The framing puts the lens a bit over half
+       a unit above the midpoint of the pair, which was under the top of a
+       ridge whenever a fight straddled a step: the lens ended up in solid
+       ground, showing its inside faces through the near plane. Lifting is
+       the right correction rather than pulling back, since backing off
+       loses the tight framing the whole cut-in is for. On level ground the
+       framing already clears this and the clamp does nothing. */
+    cine.pos.y = Math.max(cine.pos.y, highestGround(cine.pos, cine.target) + GROUND_CLEAR);
     cine.fov = opts.fov ?? CINE_FOV;
 
     /* key light aim. From this camera a blade is seen edge-on: its wide
@@ -155,8 +194,13 @@ export function createDirector({ isEnabled, scene }) {
     viewDir.subVectors(cine.target, candPos);
     const len = viewDir.length();
     viewDir.divideScalar(len);
-    let score = 0;
-    for (const p of others) {
+    /* ground is charged for exactly what it costs: how far the clamp in
+       framePair would have to lift the lens to clear it. A side with
+       nothing in the way charges zero, so the downhill side of a step
+       wins by default, and the lift it saves is framing it keeps. */
+    const climb = highestGround(candPos, cine.target) + GROUND_CLEAR - candPos.y;
+    let score = Math.max(0, climb) * TERRAIN_WEIGHT;
+    for (const p of others || []) {
       rel.subVectors(p, candPos);
       const depth = rel.dot(viewDir);
       if (depth <= 0.05 || depth >= 2 * len) continue;
