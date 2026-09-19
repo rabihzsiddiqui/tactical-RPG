@@ -31,7 +31,25 @@ const TRACK = "0.18em";
    ribbon stops competing with it. Two bands rather than one scrim with a
    hole in it, since the ribbon's pointed ends need the board showing
    through around them. */
-const SCRIM = "rgba(10,12,18,0.55)";
+const SCRIM_RGB = "10,12,18";
+const SCRIM_A = 0.55;
+/* the inner edge of each band, the one facing the ribbon, is a ramp rather
+   than a line. A plain two-stop gradient bands visibly across a dark sky,
+   so the alpha comes down in an ease-out: most of the drop happens in the
+   first third of the ramp and the rest is a long tail into nothing, which
+   is also what stops the soft edge from reading as a second, blurrier
+   line. Stops are given as a fraction of the ramp length back from the
+   edge, so the whole thing scales with FADE. */
+const FADE = `clamp(28px, calc(${VH} * 0.09), 64px)`;
+const RAMP = [[1, 1], [0.65, 0.7], [0.38, 0.4], [0.16, 0.15], [0, 0]];
+const scrimAt = (a) => `rgba(${SCRIM_RGB},${(SCRIM_A * a).toFixed(3)})`;
+/* `dir` is the direction the ramp runs, so the outer edge of the band
+   stays solid: it sits against the edge of the canvas, where there is no
+   seam to soften. */
+const scrim = (dir) =>
+  `linear-gradient(to ${dir}, ${scrimAt(1)} 0%, `
+  + RAMP.map(([k, a]) => `${scrimAt(a)} calc(100% - ${k} * ${FADE})`).join(", ")
+  + ")";
 const SCRIM_ANIM =
   `scrimIn ${ENTER_MS}ms ease-out forwards, `
   + `scrimOut ${EXIT_MS}ms ease-in ${EXIT_DELAY_MS}ms forwards`;
@@ -46,11 +64,12 @@ export default function PhaseBanner({ side, text, top }) {
       top: 0, left: 0, right: 0, height: VH, zIndex: 25, pointerEvents: "none", overflow: "hidden",
     }}>
       <div className="absolute" style={{
-        top: 0, left: 0, right: 0, height: top, background: SCRIM, animation: SCRIM_ANIM,
+        top: 0, left: 0, right: 0, height: top,
+        backgroundImage: scrim("bottom"), animation: SCRIM_ANIM,
       }} />
       <div className="absolute" style={{
         top: `calc(${top} + ${BAND_H})`, left: 0, right: 0, bottom: 0,
-        background: SCRIM, animation: SCRIM_ANIM,
+        backgroundImage: scrim("top"), animation: SCRIM_ANIM,
       }} />
 
       <div className="absolute flex items-center justify-center"
