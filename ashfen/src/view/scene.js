@@ -17,7 +17,7 @@ import {
   resolveMove, resolveAttack, resolveHeal, resolveItem, resolveWait,
   endPlayerPhase, runEnemyPhase,
 } from "../core/game.js";
-import { buildTerrain, buildUnitMesh, buildTree, buildKeep, buildBridge, buildHealthBar, HP_BAR_W } from "./meshes.js";
+import { buildTerrain, buildUnitMesh, buildTree, buildKeep, buildBridge, buildHealthBar, buildShoreField, HP_BAR_W } from "./meshes.js";
 import {
   POST_VERT, POST_FRAG, TILE_VERT, TILE_FRAG, RING_FRAG, WATER_VERT, WATER_FRAG,
 } from "./shaders.js";
@@ -109,9 +109,24 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   ground.castShadow = true;
   scene.add(ground);
 
+  /* the water. WATER_FRAG places its foam by reading the shore field, a
+     distance-to-land texture over the map, so uOrigin/uSize are what turn
+     a world position back into a lookup into it. The surface rolls in the
+     vertex stage, hence the subdivided tile plane: a flat quad would only
+     move at its corners. */
+  const shore = buildShoreField();
   const waterMat = new THREE.ShaderMaterial({
-    vertexShader: WATER_VERT, fragmentShader: WATER_FRAG, uniforms: { uTime: { value: 0 } },
+    vertexShader: WATER_VERT, fragmentShader: WATER_FRAG,
+    uniforms: {
+      uTime: { value: 0 },
+      uShore: { value: shore.tex },
+      uOrigin: { value: new THREE.Vector2(CX + 0.5, CZ + 0.5) },
+      uSize: { value: new THREE.Vector2(MW, MH) },
+      uRange: { value: shore.range },
+      uSun: { value: sun.position.clone().normalize() },
+    },
   });
+  const waterGeo = new THREE.PlaneGeometry(1, 1, 6, 6);
 
   const pickGeo = new THREE.PlaneGeometry(1, 1);
   const pickMat = new THREE.MeshBasicMaterial({ visible: false });
@@ -122,10 +137,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     for (let x = 0; x < MW; x++) {
       const t = cell(x, y);
       if (t.water) {
-        const wp = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), waterMat);
+        const wp = new THREE.Mesh(waterGeo, waterMat);
         wp.rotation.x = -Math.PI / 2;
         wp.position.set(x - CX, -0.1, y - CZ);
-        wp.receiveShadow = true;
         scene.add(wp);
       }
       if (t.bridge && (x === 0 || !cell(x - 1, y).bridge)) {

@@ -53,17 +53,86 @@ export const RING_FRAG = `
     gl_FragColor=vec4(uColor, ring*0.95+glow);
   }`;
 
+/* the water, in the Wind Waker key: flat bright tones, a lapping white
+   collar wherever the surface meets land, and hard little glints riding
+   the swell. Nothing here is physically motivated; it is all cel shapes.
+
+   WATER_VERT rolls the surface with three crossing sine swells and
+   builds the normal from their analytic slopes rather than from the
+   geometry, so a coarse grid still lights smoothly. Everything works in
+   world space, which is what keeps the per-tile planes seamless: two
+   vertices that share a world position get the same displacement. */
 export const WATER_VERT = `
-  varying vec3 vPos;
-  void main(){ vPos=(modelMatrix*vec4(position,1.)).xyz; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`;
-export const WATER_FRAG = `
-  precision mediump float;
-  uniform float uTime; varying vec3 vPos;
+  uniform float uTime;
+  /* uTime is declared in both stages, so neither may pin a precision:
+     three's default highp then applies to both and they agree */
+  varying vec3 vPos; varying vec3 vN;
   void main(){
-    float w=sin(vPos.x*2.2+uTime*1.3)*0.5+sin(vPos.z*3.1-uTime*0.9)*0.5;
-    vec3 c=mix(vec3(0.12,0.27,0.34), vec3(0.19,0.40,0.47), step(0.05,w));
-    c=mix(c, vec3(0.36,0.60,0.66), step(0.80,w));
-    gl_FragColor=vec4(c,1.0);
+    vec3 wp = (modelMatrix*vec4(position,1.)).xyz;
+    float px = wp.x*1.7 + uTime*1.10;
+    float pz = wp.z*2.3 - uTime*0.80;
+    float pd = (wp.x+wp.z)*3.1 + uTime*1.70;
+    wp.y += sin(px)*0.034 + sin(pz)*0.026 + sin(pd)*0.013;
+    float dx = cos(px)*0.034*1.7 + cos(pd)*0.013*3.1;
+    float dz = cos(pz)*0.026*2.3 + cos(pd)*0.013*3.1;
+    vN = normalize(vec3(-dx, 1.0, -dz));
+    vPos = wp;
+    gl_Position = projectionMatrix*viewMatrix*vec4(wp,1.);
+  }`;
+/* WATER_FRAG. uShore is the shore field built by buildShoreField in
+   meshes.js: one channel holding the distance from that point to the
+   nearest land tile, in tile units, scaled into 0..1 over SHORE_RANGE.
+   Reading it back gives a distance the shader can cut foam bands out of,
+   so the collar follows the real coastline instead of a hand-placed
+   decal. uOrigin/uSize map a world position onto that texture.
+
+   The rest is three flat colour steps for depth, two more for the swell,
+   a wobbling white collar at the waterline with a second band trailing
+   behind it, and sparse diamond glints. Bands are cut with step, not
+   smoothstep, on purpose: the hard edge is the whole look. */
+export const WATER_FRAG = `
+  uniform float uTime; uniform sampler2D uShore;
+  uniform vec2 uOrigin; uniform vec2 uSize; uniform float uRange; uniform vec3 uSun;
+  varying vec3 vPos; varying vec3 vN;
+  void main(){
+    vec2 uv = (vPos.xz + uOrigin) / uSize;
+    float d = texture2D(uShore, uv).r * uRange;
+
+    /* depth ramp: bright turquoise in the shallows, deep teal offshore,
+       in three flat steps rather than a smooth gradient */
+    float dd = clamp(d/0.50, 0.0, 1.0);
+    vec3 c = vec3(0.30,0.76,0.78);
+    c = mix(c, vec3(0.11,0.53,0.66), step(0.30, dd));
+    c = mix(c, vec3(0.06,0.38,0.60), step(0.72, dd));
+
+    /* swell tones: two crossing waves quantised into a lighter and a
+       lightest step, which is what gives the surface its cut-paper feel */
+    float w = sin(vPos.x*2.6 + uTime*1.2) + sin(vPos.z*3.4 - uTime*0.9)
+            + sin((vPos.x-vPos.z)*4.7 + uTime*1.8)*0.7;
+    c = mix(c, c*1.16, step(0.55, w));
+    c = mix(c, c*1.30 + vec3(0.03,0.05,0.04), step(1.55, w));
+
+    /* the sun side of each swell lifts slightly, a soft tilt under the
+       hard bands so the surface does not read as perfectly flat */
+    c *= 0.95 + 0.10*smoothstep(-0.04, 0.04, dot(vN.xz, uSun.xz));
+
+    /* shore collar. The waterline wobbles so the foam laps instead of
+       tracing a clean offset, then a second thinner band trails behind
+       it the way Wind Waker draws its concentric arcs. */
+    float wob = sin(vPos.x*3.1 + uTime*1.7)*0.5 + sin(vPos.z*3.7 - uTime*1.2)*0.5;
+    float e = d + wob*0.030;
+    float collar = 1.0 - step(0.055, e);
+    float arc = step(0.125, e) * (1.0 - step(0.155, e));
+    float foam = clamp(collar + arc*0.6, 0.0, 1.0);
+
+    /* glints: a product of two fast sines makes a drifting diamond
+       lattice, of which only the crests survive the step */
+    float g = sin(vPos.x*7.0 + uTime*2.1) * sin(vPos.z*8.5 - uTime*1.6);
+    float glint = step(0.972, g) * (1.0 - foam) * step(0.20, d);
+
+    c = mix(c, vec3(0.93,0.99,1.0), foam);
+    c = mix(c, vec3(1.0), glint*0.85);
+    gl_FragColor = vec4(c,1.0);
   }`;
 
 /* attack effects, see effects.js. Both use TILE_VERT for the vertex stage

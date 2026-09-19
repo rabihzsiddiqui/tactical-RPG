@@ -546,3 +546,49 @@ export function buildBolt() {
   m.visible = false;
   return m;
 }
+
+/* SHORE_RANGE is how far from land the shore field still measures, in
+   tile widths; past it every sample reads as "open water". SHORE_RES is
+   how many samples each tile gets on a side. Both only need to be big
+   enough for the foam bands WATER_FRAG cuts out of the field. */
+const SHORE_RANGE = 2, SHORE_RES = 8;
+
+/* the shore field: a one-channel texture over the whole map holding, at
+   each sample, the distance to the nearest land tile, in tile widths,
+   scaled into 0..1 over SHORE_RANGE. WATER_FRAG reads it back to place
+   its foam, which is why this is a texture and not a per-vertex value:
+   the foam bands are much finer than the water grid.
+
+   Land tiles are squares, so the distance from a sample to one is the
+   usual point-to-rectangle distance. Brute-forcing every land tile per
+   sample is fine at this map size and runs once at startup. Anything
+   off the edge of the map counts as water, so a river that leaves the
+   map keeps flowing rather than foaming against the boundary. */
+export function buildShoreField() {
+  const W = MW * SHORE_RES, H = MH * SHORE_RES;
+  const data = new Uint8Array(W * H);
+  const land = [];
+  for (let y = 0; y < MH; y++) {
+    for (let x = 0; x < MW; x++) if (!cell(x, y).water) land.push(x, y);
+  }
+  for (let j = 0; j < H; j++) {
+    const tz = (j + 0.5) / SHORE_RES - 0.5;
+    for (let i = 0; i < W; i++) {
+      const tx = (i + 0.5) / SHORE_RES - 0.5;
+      let best = SHORE_RANGE;
+      for (let k = 0; k < land.length; k += 2) {
+        const dx = Math.max(Math.abs(tx - land[k]) - 0.5, 0);
+        const dz = Math.max(Math.abs(tz - land[k + 1]) - 0.5, 0);
+        if (dx >= best || dz >= best) continue;
+        const d = Math.hypot(dx, dz);
+        if (d < best) best = d;
+      }
+      data[j * W + i] = Math.round((best / SHORE_RANGE) * 255);
+    }
+  }
+  const tex = new THREE.DataTexture(data, W, H, THREE.RedFormat);
+  tex.minFilter = tex.magFilter = THREE.LinearFilter;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return { tex, range: SHORE_RANGE };
+}
