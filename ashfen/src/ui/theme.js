@@ -2,6 +2,12 @@
 
 export const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 export const SERIF = "Georgia, 'Iowan Old Style', 'Times New Roman', serif";
+/* the display face, for the phase banner and anything else that wants
+   carved capitals. The web font behind it is subset to uppercase (see the
+   @font-face in index.css), so only set this on text that is uppercased,
+   by textTransform or by being written that way. Lowercase would silently
+   fall through to the next face in the stack. */
+export const DISPLAY = "Cinzel, 'Trajan Pro', Optima, Georgia, serif";
 
 export const C = {
   parch: "#e9e0c8", parchDim: "#d8ccae", ink: "#221c12", inkSoft: "#5c5140",

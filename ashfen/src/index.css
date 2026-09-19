@@ -1,5 +1,22 @@
 @import "tailwindcss";
 
+/* Cinzel, the phase banner's face: Roman capitals, which is the elegant end
+   of fantasy rather than the runic one. SIL Open Font License 1.1, (c) The
+   Cinzel Project Authors. Self-hosted instead of pulled off a font CDN so
+   the installed app still has it with no network, and subset to capitals,
+   digits and the few marks a banner could want, which is how a display face
+   comes to 5KB. index.html preloads it, so the swap has happened long
+   before the first banner. Only ever set on text that is already
+   uppercased, see DISPLAY in ui/theme.js. */
+@font-face {
+  font-family: "Cinzel";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/cinzel-600-caps.woff2") format("woff2");
+  unicode-range: U+20-21, U+27, U+2c-2e, U+30-39, U+3f, U+41-5a;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
 }

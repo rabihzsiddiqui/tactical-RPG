@@ -220,6 +220,8 @@ export default function App() {
           100%{transform:translateX(0) scale(1);opacity:1} }
         @keyframes bannerOut { 0%{transform:translateX(0) scale(1);opacity:1}
           100%{transform:translateX(40px) scale(0.94);opacity:0} }
+        @keyframes scrimIn { 0%{opacity:0} 100%{opacity:1} }
+        @keyframes scrimOut { 0%{opacity:1} 100%{opacity:0} }
         @keyframes riseOut { 0%{transform:translate(-50%,0);opacity:0} 20%{transform:translate(-50%,-8px);opacity:1}
           100%{transform:translate(-50%,-34px);opacity:0} }
         @keyframes popIn { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
