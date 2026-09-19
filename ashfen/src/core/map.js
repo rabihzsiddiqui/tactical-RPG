@@ -11,8 +11,8 @@ export const MAP = [
   "....^^*^^...",
   "T....^^^....",
   "~~~bb~~~bb~~",
-  "............",
-  "..T......T..",
+  "...%....%...",
+  "..%....%.%..",
   "...,,,,,....",
   "..,,....,,..",
   "T..........T",
@@ -39,6 +39,25 @@ export const TYPES = {
   ".": { name: "Plain", h: 0, cost: 1, def: 0, avo: 0, heal: 0, top: 0x6f9a4e, side: 0x6b5a3e },
   ",": { name: "Path", h: 0, cost: 1, def: 0, avo: 0, heal: 0, top: 0xa08a5c, side: 0x6b5a3e },
   T: { name: "Wood", h: 0, cost: 2, def: 1, avo: 20, heal: 0, top: 0x5f8a46, side: 0x6b5a3e, tree: true },
+  /* the same cover as Wood, drawn as a knee-high tuft instead of a tree.
+     Nothing about the numbers changes: a unit taking +20 avoid should look
+     like it is crouched in something, and a conifer it is standing beside
+     never read that way.
+
+     All five sit in the open ground between the company and the river,
+     which is the only part of the map with no cover of its own: the north
+     half has the hills and the wood, and the south rows are the player's
+     own back line. Two are the tiles south of a bridge, so a unit waiting
+     its turn to cross is not standing in the open, and one is beside the
+     mercenary who opens the battle, so there is somewhere to fight him
+     from.
+
+     Note that terrain cost feeds pathing, so a tile added here can change
+     a route the tests pin down: cover in the box from (4,5) to (6,6) sends
+     the walk in path.test.js straight through an ally instead of around
+     it. The two bridge tiles sit at x 3 and x 8 for that reason, rather
+     than at 4 and 9 directly under the bridge mouths. */
+  "%": { name: "Brush", h: 0, cost: 2, def: 1, avo: 20, heal: 0, top: 0x5f8a46, side: 0x6b5a3e, bush: true },
   "^": { name: "Hill", h: 0.3, cost: 2, def: 1, avo: 20, heal: 0, top: 0x7ba055, side: 0x7d6b4c },
   "*": { name: "Ridge", h: 0.6, cost: 2, def: 2, avo: 30, heal: 0, top: 0x8e9270, side: 0x8a8068 },
   K: { name: "Keep", h: 0.6, cost: 2, def: 2, avo: 20, heal: 0.2, top: 0x9a9484, side: 0x8a8068, keep: true },

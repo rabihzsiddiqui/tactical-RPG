@@ -472,6 +472,69 @@ export function buildTree() {
   return g;
 }
 
+/* the brush tiles: a tuft of grass, not a shrub. Knee-high on purpose, so
+   a unit standing in one still reads clearly from the orbit camera, where
+   a tree is tall enough to hide whoever is taking cover under it. That was
+   the whole problem with using woods for the tiles out in the open field.
+
+   Built from blades rather than from lobes. An earlier version stacked
+   squashed icosahedra with a few spikes pushed through them, and at this
+   size a shaded green lump reads as a mossy boulder, whiskers and all.
+   Grass has no mass to model: it is the blades, so the blades are the
+   whole thing, and the only solid part is a flat mat at the base that
+   stops the ground showing through between them.
+
+   Three greens keyed off the plain tile's own top colour, two above it and
+   one below, so the patch separates from the ground it sits on whichever
+   way the light falls. One proto, cloned and jittered per tile like the
+   trees, so the randomness is baked once rather than per instance. */
+const BLADES = 24;
+const PATCH_R = 0.2;      // radius the blades are scattered across
+const BLADE_H = 0.34;     // tallest blade, at the middle of the patch
+const EDGE_DROP = 0.16;   // how much shorter the outermost blades are
+const LEAN = 0.6;         // outward tilt at the rim, in radians, 0 at the centre
+export function buildBush() {
+  const g = new THREE.Group();
+  const M = (c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true });
+  const greens = [M(0x7cab4a), M(0x63914a), M(0x4c7538)];
+
+  /* the mat, which only exists to stop the ground showing between the
+     blades. Flattened hard rather than domed, and set low and narrow
+     enough that the blades overhang its rim: a visible disc of its own
+     reads as a plate the grass is standing on, and any curvature on it
+     reads as the old rock. */
+  const mat = new THREE.Mesh(new THREE.IcosahedronGeometry(PATCH_R * 0.72, 0), greens[2]);
+  mat.scale.set(1, 0.1, 1);
+  mat.position.y = 0.012;
+  g.add(mat);
+
+  for (let i = 0; i < BLADES; i++) {
+    const ang = Math.random() * 6.28;
+    /* sqrt spreads the blades evenly over the disc. Sampling the radius
+       flat would crowd them into the middle and leave the rim bald. */
+    const rad = PATCH_R * Math.sqrt(Math.random());
+    const t = rad / PATCH_R;                       // 0 at the centre, 1 at the rim
+    const h = BLADE_H - t * EDGE_DROP + (Math.random() - 0.5) * 0.07;
+    /* three sided, so each blade is a sliver rather than a post. The spin
+       is baked into the geometry instead of set on the mesh: rotation.y
+       would turn the axes the lean below is expressed in, and the blades
+       would splay every way but outward. */
+    const geo = new THREE.ConeGeometry(0.022, h, 3);
+    geo.rotateY(Math.random() * 6.28);
+    const blade = new THREE.Mesh(geo, greens[i % 3]);
+    // 0.92 tucks the base of each blade down into the mat
+    blade.position.set(Math.cos(ang) * rad, (h / 2) * 0.92, Math.sin(ang) * rad);
+    /* z tips the blade toward +x and x toward +z, so this pair leans each
+       one straight out from the middle. The jitter keeps the tuft from
+       looking combed. */
+    const out = LEAN * t + (Math.random() - 0.5) * 0.22;
+    blade.rotation.set(out * Math.sin(ang), 0, -out * Math.cos(ang));
+    g.add(blade);
+  }
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
+}
+
 /* a low rampart bordering three sides of the tile, open to the south (the
    side players approach from). A raised, walkable square with a "rook"
    crenellated edge, not a solid tower that would hide whoever stands on it.

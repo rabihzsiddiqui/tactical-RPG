@@ -17,7 +17,7 @@ import {
   resolveMove, resolveAttack, resolveHeal, resolveItem, resolveWait,
   endPlayerPhase, runEnemyPhase,
 } from "../core/game.js";
-import { buildTerrain, buildUnitMesh, buildTree, buildKeep, buildBridge, buildHealthBar, buildShoreField, HP_BAR_W } from "./meshes.js";
+import { buildTerrain, buildUnitMesh, buildTree, buildBush, buildKeep, buildBridge, buildHealthBar, buildShoreField, HP_BAR_W } from "./meshes.js";
 import {
   POST_VERT, POST_FRAG, TILE_VERT, TILE_FRAG, RING_FRAG, WATER_VERT, WATER_FRAG,
   FALL_VERT, FALL_FRAG,
@@ -207,6 +207,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   const pickMat = new THREE.MeshBasicMaterial({ visible: false });
   const pickables = [];
   const treeProto = buildTree();
+  const bushProto = buildBush();
 
   for (let y = 0; y < MH; y++) {
     for (let x = 0; x < MW; x++) {
@@ -226,9 +227,14 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         b.position.set(x - CX + (w - 1) / 2, 0, y - CZ);
         scene.add(b);
       }
-      if (t.tree) {
-        const tr = treeProto.clone(true);
-        tr.position.set(x - CX + (Math.random() - 0.5) * 0.2, t.h, y - CZ + (Math.random() - 0.5) * 0.2);
+      if (t.tree || t.bush) {
+        /* same jitter for both, so neither sits dead centre on its tile.
+           The bush takes a smaller offset: it is low and wide enough that
+           a big one would hang over the tile edge onto plain ground. */
+        const proto = t.tree ? treeProto : bushProto;
+        const off = t.tree ? 0.2 : 0.08;
+        const tr = proto.clone(true);
+        tr.position.set(x - CX + (Math.random() - 0.5) * off, t.h, y - CZ + (Math.random() - 0.5) * off);
         tr.rotation.y = Math.random() * 6.28;
         tr.scale.setScalar(0.85 + Math.random() * 0.3);
         scene.add(tr);
