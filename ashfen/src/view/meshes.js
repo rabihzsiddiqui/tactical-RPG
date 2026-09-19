@@ -472,7 +472,7 @@ export function buildTree() {
   return g;
 }
 
-/* the brush tiles: a tuft of grass, not a shrub. Knee-high on purpose, so
+/* the brush tiles: tufts of grass, not a shrub. Knee-high on purpose, so
    a unit standing in one still reads clearly from the orbit camera, where
    a tree is tall enough to hide whoever is taking cover under it. That was
    the whole problem with using woods for the tiles out in the open field.
@@ -481,40 +481,59 @@ export function buildTree() {
    squashed icosahedra with a few spikes pushed through them, and at this
    size a shaded green lump reads as a mossy boulder, whiskers and all.
    Grass has no mass to model: it is the blades, so the blades are the
-   whole thing, and the only solid part is a flat mat at the base that
+   whole thing, and the only solid part is a flat mat under each tuft that
    stops the ground showing through between them.
+
+   Several tufts to a tile rather than one. A single clump in the middle of
+   a square reads as an object placed on the tile, and it is also exactly
+   where the unit taking cover stands. Scattering five of different sizes
+   fills the square, gives the silhouette something to vary against, and
+   leaves the centre to the unit.
 
    Three greens keyed off the plain tile's own top colour, two above it and
    one below, so the patch separates from the ground it sits on whichever
    way the light falls. One proto, cloned and jittered per tile like the
    trees, so the randomness is baked once rather than per instance. */
-const BLADES = 24;
-const PATCH_R = 0.2;      // radius the blades are scattered across
-const BLADE_H = 0.34;     // tallest blade, at the middle of the patch
+const BLADES = 16;        // blades in a full-size tuft; smaller ones scale down
+const PATCH_R = 0.16;     // radius the blades of one tuft are scattered across
+const BLADE_H = 0.34;     // tallest blade, at the middle of a full-size tuft
 const EDGE_DROP = 0.16;   // how much shorter the outermost blades are
 const LEAN = 0.6;         // outward tilt at the rim, in radians, 0 at the centre
-export function buildBush() {
-  const g = new THREE.Group();
-  const M = (c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true });
-  const greens = [M(0x7cab4a), M(0x63914a), M(0x4c7538)];
+/* where the tufts sit, in tile units, and how big each one is. Held inside
+   about a third of a tile so the clump still belongs to its own square
+   after scene.js jitters the whole group and scales it up to 1.15. The
+   middle one is offset rather than centred: a unit stands on that spot. */
+const TUFT_PLACES = [
+  [-0.05, -0.06, 1],
+  [-0.28, 0.19, 0.74],
+  [0.26, 0.22, 0.66],
+  [0.23, -0.26, 0.82],
+  [-0.21, -0.25, 0.56],
+];
 
+function buildTuft(greens, s) {
+  const g = new THREE.Group();
+  const r = PATCH_R * s;
   /* the mat, which only exists to stop the ground showing between the
      blades. Flattened hard rather than domed, and set low and narrow
      enough that the blades overhang its rim: a visible disc of its own
      reads as a plate the grass is standing on, and any curvature on it
      reads as the old rock. */
-  const mat = new THREE.Mesh(new THREE.IcosahedronGeometry(PATCH_R * 0.72, 0), greens[2]);
+  const mat = new THREE.Mesh(new THREE.IcosahedronGeometry(r * 0.72, 0), greens[2]);
   mat.scale.set(1, 0.1, 1);
   mat.position.y = 0.012;
   g.add(mat);
 
-  for (let i = 0; i < BLADES; i++) {
+  // blade count follows the tuft's footprint, so a small one is not just a
+  // big one shrunk: it is genuinely sparser
+  const n = Math.max(6, Math.round(BLADES * s));
+  for (let i = 0; i < n; i++) {
     const ang = Math.random() * 6.28;
     /* sqrt spreads the blades evenly over the disc. Sampling the radius
        flat would crowd them into the middle and leave the rim bald. */
-    const rad = PATCH_R * Math.sqrt(Math.random());
-    const t = rad / PATCH_R;                       // 0 at the centre, 1 at the rim
-    const h = BLADE_H - t * EDGE_DROP + (Math.random() - 0.5) * 0.07;
+    const rad = r * Math.sqrt(Math.random());
+    const t = rad / r;                             // 0 at the centre, 1 at the rim
+    const h = (BLADE_H - t * EDGE_DROP) * (0.72 + s * 0.28) + (Math.random() - 0.5) * 0.07;
     /* three sided, so each blade is a sliver rather than a post. The spin
        is baked into the geometry instead of set on the mesh: rotation.y
        would turn the axes the lean below is expressed in, and the blades
@@ -530,6 +549,23 @@ export function buildBush() {
     const out = LEAN * t + (Math.random() - 0.5) * 0.22;
     blade.rotation.set(out * Math.sin(ang), 0, -out * Math.cos(ang));
     g.add(blade);
+  }
+  return g;
+}
+
+export function buildBush() {
+  const g = new THREE.Group();
+  const M = (c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true });
+  // shared across every tuft on the tile: five materials, not five per clump
+  const greens = [M(0x7cab4a), M(0x63914a), M(0x4c7538)];
+
+  for (const [ox, oz, s] of TUFT_PLACES) {
+    const t = buildTuft(greens, s);
+    // a little scatter on top of the table, so the five do not sit in the
+    // same arrangement on every tile of the map
+    t.position.set(ox + (Math.random() - 0.5) * 0.06, 0, oz + (Math.random() - 0.5) * 0.06);
+    t.rotation.y = Math.random() * 6.28;
+    g.add(t);
   }
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;

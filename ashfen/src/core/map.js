@@ -8,8 +8,8 @@ export const LEVEL_NAME = "Ashfen Pass";
 export const MAP = [
   "TT..^^^^..TT",
   "T...^*K*^..T",
-  "....^^*^^...",
-  "T....^^^....",
+  ".%..^^*^^.%.",
+  "T..%.^^^.%..",
   "~~~bb~~~bb~~",
   "...%....%...",
   "..%....%.%..",
@@ -44,7 +44,7 @@ export const TYPES = {
      like it is crouched in something, and a conifer it is standing beside
      never read that way.
 
-     All five sit in the open ground between the company and the river,
+     Five sit in the open ground between the company and the river,
      which is the only part of the map with no cover of its own: the north
      half has the hills and the wood, and the south rows are the player's
      own back line. Two are the tiles south of a bridge, so a unit waiting
@@ -56,7 +56,12 @@ export const TYPES = {
      a route the tests pin down: cover in the box from (4,5) to (6,6) sends
      the walk in path.test.js straight through an ally instead of around
      it. The two bridge tiles sit at x 3 and x 8 for that reason, rather
-     than at 4 and 9 directly under the bridge mouths. */
+     than at 4 and 9 directly under the bridge mouths.
+
+     Four more sit north of the river. Two are the far ends of the two
+     bridges, so a crossing does not end on bare ground under the sniper
+     and the keep, and two are out on the flanks the hills do not cover,
+     which gives the north half something growing on it besides conifers. */
   "%": { name: "Brush", h: 0, cost: 2, def: 1, avo: 20, heal: 0, top: 0x5f8a46, side: 0x6b5a3e, bush: true },
   "^": { name: "Hill", h: 0.3, cost: 2, def: 1, avo: 20, heal: 0, top: 0x7ba055, side: 0x7d6b4c },
   "*": { name: "Ridge", h: 0.6, cost: 2, def: 2, avo: 30, heal: 0, top: 0x8e9270, side: 0x8a8068 },
