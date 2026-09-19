@@ -307,7 +307,12 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const postMat = new THREE.ShaderMaterial({
     vertexShader: POST_VERT, fragmentShader: POST_FRAG,
-    uniforms: { tDiffuse: { value: rt.texture }, uLevels: { value: 32 }, uVignette: { value: 0.04 }, uRush: { value: 0 } },
+    uniforms: {
+      tDiffuse: { value: rt.texture }, uLevels: { value: 32 }, uVignette: { value: 0.04 }, uRush: { value: 0 },
+      /* the low-res buffer's size, so POST_FRAG's dither cell lands one
+         per rendered pixel. applyRes keeps it in step with rt. */
+      uRes: { value: new THREE.Vector2(400, 240) },
+    },
     depthTest: false,
   });
   postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat));
@@ -317,7 +322,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     const p = RES[camRef.current.res];
     lastRes = camRef.current.res;
     const h = p.h === 0 ? VH : p.h;
-    rt.setSize(Math.max(64, Math.round(h * (VW / VH))), Math.max(48, h));
+    const w = Math.max(64, Math.round(h * (VW / VH))), rh = Math.max(48, h);
+    rt.setSize(w, rh);
+    postMat.uniforms.uRes.value.set(w, rh);
   }
   function resize() {
     const r = mount.getBoundingClientRect();

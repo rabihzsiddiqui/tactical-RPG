@@ -8,11 +8,32 @@ export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec
    the middle of the frame stays readable while the edges streak past.
    Taps step inward rather than outward so the streak reads as the
    world rushing at the lens. The blur runs before the posteriser, which
-   would otherwise cut the averaged ramps back into bands. */
+   would otherwise cut the averaged ramps back into bands.
+
+   The posteriser is dithered. Quantising straight to uLevels steps turns
+   any slow ramp into flat plateaus with hard seams between them, and the
+   scene's one big ramp is the distance fog: its contours are bands of
+   constant camera distance, so they lie across the board and stay put
+   however far you orbit. That is the "lines cutting through the map".
+   An ordered 4x4 Bayer threshold of one quantisation step, added before
+   the floor, trades each seam for a chequered handover between the two
+   neighbouring steps. Same 32 colours, no contours, and the pattern is
+   the era's own answer to the problem rather than a softening of it.
+
+   uRes is the low-res buffer's size, so the Bayer cell is evaluated per
+   rendered pixel rather than per screen pixel: the dither is chunky at
+   the same scale as everything else instead of being fine noise under
+   the upscale. highp, not mediump, because vUv*uRes runs past the range
+   mediump holds whole numbers in and floor() would then double up cells. */
 export const POST_FRAG = `
-  precision mediump float;
+  precision highp float;
   uniform sampler2D tDiffuse; uniform float uLevels; uniform float uVignette; uniform float uRush;
+  uniform vec2 uRes;
   varying vec2 vUv;
+  /* the 2x2 Bayer matrix ((0,2),(3,1))/4 written as arithmetic, and the
+     4x4 built from it by recursion, so neither needs an array lookup */
+  float bayer2(vec2 a){ a = floor(a); return fract(a.x*0.5 + a.y*a.y*0.75); }
+  float bayer4(vec2 a){ return bayer2(a*0.5)*0.25 + bayer2(a); }
   void main(){
     vec2 d = vUv-0.5;
     vec3 c;
@@ -24,7 +45,10 @@ export const POST_FRAG = `
     } else {
       c = texture2D(tDiffuse, vUv).rgb;
     }
-    if (uLevels < 63.0) c = floor(c*uLevels + 0.5)/uLevels;
+    if (uLevels < 63.0) {
+      float dth = bayer4(vUv*uRes) - 0.5;
+      c = floor(c*uLevels + 0.5 + dth)/uLevels;
+    }
     c = mix(c, c*vec3(1.06,1.01,0.93), 0.5);
     c *= 1.0 - dot(d,d)*uVignette;
     gl_FragColor = vec4(c,1.0);
