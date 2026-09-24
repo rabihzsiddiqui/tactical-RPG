@@ -70,9 +70,10 @@ function cloudTexture() {
 }
 
 /* adds `add` after `at`, and fails loudly if a three upgrade has renamed
-   `at`, rather than quietly shipping a board with no wind */
-function splice(src, at, add) {
-  if (!src.includes(at)) throw new Error(`wind.js: "${at}" is not in the shader`);
+   `at`, rather than quietly shipping a board with no wind. sky.js patches
+   the lowland's haze in with it too. */
+export function splice(src, at, add) {
+  if (!src.includes(at)) throw new Error(`shader patch: "${at}" is not in the shader`);
   return src.replace(at, `${at}\n${add}`);
 }
 
@@ -122,8 +123,9 @@ function buildAsh(uniforms) {
 
 /* call once the board and the units are in the scene. Every lit solid in
    it takes the cloud shadow, and the props meshes.js flagged take the
-   sway. Returns sway() for the outline normal material, and update(), once
-   per frame with the scene shaders' time in seconds. */
+   sway. Returns sway() for the outline normal material, cloud() for a lit
+   solid built later, and update(), once per frame with the scene shaders'
+   time in seconds. */
 export function createWind({ scene, sun }) {
   const dir = new THREE.Vector2(...WIND_DIR).normalize();
   const uniforms = {
@@ -198,6 +200,8 @@ export function createWind({ scene, sun }) {
 
   return {
     sway: (m) => patch(m, true, false),
+    // for a lit solid added after the traverse above: sky.js's lowland
+    cloud: (m) => patch(m, false, true),
     update(t) { uniforms.uTime.value = t; },
   };
 }

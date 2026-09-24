@@ -1,11 +1,13 @@
-/* the world past the board's edge: the sky, the lowland and the ridges.
+/* the world past the board's edge: the sky, the lowland, the river's run
+   out across it, and the ridges.
 
-   The board stands as a low plateau in a lowland that runs out under two
-   rings of ridges, so the map is part of a place rather than an island in
-   the sky. The lowland takes the same light and haze as the board, but
-   stays one flat colour a step down, so the board stays the thing you
-   look at. The orbit never sees
-   above the horizon (its pitch stops at 20 degrees down); the cut-in
+   The lowland is flush with the map's edge tiles, so the board is a piece
+   of the land rather than something set on it, and it runs out under two
+   rings of ridges. What makes the map the subject is haze: the lowland
+   steps paler in rings by distance from the board's edge, and reaches the
+   sky's own haze colour before the ridges. The board stays clear in the
+   middle, and nothing out at the rim ever shows an edge. The orbit never
+   sees above the horizon (its pitch stops at 20 degrees down); the cut-in
    drops the camera to a unit's eye line, and there the lowland runs back
    to the ridges and the dome's bands rise over them, behind both fighters
    from whichever side the director picks.
@@ -17,29 +19,37 @@
    far plane is the orbit distance plus 80, and nothing here is more than
    GROUND_RADIUS from the centre, so all of it stays inside the far plane.
 
-   Three draw calls and no pass: the dome, the lowland, and both rings in
-   one mesh. The dome and the ridges sit on the no-outline layer, so the
-   normal pass never draws them, and the ridges take no lines. Neither is
-   lit by three: MeshBasicMaterial and a ShaderMaterial are skipped by the
-   haze and the cloud shadow, and the ridges carry their shading baked
-   into vertex colours, one flat colour per face. */
+   Four draw calls and no pass: the dome, the lowland with its river
+   banks, the river, and both ridge rings in one mesh. The dome, the river
+   and the ridges sit on the no-outline layer, so the normal pass never
+   draws them, and the ridges take no lines. The ridges carry their
+   shading baked into vertex colours, one flat colour per face; the dome
+   and the ridges take no haze or cloud. */
 
 import * as THREE from "three";
-import { SKY_VERT, SKY_FRAG } from "./shaders.js";
+import { MW, MH, CX, CZ, cell } from "../core/map.js";
+import { SKY_VERT, SKY_FRAG, WATER_VERT, WATER_FRAG, RING_HAZE_PARS } from "./shaders.js";
 import { noOutline, NO_OUTLINE_LAYER } from "./meshes.js";
-import { tileFog } from "./tilefog.js";
-import { hash } from "./wind.js";
+import { hash, splice } from "./wind.js";
 
 export const SKY_HORIZON = 0x9fc3d8; // the lowest band and everything under the horizon; also the clear colour the outline pass keeps
 const SKY_ZENITH = 0x5b8ec4;         // the top band, a deeper blue
 const SKY_EDGES = [2, 5, 9, 14];     // degrees above the horizon where each band above the lowest starts; the cut-in sees up to about 30
 const SKY_RADIUS = 60;               // dome radius; the far plane never comes nearer than 80
 
-const GROUND_Y = -1.25;              // the lowland's height: just over the highest bottom of the board's edge walls (-1.3), so no gap opens under the board
+const GROUND_Y = 0;                  // the lowland's height: flush with the map's edge tiles
 const GROUND_RADIUS = 72;            // out past the far ring's ridge line, so every look below the ridges lands on ground
 const GROUND = 0x6b8f4a;             // the lowland's grass, a little darker and duller than the board's plain so the board stays first
-const GROUND_HAZE = 0.2;             // how far the lowland is mixed toward the board's haze colour, everywhere; the board's far row takes 0.35
-const GROUND_HAZE_AT = 1000;         // where the lowland's haze anchor sits: far enough out that it always takes GROUND_HAZE in full
+const GROUND_TUCK = 0.25;            // how far the lowland reaches in under the board's edge tiles, so no crack opens along the seam
+/* the haze rings round the map: [distance from the board's edge, amount
+   mixed toward the haze colour]. The last is 1, the sky's own haze, so
+   the lowland meets the dome with no edge, reached well before the near
+   ridges. */
+const HAZE_RINGS = [[0, 0.25], [2, 0.4], [5, 0.55], [9, 0.7], [15, 0.85], [24, 1]];
+
+const RIVER_REACH = 44;              // how far the river runs out from the board centre along its own axis: deep in the full haze, so its end is never seen
+const RIVER_Y = -0.1;                // the river's surface, where scene.js lays the water tiles
+const RIVER_SEGS = 2;                // water grid cells per unit along the river, enough for the swell in WATER_VERT; across it is 6, as on a water tile
 
 const RIDGE_LIT = 0x7d9a86;          // a ridge face turned full to the sun, before mist
 const RIDGE_SHADE = 0x4c6470;        // a ridge face turned away from it, before mist
@@ -62,8 +72,7 @@ const lerp3 = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
    depth test or write, so everything else lands on top of it wherever it
    is. It rides on the camera, so it can never reach the far plane. The
    band colours are mixed in sRGB, so the steps look even. Under the
-   horizon it is the haze colour, and the lowland and the ridges cover it
-   there from everywhere the orbit can go.
+   horizon it is the haze colour, which the lowland fades into.
 
    The layer keeps it out of the normal pass, but it is not noOutline:
    it writes 1 into rt's alpha, as the clear it replaces did. Zeroing it
@@ -91,26 +100,153 @@ function buildDome() {
   return dome;
 }
 
-/* the lowland: one flat disk, lit like the board, so it is one colour
-   except where the board's shadow falls on it. It takes the board's haze
-   through an anchor far out, which pins it at GROUND_HAZE from any
-   camera; graded by distance like a tile, it would step in tile-sized
-   squares beside the board and read as more board. At the board's full
-   0.35 the blue haze turned the grass teal, (114,143,137) on screen, and
-   lighter than the board's own front rows. No cloud shadow either: over
-   a flat plain this size the clouds were blotches all round the board.
-   It stays on the outline layer: the depth edge where the board's rim
-   meets it is a line worth drawing, and a flat disk has no creases. */
-function buildGround(haze) {
-  const anchor = { value: new THREE.Vector3(GROUND_HAZE_AT, 0, GROUND_HAZE_AT) };
-  const fog = { ...haze, uHazeMax: { value: GROUND_HAZE } };
-  const mat = tileFog(new THREE.MeshLambertMaterial({ color: GROUND }), fog, anchor);
-  const geo = new THREE.CircleGeometry(GROUND_RADIUS, 64);
-  geo.rotateX(-Math.PI / 2);
+/* where the river leaves the map: one arm per run of water tiles along an
+   edge. along is the axis the arm runs out on, sign which way; lo and hi
+   bound the run across the arm, in world units; bed is the water tiles'
+   floor, and sideLo and sideHi the bank colours either side, taken from
+   the edge tiles beside the run as the board's own walls take them. */
+function riverArms() {
+  const arms = [];
+  const scan = (along, sign, count, at) => {
+    const mid = along === "x" ? CZ : CX, half = (along === "x" ? MH : MW) / 2 - GROUND_TUCK;
+    const side = (j, i) => (j >= 0 && j < count && !at(j).water ? at(j) : at(i)).side;
+    for (let i = 0; i < count; i++) {
+      if (!at(i).water || (i > 0 && at(i - 1).water)) continue;
+      let len = 1;
+      while (i + len < count && at(i + len).water) len++;
+      arms.push({
+        along, sign, bed: at(i).h, sideLo: side(i - 1, i), sideHi: side(i + len, i),
+        lo: Math.max(i - mid - 0.5, -half), hi: Math.min(i + len - 1 - mid + 0.5, half),
+      });
+    }
+  };
+  scan("x", -1, MH, (y) => cell(0, y));
+  scan("x", 1, MH, (y) => cell(MW - 1, y));
+  scan("z", -1, MW, (x) => cell(x, 0));
+  scan("z", 1, MW, (x) => cell(x, MH - 1));
+  return arms;
+}
+
+/* haze by distance from the board's edge, spliced into one of three's
+   lit materials the way tilefog.js splices its own. `ring` holds the
+   uniforms RING_HAZE_PARS reads. Any patch already on the material runs
+   first and keeps its cache key. */
+function ringHaze(m, ring) {
+  const prevCompile = m.onBeforeCompile;
+  // read before the patch below replaces onBeforeCompile, which three's default key is made from
+  const key = m.customProgramCacheKey() + "|ringhaze";
+  m.onBeforeCompile = (sh, renderer) => {
+    prevCompile.call(m, sh, renderer);
+    Object.assign(sh.uniforms, ring);
+    sh.vertexShader = splice(splice(sh.vertexShader, "#include <common>", "varying vec3 vRingP;"),
+      "#include <fog_vertex>", "vRingP = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    sh.fragmentShader = splice(sh.fragmentShader, "#include <common>",
+      `#define RING_STEPS ${HAZE_RINGS.length}\n${RING_HAZE_PARS}\nvarying vec3 vRingP;`)
+      .replace("#include <tonemapping_fragment>",
+        "gl_FragColor.rgb = mix(gl_FragColor.rgb, uHazeColor, ringHaze(vRingP.xz));\n#include <tonemapping_fragment>");
+  };
+  m.customProgramCacheKey = () => key;
+  return m;
+}
+
+/* the lowland: a disk flush with the edge tiles, with the board cut out
+   of it and a channel wherever the river leaves the map, walled down to
+   the river bed like the banks inside the board. The cut is tucked
+   GROUND_TUCK in under the board's edge, so the two overlap rather than
+   meet on a line that could open a crack, and polygon offset keeps the
+   board on top in the overlap. The channel's walls reach in the same way
+   and the offset hands the board its own walls there too.
+
+   Lit like the board and under the same cloud, so light and cloud run
+   straight across the seam; clouds stopping dead at the map's edge would
+   draw the rectangle the haze is meant to soften. Hazed in rings from the
+   board's edge, which also fades the clouds out with distance, where on
+   a flat plain at one haze they made blotches all round the board. It
+   stays on the outline layer: its channel walls take lines like the
+   river's banks inside the board, and the flat disk has no creases. */
+function buildGround(arms, ring, wind) {
+  const a = MW / 2 - GROUND_TUCK, b = MH / 2 - GROUND_TUCK, R = RIVER_REACH;
+  const on = (along, sign) => arms.filter((m) => m.along === along && m.sign === sign);
+  // the hole, walked round the board's rim with a notch out along each arm; shape y is world -z
+  const hole = [];
+  const P = (x, z) => hole.push(new THREE.Vector2(x, -z));
+  P(-a, -b);
+  for (const m of on("z", -1).sort((p, q) => p.lo - q.lo)) { P(m.lo, -b); P(m.lo, -R); P(m.hi, -R); P(m.hi, -b); }
+  P(a, -b);
+  for (const m of on("x", 1).sort((p, q) => p.lo - q.lo)) { P(a, m.lo); P(R, m.lo); P(R, m.hi); P(a, m.hi); }
+  P(a, b);
+  for (const m of on("z", 1).sort((p, q) => q.lo - p.lo)) { P(m.hi, b); P(m.hi, R); P(m.lo, R); P(m.lo, b); }
+  P(-a, b);
+  for (const m of on("x", -1).sort((p, q) => q.lo - p.lo)) { P(-a, m.hi); P(-R, m.hi); P(-R, m.lo); P(-a, m.lo); }
+  const shape = new THREE.Shape().absarc(0, 0, GROUND_RADIUS, 0, Math.PI * 2, false);
+  shape.holes.push(new THREE.Path(hole));
+  const disk = new THREE.ShapeGeometry(shape, 32).rotateX(-Math.PI / 2).toNonIndexed();
+
+  const pos = Array.from(disk.attributes.position.array);
+  const nrm = Array.from(disk.attributes.normal.array);
+  const col = [];
+  const grass = new THREE.Color(GROUND);
+  for (let i = 0; i < pos.length; i += 3) col.push(grass.r, grass.g, grass.b);
+
+  // the channel walls: two triangles each side of every arm, wound to face into the channel
+  const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), c = new THREE.Color();
+  const tri = (p, q, r, n, hex) => {
+    if (e1.subVectors(q, p).cross(e2.subVectors(r, p)).dot(n) < 0) [q, r] = [r, q];
+    c.set(hex);
+    for (const v of [p, q, r]) { pos.push(v.x, v.y, v.z); nrm.push(n.x, n.y, n.z); col.push(c.r, c.g, c.b); }
+  };
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  for (const m of arms) {
+    for (const [across, n, hex] of [[m.lo, 1, m.sideLo], [m.hi, -1, m.sideHi]]) {
+      const [p0, p1, q0, q1, dir] = m.along === "x"
+        ? [V(m.sign * a, GROUND_Y, across), V(m.sign * R, GROUND_Y, across), V(m.sign * a, m.bed, across), V(m.sign * R, m.bed, across), V(0, 0, n)]
+        : [V(across, GROUND_Y, m.sign * b), V(across, GROUND_Y, m.sign * R), V(across, m.bed, m.sign * b), V(across, m.bed, m.sign * R), V(n, 0, 0)];
+      tri(p0, p1, q1, dir, hex);
+      tri(p0, q1, q0, dir, hex);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  const mat = ringHaze(new THREE.MeshLambertMaterial({
+    vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+  }), ring);
+  wind.cloud(mat);
   const ground = new THREE.Mesh(geo, mat);
-  ground.position.y = GROUND_Y;
   ground.receiveShadow = true;
   return ground;
+}
+
+/* the river's run out of the map: a strip of water down each arm, on the
+   board's own water shader with RING_HAZE defined, so it hazes out with
+   the lowland. The uniforms are the board water's own objects, so uTime
+   moves with it. Each strip starts on the board's edge with six cells a
+   unit across, as a water tile has, so the two meet vertex for vertex. */
+function buildRiver(arms, water, ring) {
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: WATER_VERT, fragmentShader: WATER_FRAG,
+    defines: { RING_HAZE: 1, RING_STEPS: HAZE_RINGS.length },
+    uniforms: { ...water.uniforms, ...ring },
+  });
+  const pos = [], idx = [];
+  for (const m of arms) {
+    const edge = (m.along === "x" ? MW : MH) / 2, len = RIVER_REACH - edge, wid = m.hi - m.lo;
+    const g = m.along === "x"
+      ? new THREE.PlaneGeometry(len, wid, Math.ceil(len * RIVER_SEGS), Math.round(wid * 6))
+      : new THREE.PlaneGeometry(wid, len, Math.round(wid * 6), Math.ceil(len * RIVER_SEGS));
+    g.rotateX(-Math.PI / 2);
+    const mid = m.sign * (edge + len / 2), across = (m.lo + m.hi) / 2;
+    g.translate(m.along === "x" ? mid : across, RIVER_Y, m.along === "x" ? across : mid);
+    const base = pos.length / 3;
+    pos.push(...g.attributes.position.array);
+    for (const i of g.index.array) idx.push(base + i);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  return noOutline(new THREE.Mesh(geo, mat));
 }
 
 /* both rings in one mesh. Each ring is a band of columns: a base under
@@ -176,12 +312,20 @@ function buildRidges(sunDir) {
   return noOutline(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true })));
 }
 
-/* adds the dome, the lowland and the ridges to the scene. `haze` is the
-   board's tile fog uniforms, so the lowland hazes toward the same colour.
-   follow() goes once a frame, after the director has placed the camera,
-   shake included. */
-export function createSky({ scene, sun, haze }) {
+/* adds the dome, the lowland, the river's run out and the ridges to the
+   scene. `haze` is the board's tile fog uniforms, for its colour; `wind`
+   the board's wind, for the lowland's cloud; `water` the board's water
+   material, for the river. follow() goes once a frame, after the
+   director has placed the camera, shake included. */
+export function createSky({ scene, sun, haze, wind, water }) {
+  const ring = {
+    uHazeColor: haze.uHazeColor,
+    uRingHalf: { value: new THREE.Vector2(MW / 2, MH / 2) },
+    uRingEdge: { value: HAZE_RINGS.map((r) => r[0]) },
+    uRingHaze: { value: HAZE_RINGS.map((r) => r[1]) },
+  };
+  const arms = riverArms();
   const dome = buildDome();
-  scene.add(dome, buildGround(haze), buildRidges(sun.position.clone().normalize()));
+  scene.add(dome, buildGround(arms, ring, wind), buildRiver(arms, water, ring), buildRidges(sun.position.clone().normalize()));
   return { follow(camera) { dome.position.copy(camera.position); } };
 }
