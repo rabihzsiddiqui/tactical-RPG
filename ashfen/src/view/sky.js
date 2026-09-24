@@ -28,7 +28,7 @@ import { hash } from "./wind.js";
 
 export const SKY_HORIZON = 0x9fc3d8; // the lowest band and everything below the horizon: the old flat sky, so the grid view is unchanged
 const SKY_ZENITH = 0x5b8ec4;         // the top band, a deeper blue
-const SKY_EDGES = [3, 8, 15, 24];    // degrees above the horizon where each band above the lowest starts; the cut-in sees up to about 30
+const SKY_EDGES = [2, 5, 9, 14];     // degrees above the horizon where each band above the lowest starts; the cut-in sees up to about 30
 const SKY_RADIUS = 60;               // dome radius; the far plane never comes nearer than 80
 
 const RIDGE_FOOT = -12;              // height of each ring's inner foot, deep enough that the board hides it from the cut-in
@@ -42,8 +42,8 @@ const RIDGE_VALLEY = 1;              // mist on the row under the haze line; 1 i
    ring, alternating peak and saddle. low and high: the range of ridge
    heights. mist: how far every face is mixed toward SKY_HORIZON. */
 const RIDGES = [
-  { radius: 46, depth: 6.5, count: 48, low: 1.8, high: 4.4, mist: 0.3 }, // near: darker and more saturated
-  { radius: 62, depth: 9, count: 40, low: 4.0, high: 8.6, mist: 0.6 },   // far: paler, rises over the near one
+  { radius: 46, depth: 6.5, count: 48, low: 1.8, high: 4.4, mist: 0.15 }, // near: darker and more saturated
+  { radius: 62, depth: 9, count: 40, low: 4.0, high: 8.6, mist: 0.45 },  // far: paler, rises over the near one
 ];
 
 const srgb = (hex) => [(hex >> 16 & 255) / 255, (hex >> 8 & 255) / 255, (hex & 255) / 255];
