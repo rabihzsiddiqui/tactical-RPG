@@ -29,6 +29,7 @@ import { tween, stepTweens, resetTweens, hitStop, easeOutCubic, easeInOutQuad } 
 import { createDirector } from "./camera.js";
 import { createAttackPlayer, CARRY } from "./attacks.js";
 import { createEffects } from "./effects.js";
+import { createTileFog, updateTileFog, tileFog, tileFogProp } from "./tilefog.js";
 import { C } from "../ui/theme.js";
 import {
   playUnitSelect, playActionSelect, playBack, playCritHit, playMiss, playNoDamage, playDeath,
@@ -143,7 +144,11 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      All of those numbers were measured before POST_FRAG had an sRGB
      encode, when the canvas showed linear light and the board sat far
      darker than its palette. The encode lifted it; the palette was never
-     as dark as this comment used to say. */
+     as dark as this comment used to say.
+
+     The front-to-back depth is back as haze stepped per tile, which the
+     quantiser cannot band: one value per tile, so one per face, with
+     every step on a tile edge. See tilefog.js. */
   const camera = new THREE.PerspectiveCamera(30, 1.6, 0.5, 120);
   /* overlays live on their own layer so the outline normal pass can leave
      them out by switching it off; see noOutline in meshes.js */
@@ -166,7 +171,10 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   scene.add(bounce);
 
   /* ---- world ---- */
-  const ground = new THREE.Mesh(buildTerrain(), new THREE.MeshLambertMaterial({ vertexColors: true }));
+  /* the haze uniforms every solid shares: the terrain, the props and the
+     units. Water, waterfalls and the overlays stay clear of it. */
+  const haze = createTileFog();
+  const ground = new THREE.Mesh(buildTerrain(), tileFog(new THREE.MeshLambertMaterial({ vertexColors: true }), haze));
   ground.receiveShadow = true;
   ground.castShadow = true;
   scene.add(ground);
@@ -253,7 +261,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         while (x + w < MW && cell(x + w, y).bridge) w++;
         const b = buildBridge(w);
         b.position.set(x - CX + (w - 1) / 2, 0, y - CZ);
-        scene.add(b);
+        scene.add(tileFogProp(b, haze));
       }
       if (t.tree || t.bush) {
         /* same jitter for both, so neither sits dead centre on its tile.
@@ -265,12 +273,12 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         tr.position.set(x - CX + (Math.random() - 0.5) * off, t.h, y - CZ + (Math.random() - 0.5) * off);
         tr.rotation.y = Math.random() * 6.28;
         tr.scale.setScalar(0.85 + Math.random() * 0.3);
-        scene.add(tr);
+        scene.add(tileFogProp(tr, haze));
       }
       if (t.keep) {
         const k = buildKeep();
         k.position.set(x - CX, t.h, y - CZ);
-        scene.add(k);
+        scene.add(tileFogProp(k, haze));
       }
       if (walkable(x, y)) {
         const p = new THREE.Mesh(pickGeo, pickMat);
@@ -361,6 +369,10 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
        added at mount to avoid. Setting it here, before the first render,
        costs nothing and every fade afterwards is one uniform. */
     v.mats.forEach((m) => { m.transparent = true; fadeOutline(m); });
+    /* one haze anchor for the whole unit, weapon included, copied from the
+       root every frame, so it steps as the unit crosses a tile edge */
+    v.haze = { value: new THREE.Vector3() };
+    v.mats.forEach((m) => tileFog(m, haze, v.haze));
     v.mats.forEach((m) => {
       if (!m.emissive) return;
       m.emissive.setHex(POP_EMISSIVE);
@@ -1445,6 +1457,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     );
     orbit.fov = o.fov;
     director.apply(camera, orbit, dt * 1000);
+    updateTileFog(haze, camera.position.distanceTo(director.target), director.mix);
 
     const t = now / 1000;
     matMove.uniforms.uTime.value = t;
@@ -1467,6 +1480,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     postMat.uniforms.uRush.value = director.rush;
 
     g.units.forEach((u) => animUnit(u, animDt));
+    g.units.forEach((u) => u.view.haze.value.copy(u.view.root.position));
     effects.update(animDt * 1000, camera);
 
     if (g.sel) {

@@ -278,5 +278,8 @@ export function createDirector({ isEnabled, scene }) {
     /* transit speed for the post pass radial blur, 0 at rest, 1 at the
        peak of a fly-in. scene.js copies it into POST_FRAG's uRush. */
     get rush() { return rush; },
+    /* where the camera is looking this frame, shake and lean included.
+       scene.js measures the haze range from it, see tilefog.js. */
+    get target() { return target; },
   };
 }
