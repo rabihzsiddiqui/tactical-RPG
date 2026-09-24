@@ -31,6 +31,7 @@ import { createAttackPlayer, CARRY } from "./attacks.js";
 import { createEffects } from "./effects.js";
 import { createTileFog, updateTileFog, tileFog, tileFogProp } from "./tilefog.js";
 import { createWind } from "./wind.js";
+import { createSky, SKY_HORIZON } from "./sky.js";
 import { C } from "../ui/theme.js";
 import {
   playUnitSelect, playActionSelect, playBack, playCritHit, playMiss, playNoDamage, playDeath,
@@ -119,7 +120,11 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   });
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x9fc3d8);
+  /* no scene.background: the sky dome (sky.js) paints every pixel of the
+     colour pass. The outline normal pass does not draw the dome, and it
+     still clears to the old flat sky, which the crease test in POST_FRAG
+     was written against. */
+  renderer.setClearColor(SKY_HORIZON);
   /* no distance fog, and the board is darker for it. A linear fog ramps
      every ground pixel toward the sky colour by camera distance, and the
      posteriser downstream cut that ramp into contour bands lying straight
@@ -1405,6 +1410,13 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     };
   }
 
+  /* ---- sky ----
+     see sky.js. Built last on purpose: three draws Math.random for every
+     mesh, material and geometry's uuid, and building these before the
+     grass, the trees, the units and the effects would move every seeded
+     random draw they make, which the pixel-diff harness depends on. */
+  const sky = createSky({ scene });
+
   /* ---- loop ---- */
   let raf = 0, prevT = performance.now();
   /* the orbit distance at which BOARD exactly fills the frame.
@@ -1520,6 +1532,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       }
     }
 
+    sky.follow(camera);
     if (o.post) {
       renderer.setRenderTarget(rt);
       renderer.render(scene, camera);

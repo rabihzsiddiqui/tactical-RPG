@@ -459,3 +459,26 @@ export const ASH_VERT = `
 export const ASH_FRAG = `
   varying vec3 vColor;
   void main() { gl_FragColor = linearToOutputTexel(vec4(vColor, 1.0)); }`;
+
+/* SKY_VERT and SKY_FRAG: the sky dome, see sky.js. The dome is centred on
+   the camera and never rotated, so a vertex's own position is the view
+   direction to it, and its y over its length is the sine of how far above
+   the horizon that is. The comparison is per fragment, so the band edges
+   are exact however coarse the sphere.
+
+   Each band is one flat colour, cut with a comparison rather than a ramp.
+   The posteriser eases off during a cut-in, which is when the sky is on
+   screen, so the sky has to carry its own banding. Below the horizon it is
+   uBand[0], the old flat sky, which is all the orbit ever sees: its pitch
+   stops at 20 degrees down. uEdge[0] is not read; uBand[0] needs no edge. */
+export const SKY_VERT = `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`;
+export const SKY_FRAG = `
+  uniform vec3 uBand[BANDS];
+  uniform float uEdge[BANDS];
+  varying vec3 vDir;
+  void main() {
+    float e = normalize(vDir).y;
+    vec3 c = uBand[0];
+    for (int i = 1; i < BANDS; i++) if (e >= uEdge[i]) c = uBand[i];
+    gl_FragColor = linearToOutputTexel(vec4(c, 1.0));
+  }`;
