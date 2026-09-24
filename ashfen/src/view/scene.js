@@ -403,6 +403,11 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       uOutline: { value: 0 }, tDepth: { value: rt.depthTexture }, tNormal: { value: normalRT.texture },
       uTexel: { value: new THREE.Vector2(1 / 400, 1 / 240) }, uTan: { value: new THREE.Vector2(1, 1) },
       uNear: { value: 0.5 }, uFar: { value: 120 }, uSun: { value: new THREE.Vector3() },
+      /* the map's outline and the fog round it: the camera's world matrix
+         to work world positions back from depth, the board's half size,
+         and the haze colour the fog ends at */
+      uCamWorld: { value: new THREE.Matrix4() }, uGroundHalf: { value: new THREE.Vector2(MW / 2, MH / 2) },
+      uFogColor: haze.uHazeColor,
     },
     depthTest: false,
   });
@@ -1494,10 +1499,18 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       }
     }
 
-    sky.follow(camera);
+    sky.follow(camera, o.post);
     if (o.post) {
       renderer.setRenderTarget(rt);
       renderer.render(scene, camera);
+      /* depth back to view and world space, for the outlines, the map's
+         outline and the fog round it */
+      const pu = postMat.uniforms;
+      const tanY = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+      pu.uTan.value.set(tanY * camera.aspect, tanY);
+      pu.uNear.value = camera.near;
+      pu.uFar.value = camera.far;
+      pu.uCamWorld.value.copy(camera.matrixWorld);
       const outlines = o.outlines !== false;
       if (outlines !== lastOutlines) {
         lastOutlines = outlines;
@@ -1517,11 +1530,6 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         renderer.shadowMap.autoUpdate = true;
         scene.overrideMaterial = null;
         camera.layers.enable(NO_OUTLINE_LAYER);
-        const pu = postMat.uniforms;
-        const tanY = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
-        pu.uTan.value.set(tanY * camera.aspect, tanY);
-        pu.uNear.value = camera.near;
-        pu.uFar.value = camera.far;
         pu.uSun.value.copy(sunDir).transformDirection(camera.matrixWorldInverse);
       }
       renderer.setRenderTarget(null);

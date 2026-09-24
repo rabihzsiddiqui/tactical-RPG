@@ -3,10 +3,11 @@
 
    The lowland is flush with the map's edge tiles, so the board is a piece
    of the land rather than something set on it, and it runs out under two
-   rings of ridges. What makes the map the subject is haze: the lowland
-   steps paler in rings by distance from the board's edge, and reaches the
-   sky's own haze colour before the ridges. The board stays clear in the
-   middle, and nothing out at the rim ever shows an edge. The orbit never
+   rings of ridges. What makes the map the subject is fog: the lowland
+   fades by distance from the board's edge, and reaches the sky's own
+   haze colour before the ridges (see GROUND_FOG_PARS in shaders.js). The
+   board stays clear in the middle, and nothing out at the rim ever shows
+   an edge. The orbit never
    sees above the horizon (its pitch stops at 20 degrees down); the cut-in
    drops the camera to a unit's eye line, and there the lowland runs back
    to the ridges and the dome's bands rise over them, behind both fighters
@@ -24,11 +25,11 @@
    and the ridges sit on the no-outline layer, so the normal pass never
    draws them, and the ridges take no lines. The ridges carry their
    shading baked into vertex colours, one flat colour per face; the dome
-   and the ridges take no haze or cloud. */
+   and the ridges take no fog or cloud. */
 
 import * as THREE from "three";
 import { MW, MH, CX, CZ, cell } from "../core/map.js";
-import { SKY_VERT, SKY_FRAG, WATER_VERT, WATER_FRAG, RING_HAZE_PARS } from "./shaders.js";
+import { SKY_VERT, SKY_FRAG, WATER_VERT, WATER_FRAG, GROUND_FOG_PARS } from "./shaders.js";
 import { noOutline, NO_OUTLINE_LAYER } from "./meshes.js";
 import { hash, splice } from "./wind.js";
 
@@ -41,13 +42,8 @@ const GROUND_Y = 0;                  // the lowland's height: flush with the map
 const GROUND_RADIUS = 72;            // out past the far ring's ridge line, so every look below the ridges lands on ground
 const GROUND = 0x6b8f4a;             // the lowland's grass, a little darker and duller than the board's plain so the board stays first
 const GROUND_TUCK = 0.25;            // how far the lowland reaches in under the board's edge tiles, so no crack opens along the seam
-/* the haze rings round the map: [distance from the board's edge, amount
-   mixed toward the haze colour]. The last is 1, the sky's own haze, so
-   the lowland meets the dome with no edge, reached well before the near
-   ridges. */
-const HAZE_RINGS = [[0, 0.25], [2, 0.4], [5, 0.55], [9, 0.7], [15, 0.85], [24, 1]];
 
-const RIVER_REACH = 44;              // how far the river runs out from the board centre along its own axis: deep in the full haze, so its end is never seen
+const RIVER_REACH = 44;              // how far the river runs out from the board centre along its own axis: deep in the full fog, so its end is never seen
 const RIVER_Y = -0.1;                // the river's surface, where scene.js lays the water tiles
 const RIVER_SEGS = 2;                // water grid cells per unit along the river, enough for the swell in WATER_VERT; across it is 6, as on a water tile
 
@@ -127,23 +123,24 @@ function riverArms() {
   return arms;
 }
 
-/* haze by distance from the board's edge, spliced into one of three's
-   lit materials the way tilefog.js splices its own. `ring` holds the
-   uniforms RING_HAZE_PARS reads. Any patch already on the material runs
-   first and keeps its cache key. */
-function ringHaze(m, ring) {
+/* the fog round the map, spliced into one of three's lit materials the
+   way tilefog.js splices its haze, for when post is off. With post on,
+   uFogInShader is 0 and POST_FRAG fogs these pixels after the quantiser
+   instead. `fog` holds the uniforms. Any patch already on the material
+   runs first and keeps its cache key. */
+function groundFog(m, fog) {
   const prevCompile = m.onBeforeCompile;
   // read before the patch below replaces onBeforeCompile, which three's default key is made from
-  const key = m.customProgramCacheKey() + "|ringhaze";
+  const key = m.customProgramCacheKey() + "|groundfog";
   m.onBeforeCompile = (sh, renderer) => {
     prevCompile.call(m, sh, renderer);
-    Object.assign(sh.uniforms, ring);
-    sh.vertexShader = splice(splice(sh.vertexShader, "#include <common>", "varying vec3 vRingP;"),
-      "#include <fog_vertex>", "vRingP = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    Object.assign(sh.uniforms, fog);
+    sh.vertexShader = splice(splice(sh.vertexShader, "#include <common>", "varying vec3 vFogP;"),
+      "#include <fog_vertex>", "vFogP = (modelMatrix * vec4(transformed, 1.0)).xyz;");
     sh.fragmentShader = splice(sh.fragmentShader, "#include <common>",
-      `#define RING_STEPS ${HAZE_RINGS.length}\n${RING_HAZE_PARS}\nvarying vec3 vRingP;`)
+      `uniform vec3 uHazeColor; uniform float uFogInShader;\n${GROUND_FOG_PARS}\nvarying vec3 vFogP;`)
       .replace("#include <tonemapping_fragment>",
-        "gl_FragColor.rgb = mix(gl_FragColor.rgb, uHazeColor, ringHaze(vRingP.xz));\n#include <tonemapping_fragment>");
+        "gl_FragColor.rgb = mix(gl_FragColor.rgb, uHazeColor, uFogInShader * groundFog(vFogP));\n#include <tonemapping_fragment>");
   };
   m.customProgramCacheKey = () => key;
   return m;
@@ -159,12 +156,12 @@ function ringHaze(m, ring) {
 
    Lit like the board and under the same cloud, so light and cloud run
    straight across the seam; clouds stopping dead at the map's edge would
-   draw the rectangle the haze is meant to soften. Hazed in rings from the
-   board's edge, which also fades the clouds out with distance, where on
-   a flat plain at one haze they made blotches all round the board. It
-   stays on the outline layer: its channel walls take lines like the
-   river's banks inside the board, and the flat disk has no creases. */
-function buildGround(arms, ring, wind) {
+   draw the rectangle the fog is meant to soften. The fog round the map
+   also fades the clouds out with distance, where on a flat plain at one
+   haze they made blotches all round the board. It stays on the outline
+   layer: its channel walls take lines like the river's banks inside the
+   board, and the flat disk has no creases. */
+function buildGround(arms, fog, wind) {
   const a = MW / 2 - GROUND_TUCK, b = MH / 2 - GROUND_TUCK, R = RIVER_REACH;
   const on = (along, sign) => arms.filter((m) => m.along === along && m.sign === sign);
   // the hole, walked round the board's rim with a notch out along each arm; shape y is world -z
@@ -210,9 +207,9 @@ function buildGround(arms, ring, wind) {
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
   geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
-  const mat = ringHaze(new THREE.MeshLambertMaterial({
+  const mat = groundFog(new THREE.MeshLambertMaterial({
     vertexColors: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
-  }), ring);
+  }), fog);
   wind.cloud(mat);
   const ground = new THREE.Mesh(geo, mat);
   ground.receiveShadow = true;
@@ -220,15 +217,22 @@ function buildGround(arms, ring, wind) {
 }
 
 /* the river's run out of the map: a strip of water down each arm, on the
-   board's own water shader with RING_HAZE defined, so it hazes out with
+   board's own water shader with GROUND_FOG defined, so it fogs out with
    the lowland. The uniforms are the board water's own objects, so uTime
    moves with it. Each strip starts on the board's edge with six cells a
-   unit across, as a water tile has, so the two meet vertex for vertex. */
-function buildRiver(arms, water, ring) {
+   unit across, as a water tile has, so the two meet vertex for vertex.
+
+   It is on the no-outline layer, off the normal pass like the board's
+   water, but not noOutline: POST_FRAG fogs a pixel by rt's alpha, and
+   noOutline would zero it and leave the river bright through the fog.
+   Its alpha of 1 takes no stray lines: against its banks the water is
+   the far side of every depth step, and water beside water has one
+   normal, the normal pass's clear colour. */
+function buildRiver(arms, water, fog) {
   const mat = new THREE.ShaderMaterial({
     vertexShader: WATER_VERT, fragmentShader: WATER_FRAG,
-    defines: { RING_HAZE: 1, RING_STEPS: HAZE_RINGS.length },
-    uniforms: { ...water.uniforms, ...ring },
+    defines: { GROUND_FOG: 1 },
+    uniforms: { ...water.uniforms, ...fog },
   });
   const pos = [], idx = [];
   for (const m of arms) {
@@ -246,7 +250,9 @@ function buildRiver(arms, water, ring) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   geo.setIndex(idx);
-  return noOutline(new THREE.Mesh(geo, mat));
+  const river = new THREE.Mesh(geo, mat);
+  river.layers.set(NO_OUTLINE_LAYER);
+  return river;
 }
 
 /* both rings in one mesh. Each ring is a band of columns: a base under
@@ -316,16 +322,21 @@ function buildRidges(sunDir) {
    scene. `haze` is the board's tile fog uniforms, for its colour; `wind`
    the board's wind, for the lowland's cloud; `water` the board's water
    material, for the river. follow() goes once a frame, after the
-   director has placed the camera, shake included. */
+   director has placed the camera, shake included; `post` says whether
+   POST_FRAG is on to fog the lowland, or the lowland fogs itself. */
 export function createSky({ scene, sun, haze, wind, water }) {
-  const ring = {
+  const fog = {
     uHazeColor: haze.uHazeColor,
-    uRingHalf: { value: new THREE.Vector2(MW / 2, MH / 2) },
-    uRingEdge: { value: HAZE_RINGS.map((r) => r[0]) },
-    uRingHaze: { value: HAZE_RINGS.map((r) => r[1]) },
+    uGroundHalf: { value: new THREE.Vector2(MW / 2, MH / 2) },
+    uFogInShader: { value: 0 },
   };
   const arms = riverArms();
   const dome = buildDome();
-  scene.add(dome, buildGround(arms, ring, wind), buildRiver(arms, water, ring), buildRidges(sun.position.clone().normalize()));
-  return { follow(camera) { dome.position.copy(camera.position); } };
+  scene.add(dome, buildGround(arms, fog, wind), buildRiver(arms, water, fog), buildRidges(sun.position.clone().normalize()));
+  return {
+    follow(camera, post) {
+      dome.position.copy(camera.position);
+      fog.uFogInShader.value = post ? 0 : 1;
+    },
+  };
 }

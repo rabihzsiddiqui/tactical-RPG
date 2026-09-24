@@ -26,7 +26,7 @@ import * as THREE from "three";
 import { CX, CZ } from "../core/map.js";
 
 const HAZE_COLOR = 0x9fc3d8; // what the far board mixes toward: the sky, so distance reads as sinking into it
-const HAZE_MAX = 0.35;       // the most any tile is mixed toward it, reached at HAZE_FAR and beyond
+const HAZE_MAX = 0.15;       // the most any tile is mixed toward it, reached at HAZE_FAR and beyond; light, since the fog round the map does the framing
 const HAZE_NEAR = -2.4;      // haze starts this far nearer than the look target: the near row at the reference pose
 const HAZE_FAR = 4.1;        // and peaks this far past it: the far row at the reference pose
 const HAZE_CINE_NEAR = 0.5;  // in a cut-in it starts this far past the look target instead, just behind the fighters' tiles

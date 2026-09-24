@@ -9,6 +9,12 @@ const OUTLINE_CREASE = 0.2;     // 1 - cos of the shallowest crease that draws, 
 const OUTLINE_SIDE_EPS = 0.03;  // two faces lit within this of each other both take the highlight
 const OUTLINE_RUSH = 8.0;       // the lines are gone once the director's rush passes 1 / this
 
+/* ground fog tunables, templated into GROUND_FOG_PARS: the fog over the
+   lowland round the map (sky.js), by distance from the map's edge */
+const GROUND_FOG_EDGE = 0.35;   // fog on the lowland right at the map's edge
+const GROUND_FOG_FULL = 18;     // distance from the map's edge where it is all fog, the dome's own colour under the horizon
+const GROUND_FOG_TOP = 0.05;    // world height over which nothing takes the fog: the lowland, the river run-out and its banks all sit at or under it
+
 /* wind tunables, templated into the wind GLSL at the end of this file.
    Speeds and reaches are at wind strength 1; direction and strength are
    uWind, set in wind.js. How far each prop sways is baked by meshes.js. */
@@ -29,8 +35,31 @@ const ASH_EMBERS = 0.1;        // share of the flakes that are embers
 const ASH_EMBER_GAIN = 1.3;    // embers burn this much brighter than their colour
 const glf = (x) => x.toFixed(3);
 
+/* GROUND_FOG_PARS: the fog round the map. d is the distance from the
+   board's rectangle, so the fog follows its outline, rounded at the
+   corners. It starts at GROUND_FOG_EDGE right at the map's edge, one
+   deliberate step, and eases out to 1, the dome's colour under the
+   horizon, by GROUND_FOG_FULL, so the lowland meets the sky with no edge.
+   Nothing on the board takes it (d is 0 there), nor anything standing on
+   the lowland (over GROUND_FOG_TOP).
+
+   It is a smooth ramp, which the posteriser would cut into contour
+   bands. So with post on, POST_FRAG applies it after the quantiser,
+   working back from depth to the world position. The lowland and the
+   river apply it themselves only with post off, where there is no
+   quantiser to band it. */
+export const GROUND_FOG_PARS = `
+  uniform highp vec2 uGroundHalf;
+  float boardDist(highp vec3 w){ return length(max(abs(w.xz) - uGroundHalf, 0.0)); }
+  float groundFog(highp vec3 w){
+    float d = boardDist(w);
+    if (w.y > ${glf(GROUND_FOG_TOP)} || d <= 0.0) return 0.0;
+    float t = 1.0 - clamp(d / ${glf(GROUND_FOG_FULL)}, 0.0, 1.0);
+    return mix(${glf(GROUND_FOG_EDGE)}, 1.0, 1.0 - t*t);
+  }`;
+
 export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
-/* POST_FRAG: encode, posterise, warm, vignette. uRush is the camera director's
+/* POST_FRAG: encode, posterise, fog, warm, vignette. uRush is the camera director's
    transit speed, 0 at rest and 1 at the peak of a fly-in. While it is up,
    each pixel averages eight taps along the line from itself toward the
    screen centre, a smear that grows with distance from the centre, so
@@ -83,16 +112,29 @@ export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec
    overlay by its coverage (see noOutline in meshes.js). uRush fades the
    lot out quickly, since lines drawn crisp over the transit blur would
    dirty it. Depth math and the tap coordinates are highp: mediump holds
-   neither a linear depth nor a one-texel step at native width. */
+   neither a linear depth nor a one-texel step at native width.
+
+   The fog round the map comes after the quantiser, since it is a smooth
+   ramp (see GROUND_FOG_PARS). worldAt() works a pixel's world position
+   back from depth through uCamWorld, the camera's world matrix. Its colour goes through the same encode and
+   quantiser as the dome, so full fog lands on exactly the dome's colour.
+   rt's alpha keeps it off the overlays and the ash, as it keeps the lines
+   off them. */
 export const POST_FRAG = `
   precision mediump float;
   uniform sampler2D tDiffuse; uniform float uLevels; uniform float uVignette; uniform float uRush;
   uniform float uOutline; uniform sampler2D tDepth; uniform sampler2D tNormal;
-  uniform highp vec2 uTexel; uniform vec2 uTan; uniform highp float uNear; uniform highp float uFar; uniform vec3 uSun;
+  uniform highp vec2 uTexel; uniform highp vec2 uTan; uniform highp float uNear; uniform highp float uFar; uniform vec3 uSun;
+  uniform highp mat4 uCamWorld; uniform vec3 uFogColor;
   varying highp vec2 vUv;
+  ${GROUND_FOG_PARS}
   highp float viewZ(highp vec2 uv){
     highp float d = texture2D(tDepth, uv).r;
     return uNear*uFar / (uFar - d*(uFar - uNear));
+  }
+  highp vec3 worldAt(highp vec2 uv){
+    highp float z = viewZ(uv);
+    return (uCamWorld * vec4((uv*2.0 - 1.0)*uTan*z, -z, 1.0)).xyz;
   }
   vec3 viewN(highp vec2 uv){ return texture2D(tNormal, uv).rgb*2.0 - 1.0; }
   void edgeTap(vec2 o, highp float z, vec3 n, vec3 v, float fn, highp float px,
@@ -142,6 +184,11 @@ export const POST_FRAG = `
     c = linearToOutputTexel(vec4(c, 1.0)).rgb;
     if (uLevels < 63.0) c = floor(c*uLevels + 0.5)/uLevels;
     if (uOutline > 0.5) c *= outline();
+    if (texture2D(tDepth, vUv).r < 1.0) {
+      vec3 fc = linearToOutputTexel(vec4(uFogColor, 1.0)).rgb;
+      if (uLevels < 63.0) fc = floor(fc*uLevels + 0.5)/uLevels;
+      c = mix(c, fc, groundFog(worldAt(vUv)) * texture2D(tDiffuse, vUv).a);
+    }
     c = mix(c, c*vec3(1.06,1.01,0.93), 0.5);
     c *= 1.0 - dot(d,d)*uVignette;
     gl_FragColor = vec4(c,1.0);
@@ -184,24 +231,6 @@ export const RING_FRAG = `
    geometry, so a coarse grid still lights smoothly. Everything works in
    world space, which is what keeps the per-tile planes seamless: two
    vertices that share a world position get the same displacement. */
-/* RING_HAZE_PARS: haze by distance from the board's edge, for the ground
-   and water past it (see sky.js). d is the distance from the board's
-   rectangle, so each ring follows the board's outline, rounded at the
-   corners. Each step is one flat amount cut with a comparison, a hard
-   edge the posteriser leaves alone. Inside the board d is 0 and nothing
-   is hazed. RING_STEPS is a define set by the material. */
-export const RING_HAZE_PARS = `
-  uniform vec3 uHazeColor;
-  uniform vec2 uRingHalf;
-  uniform float uRingEdge[RING_STEPS];
-  uniform float uRingHaze[RING_STEPS];
-  float ringHaze(vec2 xz) {
-    float d = length(max(abs(xz) - uRingHalf, 0.0));
-    float k = 0.0;
-    for (int i = 0; i < RING_STEPS; i++) if (d > uRingEdge[i]) k = uRingHaze[i];
-    return k;
-  }`;
-
 export const WATER_VERT = `
   uniform float uTime;
   /* uTime is declared in both stages, so neither may pin a precision:
@@ -236,15 +265,17 @@ export const WATER_VERT = `
    the frame, and the encode on the way out gives back exactly these.
 
    The river runs on past the map across the lowland (sky.js), on this
-   shader with RING_HAZE defined, so it hazes in the lowland's rings. Out
-   there the shore field reads its edge column, clamped, which is the
-   same banks the river had where it left the map. */
+   shader with GROUND_FOG defined, so with post off it fogs itself like
+   the lowland; with post on POST_FRAG fogs it. Out there the shore field
+   reads its edge column, clamped, which is the same banks the river had
+   where it left the map. */
 export const WATER_FRAG = `
   uniform float uTime; uniform sampler2D uShore;
   uniform vec2 uOrigin; uniform vec2 uSize; uniform float uRange; uniform vec3 uSun;
   varying vec3 vPos; varying vec3 vN;
-  #ifdef RING_HAZE
-  ${RING_HAZE_PARS}
+  #ifdef GROUND_FOG
+  uniform vec3 uHazeColor; uniform float uFogInShader;
+  ${GROUND_FOG_PARS}
   #endif
   void main(){
     vec2 uv = (vPos.xz + uOrigin) / uSize;
@@ -286,8 +317,8 @@ export const WATER_FRAG = `
     c = mix(c, vec3(0.93,0.99,1.0), foam);
     c = mix(c, vec3(1.0), glint*0.85);
     vec4 lin = sRGBTransferEOTF(vec4(c,1.0));
-    #ifdef RING_HAZE
-    lin.rgb = mix(lin.rgb, uHazeColor, ringHaze(vPos.xz));
+    #ifdef GROUND_FOG
+    lin.rgb = mix(lin.rgb, uHazeColor, uFogInShader * groundFog(vPos));
     #endif
     gl_FragColor = linearToOutputTexel(lin);
   }`;
