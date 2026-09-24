@@ -18,7 +18,7 @@ import ActionMenu from "./ActionMenu.jsx";
 import OnboardingCard from "./OnboardingCard.jsx";
 import TitleCard from "./TitleCard.jsx";
 import PhaseBanner from "./PhaseBanner.jsx";
-import PauseMenu from "./PauseMenu.jsx";
+import PauseMenu, { MenuButton, MENU_CSS } from "./PauseMenu.jsx";
 import HelpOverlay from "./HelpOverlay.jsx";
 import { hintFor } from "./hint.js";
 
@@ -76,6 +76,8 @@ export default function App() {
   /* null when closed, otherwise the tab id the manual should open on, so
      a button can drop the reader straight into the section it's about */
   const [help, setHelp] = useState(null);
+  /* the open menu's key handler, see the keydown effect below */
+  const menuKeys = useRef(null);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -96,11 +98,22 @@ export default function App() {
     playHelp();
     setHelp(null);
   }, []);
+  /* the menu plays its own way out (see PauseMenu.jsx) and calls closeMenu
+     when the animation is done. Stable, since the menu waits on it. */
+  const openMenu = useCallback(() => {
+    playMenu();
+    setPaused(true);
+  }, []);
+  const closeMenu = useCallback(() => setPaused(false), []);
 
-  /* "?" (or "h") toggles the manual anywhere in the app. The map itself is
-     pointer-only, so no keystroke here can collide with a game input. This
-     reads `help` and re-binds on it rather than using a setHelp updater:
-     the updater is the wrong place to fire a sound, since StrictMode runs
+  /* the one keydown listener. "?" (or "h") toggles the manual anywhere in
+     the app. Escape goes to whatever is on top: the manual closes itself
+     (HelpOverlay listens for its own Escape, so this steps aside while it
+     is open), then the open menu takes Escape, the arrows and Enter through
+     menuKeys, and with nothing open Escape opens the menu. The map itself is
+     pointer-only, so none of this collides with a game input. This reads
+     `help` and `paused` and re-binds on them rather than using updaters:
+     an updater is the wrong place to fire a sound, since StrictMode runs
      updaters twice in dev and the sting would double. */
   useEffect(() => {
     function onKey(e) {
@@ -109,11 +122,18 @@ export default function App() {
         e.preventDefault();
         if (help) closeHelp();
         else openHelp();
+        return;
+      }
+      if (help) return;
+      if (paused) menuKeys.current?.(e);
+      else if (e.key === "Escape" && !e.repeat && began && g.status === "playing") {
+        e.preventDefault();
+        openMenu();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [help, openHelp, closeHelp]);
+  }, [help, openHelp, closeHelp, paused, began, g, openMenu]);
 
   /* see DEV_KEYS. The orbit target is fixed at the board's centre, so
      restoring the four camera fields is the whole reference pose. */
@@ -140,6 +160,9 @@ export default function App() {
     gs.current.banner = { text: "Player Phase", side: "player", n: 0 };
     setFloats([]);
     setResetKey((k) => k + 1);
+    /* the menu can be open when the battle ends, since the enemy phase
+       plays on behind it, and it would reopen over the new board */
+    setPaused(false);
     restartAudio();
     setTrack("prelude");
   }
@@ -266,6 +289,7 @@ export default function App() {
           .bhud { animation: none; transition: none; }
           .bhud-fill { transition: none; }
         }
+        ${MENU_CSS}
       `}</style>
 
       {!began && <TitleCard onBegin={onBegin} onHelp={() => openHelp()} />}
@@ -302,16 +326,6 @@ export default function App() {
                 border: "2px solid #2f3746", background: "#9fc3d8", overflow: "hidden", touchAction: "none",
               }}
             />
-
-            {/* while paused, block input to the map and everything overlaid on it
-                (unit selection, action menu, forecast). Sized to the canvas only,
-                so it never covers the under-map row where Resume actually lives */}
-            {paused && g.status === "playing" && (
-              <div className="absolute" style={{
-                top: 0, left: 0, right: 0, height: "var(--view-h)",
-                zIndex: 45, background: "rgba(10,12,18,0.4)", cursor: "default",
-              }} />
-            )}
 
             {/* hint line: always names the next action; HTML, never inside the render buffer */}
             <div style={{
@@ -409,39 +423,39 @@ export default function App() {
               </div>
             )}
 
-            {/* the menu takes over this same under-map slot instead of floating
-                over the viewport; see PauseMenu.jsx. Gated on status==="playing"
-                so it can't get stuck open (or reachable) behind the end screen.
-                End turn and the resolution ("graphics") toggle live only inside
-                it now; Show threat/Rotate 90 stay available in both places. */}
+            {/* the menu, over the map: its button in the top-right corner and
+                the overlay itself at zIndex 50, above everything else on the
+                map and below the title card and the manual. See PauseMenu.jsx.
+                Gated on status==="playing" so it can't get stuck open (or
+                reachable) behind the end screen. */}
+            {began && g.status === "playing" && !paused && <MenuButton on={openMenu} />}
+            {paused && g.status === "playing" && (
+              <PauseMenu
+                onClosed={closeMenu} keysRef={menuKeys} helpOpen={!!help}
+                api={api} g={g} cam={cam} setCam={setCam} RES={RES}
+                onToggleCinematics={toggleCinematics}
+                onToggleOutlines={toggleOutlines}
+                musicOn={musicOn} onToggleMusic={toggleMusic}
+                track={track} onSetTrack={chooseTrack}
+                onHelp={() => openHelp()}
+                musicVol={musicVol} onSetMusicVol={changeMusicVol}
+                sfxVol={sfxVol} onSetSfxVol={changeSfxVol}
+              />
+            )}
+
+            {/* the under-map row: the threat range, a quarter turn of the
+                camera and the manual, each one tap from the board. End turn
+                and the settings live in the menu. */}
             <div className="mt-2">
-              {paused && g.status === "playing" ? (
-                <PauseMenu
-                  onResume={() => setPaused(false)}
-                  api={api} g={g} cam={cam} setCam={setCam} RES={RES}
-                  onToggleCinematics={toggleCinematics}
-                  onToggleOutlines={toggleOutlines}
-                  musicOn={musicOn} onToggleMusic={toggleMusic}
-                  track={track} onSetTrack={chooseTrack}
-                  onHelp={() => openHelp()}
-                  musicVol={musicVol} onSetMusicVol={changeMusicVol}
-                  sfxVol={sfxVol} onSetSfxVol={changeSfxVol}
-                />
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  <Btn on={() => { playMenu(); setPaused(true); }}
-                    disabled={g.status !== "playing"} strong>
-                    Menu
-                  </Btn>
-                  <Btn on={api.toggleDanger} active={g.danger}>
-                    {g.danger ? "Hide threat" : "Show threat"}
-                  </Btn>
-                  <Btn on={() => { playActionSelect(); setCam((c) => ({ ...c, yaw: (c.yaw + 90) % 360 })); }}>
-                    Rotate 90&deg;
-                  </Btn>
-                  <Btn on={() => openHelp()}>Help</Btn>
-                </div>
-              )}
+              <div className="flex flex-wrap gap-2">
+                <Btn on={api.toggleDanger} active={g.danger}>
+                  {g.danger ? "Hide threat" : "Show threat"}
+                </Btn>
+                <Btn on={() => { playActionSelect(); setCam((c) => ({ ...c, yaw: (c.yaw + 90) % 360 })); }}>
+                  Rotate 90&deg;
+                </Btn>
+                <Btn on={() => openHelp()}>Help</Btn>
+              </div>
             </div>
           </div>
 

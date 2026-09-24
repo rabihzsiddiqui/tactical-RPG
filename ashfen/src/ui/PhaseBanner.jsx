@@ -1,4 +1,4 @@
-import { C, DISPLAY, PHASE_BANNER_MS } from "./theme.js";
+import { C, DISPLAY, PHASE_BANNER_MS, SCRIM_RGB, SCRIM_RAMP as RAMP } from "./theme.js";
 
 /* a ribbon rather than a full-width slab. The old version slid a bar the
    whole viewport's width across the screen, which read as choppy simply
@@ -30,8 +30,8 @@ const TRACK = "0.18em";
    film letterboxes a title card: the board stays readable underneath, the
    ribbon stops competing with it. Two bands rather than one scrim with a
    hole in it, since the ribbon's pointed ends need the board showing
-   through around them. */
-const SCRIM_RGB = "10,12,18";
+   through around them. The colour and the ramp below live in theme.js,
+   since the pause menu dims the board the same way. */
 const SCRIM_A = 0.55;
 /* the inner edge of each band, the one facing the ribbon, is a ramp rather
    than a line. A plain two-stop gradient bands visibly across a dark sky,
@@ -41,7 +41,6 @@ const SCRIM_A = 0.55;
    line. Stops are given as a fraction of the ramp length back from the
    edge, so the whole thing scales with FADE. */
 const FADE = `clamp(28px, calc(${VH} * 0.09), 64px)`;
-const RAMP = [[1, 1], [0.65, 0.7], [0.38, 0.4], [0.16, 0.15], [0, 0]];
 const scrimAt = (a) => `rgba(${SCRIM_RGB},${(SCRIM_A * a).toFixed(3)})`;
 /* `dir` is the direction the ramp runs, so the outer edge of the band
    stays solid: it sits against the edge of the canvas, where there is no

@@ -15,6 +15,12 @@ export const C = {
   redLite: "#e0868a", gold: "#c8a04a", green: "#5f8a4a", table: "#0c0f16",
 };
 
+/* the dark scrim the phase banner and the pause menu lay over the map, and
+   the ramp both fade it by: [fraction of the ramp back from its inner edge,
+   fraction of full alpha]. PhaseBanner.jsx explains the shape. */
+export const SCRIM_RGB = "10,12,18";
+export const SCRIM_RAMP = [[1, 1], [0.65, 0.7], [0.38, 0.4], [0.16, 0.15], [0, 0]];
+
 /* the phase banner's full on-screen lifetime (enter + hold + exit). audio.js
    times the first "Player Phase" banner's music cue off this same number, so
    the sting-to-music handoff stays in sync with what's actually on screen. */

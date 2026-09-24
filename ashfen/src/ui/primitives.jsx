@@ -45,26 +45,30 @@ export function Btn({ children, on, disabled, active, strong, light }) {
 /* a labelled 0-to-1 slider, used for the volume rows in the pause menu.
    `on` fires on every drag step, since the whole point is hearing the level
    change as you move it. The percentage readout is there because the track
-   alone gives no sense of where you are once the sound stops. Thumb and
-   track styling lives in index.css under .vol, out of reach of inline
-   styles. */
-export function Slider({ label, value, on, onGrab }) {
+   alone gives no sense of where you are once the sound stops. Set for the
+   menu's dark panels; thumb and track styling lives in index.css under
+   .vol, out of reach of inline styles. Extra props land on the input. */
+export function Slider({ label, value, on, onGrab, ...rest }) {
   return (
-    <label style={{ display: "block", marginBottom: 6 }}>
+    <label style={{ display: "block" }}>
       <div className="flex items-center justify-between" style={{
-        fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", color: C.inkSoft,
+        fontFamily: MONO, fontSize: 10, letterSpacing: "0.14em", color: C.rule,
       }}>
         <span className="uppercase">{label}</span>
-        <span>{Math.round(value * 100)}%</span>
+        <span style={{ color: C.parch }}>{Math.round(value * 100)}%</span>
       </div>
       {/* onGrab fires once when the drag starts, not on every step. The
           sample runs about half a second, so a tick per pointer move would
           stack dozens of overlapping copies. Keyboard users get the same
-          single cue from the arrow keys. */}
+          single cue from left and right. Up and down move the menu's
+          highlight instead, so they change nothing here and stay silent. */}
       <input className="vol" type="range" min={0} max={1} step={0.01} value={value}
         aria-label={label}
+        {...rest}
         onPointerDown={onGrab}
-        onKeyDown={(e) => { if (onGrab && !e.repeat && e.key.startsWith("Arrow")) onGrab(); }}
+        onKeyDown={(e) => {
+          if (onGrab && !e.repeat && (e.key === "ArrowLeft" || e.key === "ArrowRight")) onGrab();
+        }}
         onChange={(e) => on(Number(e.target.value))} />
     </label>
   );

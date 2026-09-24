@@ -190,8 +190,9 @@ function Controls() {
 
       <Section title="Buttons">
         <Term k="Menu">
-          Holds End turn, the graphics resolution, the attack cinematics toggle, music on
-          and off, and the track selector, alongside Show threat and Rotate.
+          The button in the top right corner of the map. Holds Resume, End turn, the threat
+          range and this manual. Its Options hold the graphics resolution, the attack
+          cinematics, outlines, music on and off, the track, and both volumes.
         </Term>
         <Term k="Show threat">
           Shades every tile the enemy could attack next phase. Toggle it freely. It changes
@@ -212,7 +213,11 @@ function Controls() {
 
       <Section title="Keyboard">
         <Term k="? or H">Opens and closes this manual.</Term>
-        <Term k="Esc">Closes it.</Term>
+        <Term k="Esc">
+          Closes this manual. With it closed, opens and closes the Menu, and backs out of
+          Options first.
+        </Term>
+        <Term k="Arrows, Enter">Move through the Menu and pick.</Term>
       </Section>
     </>
   );
