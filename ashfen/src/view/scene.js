@@ -30,6 +30,7 @@ import { createDirector } from "./camera.js";
 import { createAttackPlayer, CARRY } from "./attacks.js";
 import { createEffects } from "./effects.js";
 import { createTileFog, updateTileFog, tileFog, tileFogProp } from "./tilefog.js";
+import { createWind } from "./wind.js";
 import { C } from "../ui/theme.js";
 import {
   playUnitSelect, playActionSelect, playBack, playCritHit, playMiss, playNoDamage, playDeath,
@@ -392,6 +393,11 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     u.view.readyRing = readyRing;
   }
 
+  /* ---- wind ----
+     see wind.js. Created here, after the board and the units, because it
+     patches materials already in the scene, on top of the haze. */
+  const wind = createWind({ scene });
+
   /* ---- post ---- */
   /* the depth texture feeds the outlines in POST_FRAG. It is the same 24
      bits the plain depth buffer was, so nothing z-fights differently.
@@ -416,6 +422,10 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true,
   });
   const normalMat = new THREE.MeshNormalMaterial({ flatShading: true });
+  /* the grass and canopies sway in the colour pass, so they sway here too.
+     Otherwise the depth edges would follow the blades and the creases
+     would stay where the blades were. */
+  wind.sway(normalMat);
   const sunDir = sun.position.clone().normalize();
   let lastOutlines = false;
   const postScene = new THREE.Scene();
@@ -1468,6 +1478,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     readyRingMat.uniforms.uTime.value = t;
     waterMat.uniforms.uTime.value = t;
     fallMat.uniforms.uTime.value = t;
+    wind.update(t);
     /* posterisation eases off during a cut-in. POST_FRAG quantises the
        frame to uLevels steps and skips the step entirely at 63 and above.
        At grid distance the banding is the look; at cut-in distance it

@@ -4,6 +4,11 @@ import * as THREE from "three";
 import { MW, MH, CX, CZ, cell, inB } from "../core/map.js";
 import { WEAPONS, PALS, SILHOUETTES, SILHOUETTE_DEFAULT } from "../core/data.js";
 
+/* how far the wind moves each prop at full strength, in world units at its
+   tallest point; see bakeSway below and SWAY_VERT in shaders.js */
+const SWAY_TUFT = 0.03;    // tip of the tallest grass blade
+const SWAY_CANOPY = 0.012; // top of a tree; the trunk does not move
+
 /* outlines. POST_FRAG draws them from rt's depth and from a normal pass
    that the camera renders with this layer switched off. noOutline() moves
    an object onto it: overlays, projectiles, effects, water, anything that
@@ -496,6 +501,39 @@ function buildHelm(style, headG, P, M, MM, box) {
   }
 }
 
+/* wind sway, baked once per proto. Each vertex gets an aSway attribute:
+   its reach in world units at full wind, scaled from `reach` at the
+   tallest vertex by (height above the prop's base / tallest) ^ power.
+   Power 1 leans the whole shape from its base, power 2 bends it, so the
+   tips travel and the roots stay put.
+
+   Baked into the geometry rather than passed per material, because the
+   outline normal pass draws every mesh with one override material: the
+   weight has to travel with the vertices for that pass to sway them by
+   the same amount as the colour pass. Clones share the geometry, so every
+   tile gets the attribute for free. The materials are flagged here, the
+   flags survive tileFogProp's clones in userData, and wind.js does the
+   patching. */
+function bakeSway(root, meshes, reach, power) {
+  root.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  let top = 0;
+  for (const m of meshes) {
+    const p = m.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) top = Math.max(top, v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld).y);
+  }
+  for (const m of meshes) {
+    const p = m.geometry.attributes.position;
+    const w = new Float32Array(p.count);
+    for (let i = 0; i < p.count; i++) {
+      const y = Math.max(0, v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld).y);
+      w[i] = reach * Math.pow(y / top, power);
+    }
+    m.geometry.setAttribute("aSway", new THREE.BufferAttribute(w, 1));
+    m.material.userData.sway = true;
+  }
+}
+
 export function buildTree() {
   const g = new THREE.Group();
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.5, 6),
@@ -509,6 +547,9 @@ export function buildTree() {
   const c3 = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.38, 7), b); c3.position.y = 1.2;
   g.add(c1, c2, c3);
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  bakeSway(g, [c1, c2, c3], SWAY_CANOPY, 1);
+  // a canopy is big enough for its shadow to be seen moving; see wind.js
+  a.userData.swayShadow = b.userData.swayShadow = true;
   return g;
 }
 
@@ -607,7 +648,9 @@ export function buildBush() {
     t.rotation.y = Math.random() * 6.28;
     g.add(t);
   }
-  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  const parts = [];
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; parts.push(o); } });
+  bakeSway(g, parts, SWAY_TUFT, 2);
   return g;
 }
 

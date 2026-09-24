@@ -8,6 +8,15 @@ const OUTLINE_FACING_MIN = 0.1; // how edge-on a surface may count, so a grazing
 const OUTLINE_CREASE = 0.2;     // 1 - cos of the shallowest crease that draws, about 37 degrees
 const OUTLINE_SIDE_EPS = 0.03;  // two faces lit within this of each other both take the highlight
 const OUTLINE_RUSH = 8.0;       // the lines are gone once the director's rush passes 1 / this
+
+/* wind tunables, templated into the wind GLSL at the end of this file.
+   Speeds and reaches are at wind strength 1; direction and strength are
+   uWind, set in wind.js. How far each prop sways is baked by meshes.js. */
+const SWAY_REST = 0.35;        // share of the reach held as a steady lean downwind
+const SWAY_GUST_LEN = 5.0;     // world units between gust crests rolling downwind
+const SWAY_GUST_SPEED = 1.4;   // how fast the crests roll, world units per second
+const SWAY_FLUTTER = 0.25;     // flutter reach against a full gust's 1, out of step blade to blade
+const SWAY_FLUTTER_RATE = 3.3; // flutter speed in radians per second, about half a hertz
 const glf = (x) => x.toFixed(3);
 
 export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
@@ -346,4 +355,32 @@ export const IMPACT_FRAG = `
     float ring = smoothstep(0.12, 0.0, abs(d - r)) * (1.0 - uT) * 0.7;
     vec3 c = mix(uColor, vec3(1.0), core * 0.5);
     gl_FragColor = linearToOutputTexel(vec4(c, core + ring));
+  }`;
+
+/* the wind, see wind.js. The chunks below are not whole shaders: wind.js
+   splices them into three's own Lambert, Standard, depth and normal
+   shaders through onBeforeCompile, so the lighting stays three's and only
+   the named lines are added.
+
+   SWAY_VERT: windSway() returns the offset for one vertex, in the mesh's
+   own space. aSway is baked by meshes.js: the vertex's reach in world
+   units at full wind, 0 at the base. The offset is worked out in world
+   space, so a gust rolls across the whole field in the wind's direction
+   whichever way each prop is turned, and it is phased by world position
+   so no two tufts move together. Then it is turned back into the mesh's
+   space and added to `transformed`, so every later stage sees the moved
+   vertex, the shadow lookup included. Anything without aSway reads 0 and
+   stays put; wind.js explains why the outline normal pass depends on
+   that. */
+export const SWAY_VERT = `
+  attribute float aSway;
+  uniform vec3 uWind;
+  uniform float uTime;
+  vec3 windSway(vec3 p) {
+    if (aSway <= 0.0) return vec3(0.0);
+    vec3 w = (modelMatrix * vec4(p, 1.0)).xyz;
+    float gust = 0.5 + 0.5 * sin((dot(w.xz, uWind.xy) - uTime * ${glf(SWAY_GUST_SPEED)}) * ${glf(6.2832 / SWAY_GUST_LEN)});
+    float flutter = sin(uTime * ${glf(SWAY_FLUTTER_RATE)} + dot(w.xz, vec2(4.3, 3.1)));
+    float reach = aSway * uWind.z * (${glf(SWAY_REST)} + ${glf(1 - SWAY_REST)} * gust + ${glf(SWAY_FLUTTER)} * flutter);
+    return inverse(mat3(modelMatrix)) * vec3(uWind.x * reach, 0.0, uWind.y * reach);
   }`;
