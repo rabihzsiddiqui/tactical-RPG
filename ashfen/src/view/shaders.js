@@ -21,6 +21,12 @@ const CLOUD_SCALE = 32.0;      // world units one repeat of the noise texture sp
 const CLOUD_SPEED = 0.2;       // world units per second: an edge takes five seconds to cross a tile
 const CLOUD_CUT = 0.53;        // noise above this is cloud, about 40 percent of the sky
 const CLOUD_SUN = 0.35;        // share of the sun a cloud lets through
+const ASH_DRIFT = 0.35;        // downwind speed, world units per second, varied 0.7x to 1.3x per flake
+const ASH_FALL = 0.12;         // fall speed, world units per second, varied 0.6x to 1.4x per flake
+const ASH_WOBBLE = 0.08;       // how far a flake wanders off its line, world units
+const ASH_WOBBLE_RATE = 0.9;   // wander speed, radians per second
+const ASH_EMBERS = 0.1;        // share of the flakes that are embers
+const ASH_EMBER_GAIN = 1.3;    // embers burn this much brighter than their colour
 const glf = (x) => x.toFixed(3);
 
 export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
@@ -417,3 +423,39 @@ export const CLOUD_FRAG = `
     p = fract((p - uWind.xy * (uWind.z * uTime * ${glf(CLOUD_SPEED)})) / ${glf(CLOUD_SCALE)});
     return 1.0 - step(${glf(CLOUD_CUT)}, texture2D(uCloud, p).r) * ${glf(1 - CLOUD_SUN)};
   }`;
+
+/* ASH_VERT and ASH_FRAG: the ash, one THREE.Points over the board. Each
+   flake's path is worked out here from uTime and its own seed, so the CPU
+   never touches it after mount. `position` holds where the flake starts
+   in the volume, 0..1 on each axis. It drifts downwind, falls, wanders a
+   little, and mod() wraps it back in on the far side when it leaves.
+
+   The point size is a fixed 2 pixels whatever the distance, so a flake
+   drifting past the lens in a cut-in stays a speck rather than a blob.
+   One flat colour per flake, so there is nothing to band. */
+export const ASH_VERT = `
+  uniform vec3 uWind;
+  uniform float uTime;
+  uniform vec3 uBoxMin;
+  uniform vec3 uBoxSize;
+  uniform vec3 uGrey;
+  uniform vec3 uEmber;
+  attribute float aSeed;
+  varying vec3 vColor;
+  void main() {
+    float drift = ${glf(ASH_DRIFT)} * (0.7 + 0.6 * fract(aSeed * 17.31));
+    float fall = ${glf(ASH_FALL)} * (0.6 + 0.8 * fract(aSeed * 43.97));
+    float ph = aSeed * 43.98;
+    vec3 p = position * uBoxSize;
+    p.xz += uWind.xy * (uWind.z * drift * uTime);
+    p.y -= fall * uTime;
+    p.x += sin(uTime * ${glf(ASH_WOBBLE_RATE)} + ph) * ${glf(ASH_WOBBLE)};
+    p.z += sin(uTime * ${glf(ASH_WOBBLE_RATE * 1.3)} + ph * 1.7) * ${glf(ASH_WOBBLE)};
+    p = mod(p, uBoxSize);
+    gl_Position = projectionMatrix * viewMatrix * vec4(uBoxMin + p, 1.0);
+    gl_PointSize = 2.0;
+    vColor = aSeed < ${glf(ASH_EMBERS)} ? uEmber * ${glf(ASH_EMBER_GAIN)} : uGrey;
+  }`;
+export const ASH_FRAG = `
+  varying vec3 vColor;
+  void main() { gl_FragColor = linearToOutputTexel(vec4(vColor, 1.0)); }`;

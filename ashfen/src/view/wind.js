@@ -1,30 +1,38 @@
-/* wind: the grass and the tree canopies sway, and cloud shadows drift
-   over the board. Everything the wind moves reads one uWind uniform, so it
-   all agrees on which way the wind blows, and one uTime, the same seconds
+/* wind: the grass and the tree canopies sway, cloud shadows drift over the
+   board, and ash falls through it. All three read one uWind uniform, so
+   they agree on which way the wind blows, and one uTime, the same seconds
    the other scene shaders get. Everything moves in the shaders. After
    mount the CPU writes one float a frame.
 
    uWind is (x, z, strength): a unit direction on the ground and a scale on
    every speed and reach in the wind GLSL, whose tunables sit at the top of
    shaders.js. Motion there is speed times time, so changing uWind at
-   runtime would jump every cloud to wherever the new speed puts it. It is
-   set once. Gusts come from the sway shader, not from here.
+   runtime would jump every cloud and flake to wherever the new speed puts
+   them. It is set once. Gusts come from the sway shader, not from here.
 
-   None of this adds a render pass. The tree canopies swap their shadow
-   material for one that sways, and the rest is a few lines spliced into
-   shaders the board already runs. */
+   None of this adds a render pass. The ash is one draw call, the tree
+   canopies swap their shadow material for one that sways, and the rest is
+   a few lines spliced into shaders the board already runs. */
 
 import * as THREE from "three";
-import { SWAY_VERT, CLOUD_VERT, CLOUD_FRAG } from "./shaders.js";
+import { MW, MH } from "../core/map.js";
+import { SWAY_VERT, CLOUD_VERT, CLOUD_FRAG, ASH_VERT, ASH_FRAG } from "./shaders.js";
+import { noOutline } from "./meshes.js";
 
 const WIND_DIR = [1, -0.4];  // which way it blows, world x and z: left to right from the home pose, a little away from the camera
 const WIND_STRENGTH = 1;     // scales every speed and reach in the wind GLSL
 const CLOUD_TEX = 64;        // noise texture size, texels per side
 const CLOUD_CELLS = 8;       // value noise cells across the texture; the second octave has twice as many
+const ASH_COUNT = 320;       // flakes over the whole board
+const ASH_FLOOR = -0.4;      // bottom of the ash volume, just under the river bed
+const ASH_CEIL = 3.2;        // top of the ash volume, well above anything standing on the board
+const ASH_MARGIN = 0.5;      // how far the volume reaches past the board's edge
+const ASH_GREY = 0xc9c6bf;   // most flakes
+const ASH_EMBER = 0xff8a3c;  // the ember share, ASH_EMBERS in shaders.js
 
-/* an integer hash in place of Math.random, so the sky is the same every
-   launch, and a harness that seeds Math.random for pixel diffs sees every
-   other random draw land exactly where it did before */
+/* an integer hash in place of Math.random, so the sky and the ash are the
+   same every launch, and a harness that seeds Math.random for pixel diffs
+   sees every other random draw land exactly where it did before */
 function hash(i, j, k) {
   let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(k, 1274126177);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -76,6 +84,40 @@ const LIGHTS_WITH_CLOUD = "float cloud = cloudSun();\n" + splice(
   THREE.ShaderChunk.lights_fragment_begin, SUN_LINE,
   "#if UNROLLED_LOOP_INDEX < NUM_DIR_LIGHT_SHADOWS\n  directLight.color *= cloud;\n#endif"
 );
+
+/* see ASH_VERT. Transparent so it draws after the solids: it writes no
+   depth, and in the opaque pass anything drawn after a flake would paint
+   straight over it. renderOrder 1 puts it after the units too, which
+   live in the transparent pass for their fades, so a flake in front of a
+   fighter in a cut-in stays in front. The health bars and bursts sit at
+   10 and up, over it. noOutline keeps the flakes out of the normal pass
+   and zeroes the outline mask under each one. */
+function buildAsh(uniforms) {
+  const pos = new Float32Array(ASH_COUNT * 3), seed = new Float32Array(ASH_COUNT);
+  for (let i = 0; i < ASH_COUNT; i++) {
+    pos.set([hash(i, 1, 7), hash(i, 2, 7), hash(i, 3, 7)], i * 3);
+    seed[i] = hash(i, 4, 7);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
+  const w = MW + ASH_MARGIN * 2, d = MH + ASH_MARGIN * 2;
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: ASH_VERT, fragmentShader: ASH_FRAG,
+    uniforms: {
+      uWind: uniforms.uWind, uTime: uniforms.uTime,
+      uBoxMin: { value: new THREE.Vector3(-w / 2, ASH_FLOOR, -d / 2) },
+      uBoxSize: { value: new THREE.Vector3(w, ASH_CEIL - ASH_FLOOR, d) },
+      uGrey: { value: new THREE.Color(ASH_GREY) },
+      uEmber: { value: new THREE.Color(ASH_EMBER) },
+    },
+    transparent: true, depthWrite: false,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false; // the stored positions are seeds, not places
+  pts.renderOrder = 1;
+  return noOutline(pts);
+}
 
 /* call once the board and the units are in the scene. Every lit solid in
    it takes the cloud shadow, and the props meshes.js flagged take the
@@ -149,6 +191,9 @@ export function createWind({ scene, sun }) {
       if (m.userData.swayShadow) o.customDepthMaterial = swayDepth;
     }
   });
+
+  // after the traverse, which has no business with the flakes
+  scene.add(buildAsh(uniforms));
 
   return {
     sway: (m) => patch(m, true, false),
