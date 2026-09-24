@@ -395,8 +395,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
 
   /* ---- wind ----
      see wind.js. Created here, after the board and the units, because it
-     patches materials already in the scene, on top of the haze. */
-  const wind = createWind({ scene });
+     patches materials already in the scene, on top of the haze. The sun
+     sets the angle cloud shadows fall at. */
+  const wind = createWind({ scene, sun });
 
   /* ---- post ---- */
   /* the depth texture feeds the outlines in POST_FRAG. It is the same 24

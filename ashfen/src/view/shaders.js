@@ -17,6 +17,10 @@ const SWAY_GUST_LEN = 5.0;     // world units between gust crests rolling downwi
 const SWAY_GUST_SPEED = 1.4;   // how fast the crests roll, world units per second
 const SWAY_FLUTTER = 0.25;     // flutter reach against a full gust's 1, out of step blade to blade
 const SWAY_FLUTTER_RATE = 3.3; // flutter speed in radians per second, about half a hertz
+const CLOUD_SCALE = 32.0;      // world units one repeat of the noise texture spans
+const CLOUD_SPEED = 0.2;       // world units per second: an edge takes five seconds to cross a tile
+const CLOUD_CUT = 0.53;        // noise above this is cloud, about 40 percent of the sky
+const CLOUD_SUN = 0.35;        // share of the sun a cloud lets through
 const glf = (x) => x.toFixed(3);
 
 export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
@@ -369,9 +373,9 @@ export const IMPACT_FRAG = `
    whichever way each prop is turned, and it is phased by world position
    so no two tufts move together. Then it is turned back into the mesh's
    space and added to `transformed`, so every later stage sees the moved
-   vertex, the shadow lookup included. Anything without aSway reads 0 and
-   stays put; wind.js explains why the outline normal pass depends on
-   that. */
+   vertex, the shadow lookup and the cloud shadow included. Anything
+   without aSway reads 0 and stays put; wind.js explains why the outline
+   normal pass depends on that. */
 export const SWAY_VERT = `
   attribute float aSway;
   uniform vec3 uWind;
@@ -383,4 +387,33 @@ export const SWAY_VERT = `
     float flutter = sin(uTime * ${glf(SWAY_FLUTTER_RATE)} + dot(w.xz, vec2(4.3, 3.1)));
     float reach = aSway * uWind.z * (${glf(SWAY_REST)} + ${glf(1 - SWAY_REST)} * gust + ${glf(SWAY_FLUTTER)} * flutter);
     return inverse(mat3(modelMatrix)) * vec3(uWind.x * reach, 0.0, uWind.y * reach);
+  }`;
+
+/* CLOUD_VERT and CLOUD_FRAG: cloud shadows. The vertex stage hands on the
+   world position. The fragment stage slides it along the sun's rays down
+   to the ground plane, so the shadow on a raised tile, a wall or a unit's
+   side lines up with the shadow on the ground beside it, and reads the
+   noise there, scrolled downwind.
+
+   step(), not smoothstep: a soft edge is a ramp, and the posteriser would
+   cut it into bands. Inside a cloud, cloudSun() is one constant, so a
+   face under it stays one flat colour. wind.js multiplies it into the
+   sun's direct light only, not the whole colour. A face already in shadow
+   has no sun to lose, so a tree's shadow merges into the cloud's instead
+   of stacking darker under it, which is how it looks outdoors.
+
+   fract() keeps the lookup inside 0..1 however long the app has been
+   open, since some phone GPUs lose sub-texel precision on large texture
+   coordinates. With no mipmaps, the jump it makes costs nothing. */
+export const CLOUD_VERT = `varying vec3 vCloudW;`;
+export const CLOUD_FRAG = `
+  uniform vec3 uWind;
+  uniform float uTime;
+  uniform sampler2D uCloud;
+  uniform vec3 uSunDir;
+  varying vec3 vCloudW;
+  float cloudSun() {
+    vec2 p = vCloudW.xz - uSunDir.xz * (vCloudW.y / uSunDir.y);
+    p = fract((p - uWind.xy * (uWind.z * uTime * ${glf(CLOUD_SPEED)})) / ${glf(CLOUD_SCALE)});
+    return 1.0 - step(${glf(CLOUD_CUT)}, texture2D(uCloud, p).r) * ${glf(1 - CLOUD_SUN)};
   }`;
