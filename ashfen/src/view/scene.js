@@ -1414,8 +1414,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      see sky.js. Built last on purpose: three draws Math.random for every
      mesh, material and geometry's uuid, and building these before the
      grass, the trees, the units and the effects would move every seeded
-     random draw they make, which the pixel-diff harness depends on. */
-  const sky = createSky({ scene });
+     random draw they make, which the pixel-diff harness depends on. The
+     sun decides which ridge faces are lit. */
+  const sky = createSky({ scene, sun });
 
   /* ---- loop ---- */
   let raf = 0, prevT = performance.now();

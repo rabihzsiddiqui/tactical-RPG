@@ -32,8 +32,9 @@ const ASH_EMBER = 0xff8a3c;  // the ember share, ASH_EMBERS in shaders.js
 
 /* an integer hash in place of Math.random, so the sky and the ash are the
    same every launch, and a harness that seeds Math.random for pixel diffs
-   sees every other random draw land exactly where it did before */
-function hash(i, j, k) {
+   sees every other random draw land exactly where it did before. sky.js
+   lays out the ridges with it for the same reason. */
+export function hash(i, j, k) {
   let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(k, 1274126177);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
