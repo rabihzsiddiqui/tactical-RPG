@@ -56,9 +56,9 @@ const ZOOM_MIN = 4.5, ZOOM_MAX = 22, ZOOM_STEP = 1.18;
    default zoom out over empty sky. */
 const BOARD = { x: MW / 2 + 0.3, z: MH / 2 + 0.3, yLo: -0.6, yHi: 1.9 };
 
-/* every light on the board, tuned for this map specifically (Ashfen Pass's
-   terrain palette skews dark). If a second map ever ships, this becomes a
-   per-map parameter handed to mountScene rather than a shared constant.
+/* every light on the board, tuned for this map specifically. If a second
+   map ever ships, this becomes a per-map parameter handed to mountScene
+   rather than a shared constant.
    The cut-in key light and the impact flare belong to camera.js and
    effects.js and are not in here. */
 const LIGHTS = {
@@ -138,7 +138,12 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      colour is constant per face, so lightening TYPES in core/map.js (or
      giving it a per-row ramp) cannot band. Ambient is a weak lever by
      comparison: 1.55 to 2.2 moves the far band only 37 to 40, because
-     what was lost is a gradient and ambient lifts everything evenly. */
+     what was lost is a gradient and ambient lifts everything evenly.
+
+     All of those numbers were measured before POST_FRAG had an sRGB
+     encode, when the canvas showed linear light and the board sat far
+     darker than its palette. The encode lifted it; the palette was never
+     as dark as this comment used to say. */
   const camera = new THREE.PerspectiveCamera(30, 1.6, 0.5, 120);
   /* overlays live on their own layer so the outline normal pass can leave
      them out by switching it off; see noOutline in meshes.js */
@@ -379,10 +384,17 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   /* the depth texture feeds the outlines in POST_FRAG. It is the same 24
      bits the plain depth buffer was, so nothing z-fights differently.
      setSize disposes the target and three reallocates the depth texture at
-     the new size on the next render. */
+     the new size on the next render.
+
+     The colour is stored sRGB encoded: the GPU encodes on write and decodes
+     on read, so every shader on either side still sees linear light, but the
+     8 bits are spent where the eye can tell them apart. Linear light in a
+     plain 8-bit target bands the darks as soon as the posteriser lets go in
+     the cut-in. Alpha, the outline mask, is not encoded. */
   const rt = new THREE.WebGLRenderTarget(400, 240, {
     minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
-    format: THREE.RGBAFormat, depthBuffer: true, depthTexture: new THREE.DepthTexture(400, 240),
+    format: THREE.RGBAFormat, colorSpace: THREE.SRGBColorSpace,
+    depthBuffer: true, depthTexture: new THREE.DepthTexture(400, 240),
   });
   /* the outline normal pass: the solids again, each drawn as its view-space
      normal. Flat shaded so a crease is a crease: the trees, bushes and keep

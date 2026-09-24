@@ -11,7 +11,7 @@ const OUTLINE_RUSH = 8.0;       // the lines are gone once the director's rush p
 const glf = (x) => x.toFixed(3);
 
 export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
-/* POST_FRAG: posterise, warm, vignette. uRush is the camera director's
+/* POST_FRAG: encode, posterise, warm, vignette. uRush is the camera director's
    transit speed, 0 at rest and 1 at the peak of a fly-in. While it is up,
    each pixel averages eight taps along the line from itself toward the
    screen centre, a smear that grows with distance from the centre, so
@@ -19,6 +19,16 @@ export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec
    Taps step inward rather than outward so the streak reads as the
    world rushing at the lens. The blur runs before the posteriser, which
    would otherwise cut the averaged ramps back into bands.
+
+   rt holds linear light, and this pass is what puts the frame on the
+   canvas, so it owes the sRGB encode that three adds by itself when a
+   scene draws straight to the screen (which is why post off never looked
+   dark). It sits after the blur, which should average light rather than
+   encoded values, and before the posteriser, so the levels are spread
+   evenly over what the eye sees. Without it the canvas showed linear
+   values as if they were encoded: the sky came out at (89,135,168)
+   instead of its (159,195,216), and the whole lit board sat in the
+   bottom six of 32 levels, where one level is a big step.
 
    The quantiser is undithered on purpose. It only bands where it is fed a
    smooth ramp, and the scene no longer has one: the distance fog that
@@ -110,6 +120,7 @@ export const POST_FRAG = `
     } else {
       c = texture2D(tDiffuse, vUv).rgb;
     }
+    c = linearToOutputTexel(vec4(c, 1.0)).rgb;
     if (uLevels < 63.0) c = floor(c*uLevels + 0.5)/uLevels;
     if (uOutline > 0.5) c *= outline();
     c = mix(c, c*vec3(1.06,1.01,0.93), 0.5);
@@ -117,6 +128,11 @@ export const POST_FRAG = `
     gl_FragColor = vec4(c,1.0);
   }`;
 
+/* every scene shader below ends in linearToOutputTexel, three's own output
+   encode. Drawing into rt it does nothing, since rt holds linear light and
+   POST_FRAG encodes. With post off the scene draws straight to the canvas,
+   and it is the same sRGB encode three's built-in materials apply there,
+   so the two paths show the same colours. */
 export const TILE_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`;
 export const TILE_FRAG = `
   precision mediump float;
@@ -126,7 +142,7 @@ export const TILE_FRAG = `
     float b=min(min(p.x,1.-p.x),min(p.y,1.-p.y));
     float edge=smoothstep(0.10,0.05,b);
     float pulse=0.80+sin(uTime*2.6)*0.12;
-    gl_FragColor=vec4(uColor,(edge*0.75+0.26)*pulse);
+    gl_FragColor=linearToOutputTexel(vec4(uColor,(edge*0.75+0.26)*pulse));
   }`;
 
 export const RING_FRAG = `
@@ -137,7 +153,7 @@ export const RING_FRAG = `
     float r=0.74+sin(uTime*4.5)*0.06;
     float ring=smoothstep(0.10,0.0,abs(d-r));
     float glow=smoothstep(1.0,0.15,d)*0.16;
-    gl_FragColor=vec4(uColor, ring*0.95+glow);
+    gl_FragColor=linearToOutputTexel(vec4(uColor, ring*0.95+glow));
   }`;
 
 /* the water, in the Wind Waker key: flat bright tones, a lapping white
@@ -176,7 +192,11 @@ export const WATER_VERT = `
    The rest is three flat colour steps for depth, two more for the swell,
    a wobbling white collar at the waterline with a second band trailing
    behind it, and sparse diamond glints. Bands are cut with step, not
-   smoothstep, on purpose: the hard edge is the whole look. */
+   smoothstep, on purpose: the hard edge is the whole look.
+
+   The colours are sRGB values picked by eye against the screen, so the
+   result goes through sRGBTransferEOTF into linear light like the rest of
+   the frame, and the encode on the way out gives back exactly these. */
 export const WATER_FRAG = `
   uniform float uTime; uniform sampler2D uShore;
   uniform vec2 uOrigin; uniform vec2 uSize; uniform float uRange; uniform vec3 uSun;
@@ -229,7 +249,7 @@ export const WATER_FRAG = `
 
     c = mix(c, vec3(0.93,0.99,1.0), foam);
     c = mix(c, vec3(1.0), glint*0.85);
-    gl_FragColor = vec4(c,1.0);
+    gl_FragColor = linearToOutputTexel(sRGBTransferEOTF(vec4(c,1.0)));
   }`;
 
 /* the waterfall: what the river does when it runs out of map. One quad
@@ -260,7 +280,8 @@ export const FALL_VERT = `
 
    No precision qualifier: world positions here run to a few tens of
    units and mediump would quantise the ribbon phases into steps you can
-   see. uTop is the world height of the lip, uHeight the drop. */
+   see. uTop is the world height of the lip, uHeight the drop. Colours
+   are sRGB, decoded on the way out, as in WATER_FRAG. */
 export const FALL_FRAG = `
   uniform float uTime; uniform float uTop; uniform float uHeight;
   varying vec3 vPos; varying float vSpan;
@@ -288,7 +309,7 @@ export const FALL_FRAG = `
     float body = 1.0 - smoothstep(0.62, 1.0, t);
     float chunk = 1.0 - step(0.42, fract(ph*0.5 + 0.3));
     float shred = mix(1.0, chunk, smoothstep(0.45, 0.90, t));
-    gl_FragColor = vec4(c, clamp(body*shred + crest, 0.0, 1.0));
+    gl_FragColor = linearToOutputTexel(sRGBTransferEOTF(vec4(c, clamp(body*shred + crest, 0.0, 1.0))));
   }`;
 
 /* attack effects, see effects.js. Both use TILE_VERT for the vertex stage
@@ -307,7 +328,7 @@ export const TRAIL_FRAG = `
     float along = clamp(1.0 - vUv.x / max(uLen, 0.001), 0.0, 1.0);
     float across = 1.0 - abs(vUv.y - 0.5) * 1.2;
     float a = along * along * across * uFade * 0.85 * uGain;
-    gl_FragColor = vec4(uColor, a);
+    gl_FragColor = linearToOutputTexel(vec4(uColor, a));
   }`;
 
 /* IMPACT_FRAG: the burst quad at the point of contact. uT runs 0 to 1
@@ -324,5 +345,5 @@ export const IMPACT_FRAG = `
     float r = 0.2 + uT * 0.8;
     float ring = smoothstep(0.12, 0.0, abs(d - r)) * (1.0 - uT) * 0.7;
     vec3 c = mix(uColor, vec3(1.0), core * 0.5);
-    gl_FragColor = vec4(c, core + ring);
+    gl_FragColor = linearToOutputTexel(vec4(c, core + ring));
   }`;
