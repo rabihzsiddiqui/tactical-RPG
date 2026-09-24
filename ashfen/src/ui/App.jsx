@@ -28,6 +28,15 @@ const ONBOARD_KEY = "tactical-rpg-onboarded";
    accessibility choice (camera motion) as a taste one, and it should not
    come back on every launch of the installed app. */
 const CINEMATICS_KEY = "tactical-rpg-cinematics";
+/* the orbit pose a fresh board opens on. The dev reference-pose key snaps back to it. */
+const CAM_HOME = { pitch: 48, yaw: 0, fov: 30, zoom: 12 };
+/* dev builds only: fixed shots for graphics work, so screenshots from one
+   session line up with the next. Clear of "?" and "h" below and the
+   manual's Escape. The cut-in lives in scene.js as apiRef.refCutIn. */
+const DEV_KEYS = { pose: "p", cutIn: "c" };
+if (import.meta.env.DEV) {
+  console.info(`dev keys: "${DEV_KEYS.pose}" reference pose, "${DEV_KEYS.cutIn}" reference cut-in (press again to release)`);
+}
 
 export default function App() {
   const mountRef = useRef(null);
@@ -41,7 +50,7 @@ export default function App() {
   const [, tick] = useReducer((n) => n + 1, 0);
   const [floats, setFloats] = useState([]);
   const [cam, setCam] = useState(() => ({
-    pitch: 48, yaw: 0, fov: 30, zoom: 12, res: RES.length - 1, post: true, levels: 32,
+    ...CAM_HOME, res: RES.length - 1, post: true, levels: 32,
     cinematics: typeof localStorage === "undefined" || localStorage.getItem(CINEMATICS_KEY) !== "0",
   }));
   const camRef = useRef(cam);
@@ -101,6 +110,20 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [help, openHelp, closeHelp]);
+
+  /* see DEV_KEYS. The orbit target is fixed at the board's centre, so
+     restoring the four camera fields is the whole reference pose. */
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    function onKey(e) {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const k = e.key.toLowerCase();
+      if (k === DEV_KEYS.pose) setCam((c) => ({ ...c, ...CAM_HOME }));
+      else if (k === DEV_KEYS.cutIn) apiRef.current.refCutIn?.();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   /* mirrors onBegin below: same manual first "Player Phase" banner (the
      event stream itself only emits that banner when returning from an

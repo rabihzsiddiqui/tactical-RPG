@@ -1281,6 +1281,50 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     isBusy: () => busy,
   };
 
+  /* dev builds only: the reference cut-in, a fixed shot for judging the look
+     between sessions. It frames the closest player and enemy by ROSTER start
+     position, so a fresh board gives the same pair every time, and shows
+     what a real cut-in shows (the HUD, the world bars hidden, bystanders
+     veiled, the player unit squared up as the first strike would turn it)
+     without playing a strike or resolving anything. Holds, with the board
+     locked, until called again, then puts the facing back. Vite drops the
+     block from the build. */
+  if (import.meta.env.DEV) {
+    let held = null;    // { src, yaw, blocked } while the shot holds, null when released
+    let moving = false; // a press during the fly in or out is ignored
+    apiRef.current.refCutIn = async () => {
+      if (moving || (!held && (busy || director.active))) return;
+      moving = true;
+      if (held) {
+        g.cutIn.closing = true;
+        tick();
+        held.src.anim.targetYaw = held.yaw;
+        await Promise.all([director.flyOut(), veilTo(held.blocked, 1, VEIL_IN_MS)]);
+        if (held.blocked.length) syncUnitVisuals();
+        g.cutIn = null;
+        held = null;
+        busy = false;
+        tick();
+      } else {
+        let pair = null, best = Infinity;
+        ROSTER.forEach((a, i) => ROSTER.forEach((b, j) => {
+          const d = man(a.x, a.y, b.x, b.y);
+          if (a.team === "player" && b.team === "enemy" && d < best) { best = d; pair = ["u" + i, "u" + j]; }
+        }));
+        const [src, tgt] = pair.map((id) => g.units.find((u) => u.id === id));
+        if (src.hp > 0 && tgt.hp > 0) {
+          busy = true;
+          g.cutIn = { srcId: src.id, tgtId: tgt.id, kind: "strike", closing: false, f: forecastOf(src, tgt), amount: 0 };
+          tick();
+          held = { src, yaw: src.anim.targetYaw, blocked: inTheWay(src, tgt) };
+          faceToward(src, tgt);
+          await Promise.all([director.flyIn(src, tgt, { leftIsSource: true }), veilTo(held.blocked, 0, VEIL_OUT_MS)]);
+        }
+      }
+      moving = false;
+    };
+  }
+
   /* ---- loop ---- */
   let raf = 0, prevT = performance.now();
   /* the orbit distance at which BOARD exactly fills the frame.

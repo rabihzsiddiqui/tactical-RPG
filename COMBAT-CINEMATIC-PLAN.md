@@ -360,6 +360,12 @@ earlier work. Records decisions the code alone doesn't explain.
 - Fighter and Brigand are the same archetype, bare arms and no helm, told apart by team palette. Mercenary differs by keeping sleeves and adding pauldrons. The Warlord's horns are in the plume gold and read as crown spikes more than horns, which suits a boss and was left.
 - Verified with a lineup harness (`verify-lineup.html`, not committed) that rendered each class at front, three-quarter, side and as a black silhouette on white, plus one real enemy phase through the cut-in.
 
+**Dev reference poses (setup for the graphics sessions, 8 to 12).**
+- Two keys in `npm run dev` only, logged to the console on load and stripped from the build: `p` snaps the orbit to `CAM_HOME` in `App.jsx` (pitch 48, yaw 0, fov 30, zoom 12; the orbit target is always the board centre), `c` toggles the reference cut-in (`refCutIn` on the scene api). Screenshots for any visual change are taken at both.
+- The cut-in pair is the closest player and enemy by ROSTER start position: Doran (u2) at (5,8) against the Mercenary (u11) at (6,6). Press it on a fresh board. It frames those two units wherever they currently stand.
+- They are 2.24 tiles apart, so the framing distance is about 2.4 against 1.8 for an adjacent melee exchange. The reference is a little wider than most real cut-ins; judge scale against that.
+- It shows what a real cut-in shows (HUD, world bars hidden, bystanders veiled) and squares the player unit up with `faceToward`, as the first strike would. That snaps to a cardinal, so Doran faces north rather than straight at the Mercenary. The facing is restored on release. No strike plays, nothing resolves, and taps are locked while it holds.
+
 **Known issues carried forward.** Bystanders behind the fighters are still common on turn 1 with either side chosen; the formation is simply crowded. A close bystander still catches the key light on its helm. Standard materials and the two idle lights are still untested on a phone; the performance budget asked for that check before Session 5 and it has not happened. oxlint reports `react(refs)` warnings for every read of `g` during render, including the new HUD block; that pattern predates this plan.
 
 **At the end of every session:** append anything decided and why, but only where
