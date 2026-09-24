@@ -13,7 +13,7 @@ const OUTLINE_RUSH = 8.0;       // the lines are gone once the director's rush p
    lowland round the map (sky.js), by distance from the map's edge */
 const GROUND_FOG_EDGE = 0.35;   // fog on the lowland right at the map's edge
 const GROUND_FOG_FULL = 18;     // distance from the map's edge where it is all fog, the dome's own colour under the horizon
-const GROUND_FOG_TOP = 0.05;    // world height over which nothing takes the fog: the lowland, the river run-out and its banks all sit at or under it
+const GROUND_FOG_TOP = 0.05;    // world height over which nothing takes the fog or the map's outline: the lowland, the river run-out and its banks all sit at or under it
 
 /* wind tunables, templated into the wind GLSL at the end of this file.
    Speeds and reaches are at wind strength 1; direction and strength are
@@ -59,7 +59,7 @@ export const GROUND_FOG_PARS = `
   }`;
 
 export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
-/* POST_FRAG: encode, posterise, fog, warm, vignette. uRush is the camera director's
+/* POST_FRAG: encode, posterise, outline, fog, warm, vignette. uRush is the camera director's
    transit speed, 0 at rest and 1 at the peak of a fly-in. While it is up,
    each pixel averages eight taps along the line from itself toward the
    screen centre, a smear that grows with distance from the centre, so
@@ -114,9 +114,15 @@ export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec
    dirty it. Depth math and the tap coordinates are highp: mediump holds
    neither a linear depth nor a one-texel step at native width.
 
+   The map's outline is found in world space, since the lowland is flush
+   with the board and neither depth nor normal changes at its edge.
+   worldAt() works a pixel's world position back from depth through
+   uCamWorld, the camera's world matrix, and a board pixel at ground
+   height with a lowland pixel beside it takes the dark line, so the line
+   sits on the board's side, one pixel wide.
+
    The fog round the map comes after the quantiser, since it is a smooth
-   ramp (see GROUND_FOG_PARS). worldAt() works a pixel's world position
-   back from depth through uCamWorld, the camera's world matrix. Its colour goes through the same encode and
+   ramp (see GROUND_FOG_PARS). Its colour goes through the same encode and
    quantiser as the dome, so full fog lands on exactly the dome's colour.
    rt's alpha keeps it off the overlays and the ash, as it keeps the lines
    off them. */
@@ -135,6 +141,18 @@ export const POST_FRAG = `
   highp vec3 worldAt(highp vec2 uv){
     highp float z = viewZ(uv);
     return (uCamWorld * vec4((uv*2.0 - 1.0)*uTan*z, -z, 1.0)).xyz;
+  }
+  // 1 where uv is lowland: ground height, off the board, and not sky
+  float lowland(highp vec2 uv){
+    highp vec3 w = worldAt(uv);
+    return float(w.y <= ${glf(GROUND_FOG_TOP)} && boardDist(w) > 0.0 && texture2D(tDepth, uv).r < 1.0);
+  }
+  // 1 on a board pixel at ground height with lowland beside it
+  float mapEdge(){
+    highp vec3 w = worldAt(vUv);
+    if (w.y > ${glf(GROUND_FOG_TOP)} || boardDist(w) > 0.0) return 0.0;
+    return max(max(lowland(vUv + vec2(1.0, 0.0)*uTexel), lowland(vUv - vec2(1.0, 0.0)*uTexel)),
+               max(lowland(vUv + vec2(0.0, 1.0)*uTexel), lowland(vUv - vec2(0.0, 1.0)*uTexel)));
   }
   vec3 viewN(highp vec2 uv){ return texture2D(tNormal, uv).rgb*2.0 - 1.0; }
   void edgeTap(vec2 o, highp float z, vec3 n, vec3 v, float fn, highp float px,
@@ -163,7 +181,7 @@ export const POST_FRAG = `
     vec3 v = normalize(vec3((1.0 - 2.0*vUv)*uTan, 1.0));
     float fn = dot(n, v);
     highp float px = 2.0*uTan.y*uTexel.y*z;
-    float dark = 0.0, jump = 0.0, light = 0.0;
+    float dark = mapEdge(), jump = 0.0, light = 0.0;
     edgeTap(vec2( 1.0, 0.0), z, n, v, fn, px, dark, jump, light);
     edgeTap(vec2(-1.0, 0.0), z, n, v, fn, px, dark, jump, light);
     edgeTap(vec2(0.0,  1.0), z, n, v, fn, px, dark, jump, light);
