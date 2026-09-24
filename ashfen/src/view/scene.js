@@ -1415,8 +1415,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      mesh, material and geometry's uuid, and building these before the
      grass, the trees, the units and the effects would move every seeded
      random draw they make, which the pixel-diff harness depends on. The
-     sun decides which ridge faces are lit. */
-  const sky = createSky({ scene, sun });
+     sun decides which ridge faces are lit, and the lowland takes the
+     board's haze. */
+  const sky = createSky({ scene, sun, haze });
 
   /* ---- loop ---- */
   let raf = 0, prevT = performance.now();

@@ -468,10 +468,9 @@ export const ASH_FRAG = `
 
    Each band is one flat colour, cut with a comparison rather than a ramp.
    The posteriser eases off during a cut-in, which is when the sky is on
-   screen, so the sky has to carry its own banding. The bands run from the
-   bottom of the dome to the top, ground under the horizon and sky over
-   it, and uEdge[i] is where band i starts. uEdge[0] is not read; the
-   lowest band needs no edge. */
+   screen, so the sky has to carry its own banding. uEdge[i] is where band
+   i starts. Under the horizon it is uBand[0], which the lowland and the
+   ridges cover. uEdge[0] is not read; the lowest band needs no edge. */
 export const SKY_VERT = `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`;
 export const SKY_FRAG = `
   uniform vec3 uBand[BANDS];
