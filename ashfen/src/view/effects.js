@@ -13,6 +13,7 @@
 
 import * as THREE from "three";
 import { TILE_VERT, TRAIL_FRAG, IMPACT_FRAG } from "./shaders.js";
+import { noOutline } from "./meshes.js";
 
 const TRAIL_SEGS = 16;      // samples kept; at 60fps a 110ms sword strike fills about seven
 const TRAIL_FADE_MS = 200;
@@ -51,7 +52,7 @@ export function createEffects({ scene }) {
   const trailMesh = new THREE.Mesh(trailGeo, trailMat);
   trailMesh.frustumCulled = false; // its vertices are rewritten in world space every frame
   trailMesh.visible = false;
-  scene.add(trailMesh);
+  scene.add(noOutline(trailMesh));
   const trail = { weapon: null, base: new THREE.Vector3(), tip: new THREE.Vector3(), count: 0, fadeT: -1 };
   const wb = new THREE.Vector3(), wt = new THREE.Vector3();
 
@@ -104,7 +105,7 @@ export function createEffects({ scene }) {
   const burstMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), burstMat);
   burstMesh.renderOrder = 10;
   burstMesh.visible = false;
-  scene.add(burstMesh);
+  scene.add(noOutline(burstMesh));
   const roll = new THREE.Quaternion();
   const zAxis = new THREE.Vector3(0, 0, 1);
   let burstT = -1;
@@ -161,7 +162,7 @@ export function createEffects({ scene }) {
   motes.renderOrder = 10;
   motes.frustumCulled = false;
   motes.visible = false;
-  scene.add(motes);
+  scene.add(noOutline(motes));
   const moteOrigin = new THREE.Vector3();
   let moteT = -1;
 

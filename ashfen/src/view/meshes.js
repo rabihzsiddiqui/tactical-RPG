@@ -4,6 +4,46 @@ import * as THREE from "three";
 import { MW, MH, CX, CZ, cell, inB } from "../core/map.js";
 import { WEAPONS, PALS, SILHOUETTES, SILHOUETTE_DEFAULT } from "../core/data.js";
 
+/* outlines. POST_FRAG draws them from rt's depth and from a normal pass
+   that the camera renders with this layer switched off. noOutline() moves
+   an object onto it: overlays, projectiles, effects, water, anything that
+   is not solid ground or a body. It also rebuilds the blending so that rt's
+   alpha drops under the object by its own coverage, and POST_FRAG scales
+   the lines by that alpha, so a crease under a ring or a health bar never
+   cuts across it. The colour factors are exactly three.js's normal and
+   additive ones, and the canvas has no alpha channel, so none of this
+   moves a pixel when the post pass is off. Idempotent, since materials
+   are shared. */
+export const NO_OUTLINE_LAYER = 1;
+export function outlineBlend(m) {
+  if (m.blending === THREE.CustomBlending) return m;
+  m.blendDst = m.blending === THREE.AdditiveBlending ? THREE.OneFactor : THREE.OneMinusSrcAlphaFactor;
+  m.blending = THREE.CustomBlending;
+  m.blendSrc = THREE.SrcAlphaFactor;
+  m.blendSrcAlpha = THREE.ZeroFactor;
+  m.blendDstAlpha = THREE.OneMinusSrcAlphaFactor;
+  return m;
+}
+export function noOutline(obj) {
+  obj.traverse((o) => {
+    o.layers.set(NO_OUTLINE_LAYER);
+    if (o.material) outlineBlend(o.material);
+  });
+  return obj;
+}
+/* units stay on the normal layer, but they fade, and a veiled bystander
+   still writes depth: its outline would stay drawn around nothing. This
+   writes the unit's own opacity into rt's alpha in place of blending it
+   in, so the lines on a unit fade with the unit. */
+export function fadeOutline(m) {
+  m.blending = THREE.CustomBlending;
+  m.blendSrc = THREE.SrcAlphaFactor;
+  m.blendDst = THREE.OneMinusSrcAlphaFactor;
+  m.blendSrcAlpha = THREE.OneFactor;
+  m.blendDstAlpha = THREE.ZeroFactor;
+  return m;
+}
+
 export function buildTerrain() {
   const pos = [], nrm = [], col = [];
   const A = new THREE.Vector3(), B = new THREE.Vector3(), N = new THREE.Vector3();
@@ -665,7 +705,7 @@ export function buildHealthBar(fillHex) {
   fill.position.x = -HP_BAR_W / 2;
   group.add(fill);
 
-  return { group, fill };
+  return { group: noOutline(group), fill };
 }
 
 /* projectiles for the ranged beats in attacks.js. Each is built once and
@@ -682,7 +722,7 @@ export function buildArrow() {
   fletch.position.z = -0.17;
   g.add(shaft, head, fletch);
   g.visible = false;
-  return g;
+  return noOutline(g);
 }
 
 /* the fire bolt. Lambert with a strong emissive so it reads lit from any
@@ -691,7 +731,7 @@ export function buildBolt() {
   const mat = new THREE.MeshLambertMaterial({ color: 0xffa040, emissive: 0xff5a1a, transparent: true });
   const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.11, 0), mat);
   m.visible = false;
-  return m;
+  return noOutline(m);
 }
 
 /* SHORE_RANGE is how far from land the shore field still measures, in

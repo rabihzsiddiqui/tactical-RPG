@@ -1,5 +1,15 @@
 /* SECTION 6: shaders */
 
+/* outline tunables, templated into POST_FRAG as GLSL literals */
+const OUTLINE_DARK = 0.45;      // a depth edge multiplies the pixel by this, so the line keeps the local hue
+const OUTLINE_LIGHT = 1.3;      // a convex crease multiplies the pixel by this
+const OUTLINE_DEPTH = 3.0;      // a depth jump is an edge past this many pixels' worth of the surface's own slope
+const OUTLINE_FACING_MIN = 0.1; // how edge-on a surface may count, so a grazing floor cannot lift the threshold forever
+const OUTLINE_CREASE = 0.2;     // 1 - cos of the shallowest crease that draws, about 37 degrees
+const OUTLINE_SIDE_EPS = 0.03;  // two faces lit within this of each other both take the highlight
+const OUTLINE_RUSH = 8.0;       // the lines are gone once the director's rush passes 1 / this
+const glf = (x) => x.toFixed(3);
+
 export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
 /* POST_FRAG: posterise, warm, vignette. uRush is the camera director's
    transit speed, 0 at rest and 1 at the peak of a fly-in. While it is up,
@@ -16,11 +26,79 @@ export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec
    constant per tile, the sky is one colour, and the water bands by
    design. The vignette below cannot band either, since it is applied
    after the floor. Dithering was tried here and works, but it lays a
-   chequer over every flat surface to hide a ramp nothing needs. */
+   chequer over every flat surface to hide a ramp nothing needs.
+
+   Outlines, after the quantiser so they stay one hard pixel wide. Each
+   pixel reads rt's depth and the normal pass (scene.js) at itself and its
+   four neighbours. A dark line goes on the near side of a depth jump, a
+   light one on a convex crease where there is no jump. Every decision is
+   a step, so a pixel is lined or it is not; nothing here is a ramp.
+
+   The depth threshold is in pixels of the surface's own slope: one pixel
+   of screen at depth z spans px world units, and a surface seen at facing
+   f recedes about px / f per pixel. Scaling by z alone held at grid
+   distance, but in the cut-in the ground runs nearly edge-on and every
+   pixel of it read as a jump. The facing is the smaller of the two
+   pixels', which keeps a step seen from low down from lining the riser.
+
+   A crease is convex when the chord from this pixel to the neighbour, in
+   view space, points further along the neighbour's normal than along this
+   pixel's own: each face drops away behind the other's plane. Where a unit
+   meets the ground it is the other way round. Both pixels astride a convex
+   crease pass the test, so the more sun-facing one takes the line. That
+   choice belongs to the world, not the camera, so the line does not hop
+   sides while the camera orbits.
+
+   rt's alpha is how much outline a pixel accepts: 1 for solid geometry,
+   the unit's own opacity on a unit, 0 on water, and scaled down under an
+   overlay by its coverage (see noOutline in meshes.js). uRush fades the
+   lot out quickly, since lines drawn crisp over the transit blur would
+   dirty it. Depth math and the tap coordinates are highp: mediump holds
+   neither a linear depth nor a one-texel step at native width. */
 export const POST_FRAG = `
   precision mediump float;
   uniform sampler2D tDiffuse; uniform float uLevels; uniform float uVignette; uniform float uRush;
-  varying vec2 vUv;
+  uniform float uOutline; uniform sampler2D tDepth; uniform sampler2D tNormal;
+  uniform highp vec2 uTexel; uniform vec2 uTan; uniform highp float uNear; uniform highp float uFar; uniform vec3 uSun;
+  varying highp vec2 vUv;
+  highp float viewZ(highp vec2 uv){
+    highp float d = texture2D(tDepth, uv).r;
+    return uNear*uFar / (uFar - d*(uFar - uNear));
+  }
+  vec3 viewN(highp vec2 uv){ return texture2D(tNormal, uv).rgb*2.0 - 1.0; }
+  void edgeTap(vec2 o, highp float z, vec3 n, vec3 v, float fn, highp float px,
+               inout float dark, inout float jump, inout float light){
+    highp vec2 uv = vUv + o*uTexel;
+    highp float dz = viewZ(uv) - z;
+    vec3 m = viewN(uv);
+    highp float thr = ${glf(OUTLINE_DEPTH)}*px / max(min(fn, dot(m, v)), ${glf(OUTLINE_FACING_MIN)});
+    dark = max(dark, step(thr, dz));
+    jump = max(jump, step(thr, abs(dz)));
+    /* half the squared difference is 1 - cos for unit normals, and 0 for
+       two equal texels of anything, so the sky's clear colour, which is
+       no unit vector, never reads as a crease against itself */
+    vec3 dn = n - m;
+    vec3 chord = vec3(o*px, -dz);
+    float crease = step(${glf(OUTLINE_CREASE)}, 0.5*dot(dn, dn));
+    float convex = step(0.0, -dot(chord, dn));
+    float lit = step(-${glf(OUTLINE_SIDE_EPS)}, dot(dn, uSun));
+    light = max(light, crease*convex*lit);
+  }
+  float outline(){
+    float accept = texture2D(tDiffuse, vUv).a * clamp(1.0 - uRush*${glf(OUTLINE_RUSH)}, 0.0, 1.0);
+    if (accept <= 0.0) return 1.0;
+    highp float z = viewZ(vUv);
+    vec3 n = viewN(vUv);
+    vec3 v = normalize(vec3((1.0 - 2.0*vUv)*uTan, 1.0));
+    float fn = dot(n, v);
+    highp float px = 2.0*uTan.y*uTexel.y*z;
+    float dark = 0.0, jump = 0.0, light = 0.0;
+    edgeTap(vec2( 1.0, 0.0), z, n, v, fn, px, dark, jump, light);
+    edgeTap(vec2(-1.0, 0.0), z, n, v, fn, px, dark, jump, light);
+    edgeTap(vec2(0.0,  1.0), z, n, v, fn, px, dark, jump, light);
+    edgeTap(vec2(0.0, -1.0), z, n, v, fn, px, dark, jump, light);
+    return mix(1.0, ${glf(OUTLINE_DARK)}, dark*accept) * mix(1.0, ${glf(OUTLINE_LIGHT)}, light*(1.0 - jump)*accept);
+  }
   void main(){
     vec2 d = vUv-0.5;
     vec3 c;
@@ -33,6 +111,7 @@ export const POST_FRAG = `
       c = texture2D(tDiffuse, vUv).rgb;
     }
     if (uLevels < 63.0) c = floor(c*uLevels + 0.5)/uLevels;
+    if (uOutline > 0.5) c *= outline();
     c = mix(c, c*vec3(1.06,1.01,0.93), 0.5);
     c *= 1.0 - dot(d,d)*uVignette;
     gl_FragColor = vec4(c,1.0);

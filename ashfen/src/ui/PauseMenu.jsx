@@ -10,7 +10,7 @@ import { Card, Eyebrow, Btn, Slider } from "./primitives.jsx";
    invisible against this Card's own parchment background. `light` swaps
    in ink text/border instead, which reads correctly here. */
 export default function PauseMenu({
-  onResume, api, g, cam, setCam, RES, onToggleCinematics,
+  onResume, api, g, cam, setCam, RES, onToggleCinematics, onToggleOutlines,
   musicOn, onToggleMusic, track, onSetTrack, onHelp,
   musicVol, onSetMusicVol, sfxVol, onSetSfxVol,
 }) {
@@ -50,6 +50,10 @@ export default function PauseMenu({
     playActionSelect();
     onToggleCinematics();
   }
+  function toggleOutlines() {
+    playActionSelect();
+    onToggleOutlines();
+  }
   function pickTrack(name) {
     playActionSelect();
     onSetTrack(name);
@@ -80,6 +84,11 @@ export default function PauseMenu({
             exactly as it did before the camera director existed. */}
         <Btn light on={toggleCinematics} active={cam.cinematics}>
           {cam.cinematics ? "Cinematics: On" : "Cinematics: Off"}
+        </Btn>
+        {/* the edge lines drawn in the post pass. Off drops their extra
+            render pass entirely and is the look from before they existed. */}
+        <Btn light on={toggleOutlines} active={cam.outlines}>
+          {cam.outlines ? "Outlines: On" : "Outlines: Off"}
         </Btn>
       </div>
 

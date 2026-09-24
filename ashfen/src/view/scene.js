@@ -17,7 +17,10 @@ import {
   resolveMove, resolveAttack, resolveHeal, resolveItem, resolveWait,
   endPlayerPhase, runEnemyPhase,
 } from "../core/game.js";
-import { buildTerrain, buildUnitMesh, buildTree, buildBush, buildKeep, buildBridge, buildHealthBar, buildShoreField, HP_BAR_W } from "./meshes.js";
+import {
+  buildTerrain, buildUnitMesh, buildTree, buildBush, buildKeep, buildBridge, buildHealthBar, buildShoreField, HP_BAR_W,
+  NO_OUTLINE_LAYER, noOutline, outlineBlend, fadeOutline,
+} from "./meshes.js";
 import {
   POST_VERT, POST_FRAG, TILE_VERT, TILE_FRAG, RING_FRAG, WATER_VERT, WATER_FRAG,
   FALL_VERT, FALL_FRAG,
@@ -121,6 +124,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      comparison: 1.55 to 2.2 moves the far band only 37 to 40, because
      what was lost is a gradient and ambient lifts everything evenly. */
   const camera = new THREE.PerspectiveCamera(30, 1.6, 0.5, 120);
+  /* overlays live on their own layer so the outline normal pass can leave
+     them out by switching it off; see noOutline in meshes.js */
+  camera.layers.enable(NO_OUTLINE_LAYER);
 
   /* tuned for this map specifically (Ashfen Pass's terrain palette skews
      dark). If a second map ever ships, lighting should become a per-map
@@ -184,7 +190,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     const m = new THREE.Mesh(new THREE.PlaneGeometry(len, FALL_H), fallMat);
     m.position.set(px, FALL_TOP - FALL_H / 2, pz);
     m.rotation.y = ry;
-    scene.add(m);
+    scene.add(noOutline(m));
   };
   for (const [ex, n] of [[0, -1], [MW - 1, 1]]) {
     for (let y = 0; y < MH; y++) {
@@ -216,7 +222,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         const wp = new THREE.Mesh(waterGeo, waterMat);
         wp.rotation.x = -Math.PI / 2;
         wp.position.set(x - CX, -0.1, y - CZ);
-        scene.add(wp);
+        /* off the normal pass: the override material cannot reproduce
+           the swell, and the shoreline reads from depth alone */
+        scene.add(noOutline(wp));
       }
       if (t.bridge && (x === 0 || !cell(x - 1, y).bridge)) {
         // build one span covering the whole run of adjacent bridge tiles in
@@ -256,11 +264,11 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
 
   /* ---- overlays ---- */
-  const mkTileMat = (hex) => new THREE.ShaderMaterial({
+  const mkTileMat = (hex) => outlineBlend(new THREE.ShaderMaterial({
     vertexShader: TILE_VERT, fragmentShader: TILE_FRAG,
     uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(hex) } },
     transparent: true, depthWrite: false,
-  });
+  }));
   const matMove = mkTileMat(0x5ea8ff);
   const matAtk = mkTileMat(0xff6b60);
   const matHeal = mkTileMat(0x5fc25a);
@@ -271,7 +279,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     const m = new THREE.Mesh(hlGeo, matMove);
     m.rotation.x = -Math.PI / 2;
     m.visible = false;
-    scene.add(m);
+    scene.add(noOutline(m));
     pool.push(m);
   }
   let poolUsed = 0;
@@ -294,7 +302,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   const ring = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 1.25), ringMat);
   ring.rotation.x = -Math.PI / 2;
   ring.visible = false;
-  scene.add(ring);
+  scene.add(noOutline(ring));
 
   /* blue "hasn't acted yet" ring, one per unit, shown/hidden by
      syncUnitVisuals, distinct from the single reused gold selection ring */
@@ -332,7 +340,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
        in the middle of an exchange, the same hitch the cut-in key light is
        added at mount to avoid. Setting it here, before the first render,
        costs nothing and every fade afterwards is one uniform. */
-    v.mats.forEach((m) => { m.transparent = true; });
+    v.mats.forEach((m) => { m.transparent = true; fadeOutline(m); });
     v.mats.forEach((m) => {
       if (!m.emissive) return;
       m.emissive.setHex(POP_EMISSIVE);
@@ -348,20 +356,39 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     const readyRing = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 1.05), readyRingMat);
     readyRing.rotation.x = -Math.PI / 2;
     readyRing.visible = false;
-    scene.add(readyRing);
+    scene.add(noOutline(readyRing));
     u.view.readyRing = readyRing;
   }
 
   /* ---- post ---- */
+  /* the depth texture feeds the outlines in POST_FRAG. It is the same 24
+     bits the plain depth buffer was, so nothing z-fights differently.
+     setSize disposes the target and three reallocates the depth texture at
+     the new size on the next render. */
   const rt = new THREE.WebGLRenderTarget(400, 240, {
     minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
-    format: THREE.RGBAFormat, depthBuffer: true,
+    format: THREE.RGBAFormat, depthBuffer: true, depthTexture: new THREE.DepthTexture(400, 240),
   });
+  /* the outline normal pass: the solids again, each drawn as its view-space
+     normal. Flat shaded so a crease is a crease: the trees, bushes and keep
+     are flat shaded in colour but carry smooth vertex normals. Only
+     rendered while outlines are on, and released when they go off. */
+  const normalRT = new THREE.WebGLRenderTarget(400, 240, {
+    minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true,
+  });
+  const normalMat = new THREE.MeshNormalMaterial({ flatShading: true });
+  const sunDir = sun.position.clone().normalize();
+  let lastOutlines = false;
   const postScene = new THREE.Scene();
   const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const postMat = new THREE.ShaderMaterial({
     vertexShader: POST_VERT, fragmentShader: POST_FRAG,
-    uniforms: { tDiffuse: { value: rt.texture }, uLevels: { value: 32 }, uVignette: { value: 0.04 }, uRush: { value: 0 } },
+    uniforms: {
+      tDiffuse: { value: rt.texture }, uLevels: { value: 32 }, uVignette: { value: 0.04 }, uRush: { value: 0 },
+      uOutline: { value: 0 }, tDepth: { value: rt.depthTexture }, tNormal: { value: normalRT.texture },
+      uTexel: { value: new THREE.Vector2(1 / 400, 1 / 240) }, uTan: { value: new THREE.Vector2(1, 1) },
+      uNear: { value: 0.5 }, uFar: { value: 120 }, uSun: { value: new THREE.Vector3() },
+    },
     depthTest: false,
   });
   postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat));
@@ -371,7 +398,10 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     const p = RES[camRef.current.res];
     lastRes = camRef.current.res;
     const h = p.h === 0 ? VH : p.h;
-    rt.setSize(Math.max(64, Math.round(h * (VW / VH))), Math.max(48, h));
+    const w = Math.max(64, Math.round(h * (VW / VH))), rh = Math.max(48, h);
+    rt.setSize(w, rh);
+    normalRT.setSize(w, rh);
+    postMat.uniforms.uTexel.value.set(1 / w, 1 / rh);
   }
   function resize() {
     const r = mount.getBoundingClientRect();
@@ -1440,6 +1470,32 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     if (o.post) {
       renderer.setRenderTarget(rt);
       renderer.render(scene, camera);
+      const outlines = o.outlines !== false;
+      if (outlines !== lastOutlines) {
+        lastOutlines = outlines;
+        postMat.uniforms.uOutline.value = outlines ? 1 : 0;
+        if (!outlines) normalRT.dispose();
+      }
+      if (outlines) {
+        /* the normal pass. The shadow map and every world matrix are
+           already current from the pass above, so neither is redone. */
+        camera.layers.disable(NO_OUTLINE_LAYER);
+        scene.overrideMaterial = normalMat;
+        renderer.shadowMap.autoUpdate = false;
+        scene.matrixWorldAutoUpdate = false;
+        renderer.setRenderTarget(normalRT);
+        renderer.render(scene, camera);
+        scene.matrixWorldAutoUpdate = true;
+        renderer.shadowMap.autoUpdate = true;
+        scene.overrideMaterial = null;
+        camera.layers.enable(NO_OUTLINE_LAYER);
+        const pu = postMat.uniforms;
+        const tanY = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+        pu.uTan.value.set(tanY * camera.aspect, tanY);
+        pu.uNear.value = camera.near;
+        pu.uFar.value = camera.far;
+        pu.uSun.value.copy(sunDir).transformDirection(camera.matrixWorldInverse);
+      }
       renderer.setRenderTarget(null);
       renderer.render(postScene, postCam);
     } else {
@@ -1460,6 +1516,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     cv.removeEventListener("pointerup", endPointer);
     cv.removeEventListener("pointercancel", endPointer);
     cv.removeEventListener("wheel", onWheel);
+    rt.dispose();
+    normalRT.dispose();
     renderer.dispose();
     if (cv.parentNode) cv.parentNode.removeChild(cv);
   };

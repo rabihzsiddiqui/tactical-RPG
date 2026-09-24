@@ -28,6 +28,9 @@ const ONBOARD_KEY = "tactical-rpg-onboarded";
    accessibility choice (camera motion) as a taste one, and it should not
    come back on every launch of the installed app. */
 const CINEMATICS_KEY = "tactical-rpg-cinematics";
+/* the post pass outlines. Persisted the same way: off is also the cheaper
+   setting, and a phone that needs it should not lose it on relaunch. */
+const OUTLINES_KEY = "tactical-rpg-outlines";
 /* the orbit pose a fresh board opens on. The dev reference-pose key snaps back to it. */
 const CAM_HOME = { pitch: 48, yaw: 0, fov: 30, zoom: 12 };
 /* dev builds only: fixed shots for graphics work, so screenshots from one
@@ -52,6 +55,7 @@ export default function App() {
   const [cam, setCam] = useState(() => ({
     ...CAM_HOME, res: RES.length - 1, post: true, levels: 32,
     cinematics: typeof localStorage === "undefined" || localStorage.getItem(CINEMATICS_KEY) !== "0",
+    outlines: typeof localStorage === "undefined" || localStorage.getItem(OUTLINES_KEY) !== "0",
   }));
   const camRef = useRef(cam);
   camRef.current = cam;
@@ -164,6 +168,11 @@ export default function App() {
     const on = !cam.cinematics;
     localStorage.setItem(CINEMATICS_KEY, on ? "1" : "0");
     setCam((c) => ({ ...c, cinematics: on }));
+  }
+  function toggleOutlines() {
+    const on = !cam.outlines;
+    localStorage.setItem(OUTLINES_KEY, on ? "1" : "0");
+    setCam((c) => ({ ...c, outlines: on }));
   }
   function changeMusicVol(v) {
     setMusicVol(v);
@@ -411,6 +420,7 @@ export default function App() {
                   onResume={() => setPaused(false)}
                   api={api} g={g} cam={cam} setCam={setCam} RES={RES}
                   onToggleCinematics={toggleCinematics}
+                  onToggleOutlines={toggleOutlines}
                   musicOn={musicOn} onToggleMusic={toggleMusic}
                   track={track} onSetTrack={chooseTrack}
                   onHelp={() => openHelp()}
