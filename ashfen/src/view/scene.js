@@ -56,6 +56,22 @@ const ZOOM_MIN = 4.5, ZOOM_MAX = 22, ZOOM_STEP = 1.18;
    default zoom out over empty sky. */
 const BOARD = { x: MW / 2 + 0.3, z: MH / 2 + 0.3, yLo: -0.6, yHi: 1.9 };
 
+/* every light on the board, tuned for this map specifically (Ashfen Pass's
+   terrain palette skews dark). If a second map ever ships, this becomes a
+   per-map parameter handed to mountScene rather than a shared constant.
+   The cut-in key light and the impact flare belong to camera.js and
+   effects.js and are not in here. */
+const LIGHTS = {
+  ambient: { color: 0x93a9c6, intensity: 1.55 },                  // flat fill, the same on every face whichever way it points
+  sun: { color: 0xfff0d4, intensity: 1.55, pos: [7, 12, 6] },     // the key light and the only shadow caster
+  bounce: { color: 0x86a4d8, intensity: 0.8, pos: [-6, 3, -7] },  // cool fill on the faces turned away from the sun
+  shadowType: THREE.PCFShadowMap,                                 // filtering for the sun's shadow map
+  shadowMapSize: 1024,                                            // shadow map resolution, square
+  shadowExtent: 11,                                               // half-width of the sun's shadow camera, enough to cover the board
+  shadowNear: 1, shadowFar: 40,                                   // depth range of the sun's shadow camera
+  shadowBias: -0.0012, shadowNormalBias: 0.02,                    // acne against peter-panning on flat-shaded faces
+};
+
 export const RES = [
   { label: "400x240 (3DS)", h: 240 },
   { label: "640x384", h: 384 },
@@ -92,7 +108,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   const renderer = new THREE.WebGLRenderer({ antialias: false });
   renderer.setPixelRatio(1);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.type = LIGHTS.shadowType;
   mount.appendChild(renderer.domElement);
   const cv = renderer.domElement;
   Object.assign(cv.style, {
@@ -128,21 +144,20 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
      them out by switching it off; see noOutline in meshes.js */
   camera.layers.enable(NO_OUTLINE_LAYER);
 
-  /* tuned for this map specifically (Ashfen Pass's terrain palette skews
-     dark). If a second map ever ships, lighting should become a per-map
-     parameter here rather than a shared constant. */
-  scene.add(new THREE.AmbientLight(0x93a9c6, 1.55));
-  const sun = new THREE.DirectionalLight(0xfff0d4, 1.55);
-  sun.position.set(7, 12, 6);
+  /* the lights; values in LIGHTS at the top of this file */
+  scene.add(new THREE.AmbientLight(LIGHTS.ambient.color, LIGHTS.ambient.intensity));
+  const sun = new THREE.DirectionalLight(LIGHTS.sun.color, LIGHTS.sun.intensity);
+  sun.position.set(...LIGHTS.sun.pos);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
-  Object.assign(sun.shadow.camera, { left: -11, right: 11, top: 11, bottom: -11, near: 1, far: 40 });
-  sun.shadow.bias = -0.0012;
-  sun.shadow.normalBias = 0.02;
+  sun.shadow.mapSize.set(LIGHTS.shadowMapSize, LIGHTS.shadowMapSize);
+  const ext = LIGHTS.shadowExtent;
+  Object.assign(sun.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: LIGHTS.shadowNear, far: LIGHTS.shadowFar });
+  sun.shadow.bias = LIGHTS.shadowBias;
+  sun.shadow.normalBias = LIGHTS.shadowNormalBias;
   sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun, sun.target);
-  const bounce = new THREE.DirectionalLight(0x86a4d8, 0.8);
-  bounce.position.set(-6, 3, -7);
+  const bounce = new THREE.DirectionalLight(LIGHTS.bounce.color, LIGHTS.bounce.intensity);
+  bounce.position.set(...LIGHTS.bounce.pos);
   scene.add(bounce);
 
   /* ---- world ---- */
