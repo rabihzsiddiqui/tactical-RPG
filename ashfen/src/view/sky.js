@@ -29,7 +29,7 @@
 
 import * as THREE from "three";
 import { MW, MH, CX, CZ, cell } from "../core/map.js";
-import { SKY_VERT, SKY_FRAG, WATER_VERT, WATER_FRAG, GROUND_FOG_PARS } from "./shaders.js";
+import { SKY_VERT, skyFrag, WATER_VERT, WATER_FRAG, GROUND_FOG_PARS } from "./shaders.js";
 import { noOutline, NO_OUTLINE_LAYER } from "./meshes.js";
 import { hash, splice } from "./wind.js";
 
@@ -77,16 +77,16 @@ const lerp3 = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
 function buildDome() {
   const bands = SKY_EDGES.length + 1;
   const lo = srgb(SKY_HORIZON), hi = srgb(SKY_ZENITH);
-  const uBand = [], uEdge = [-1];
+  // linear rgb per band; skyFrag writes them into the shader as literals
+  const band = [];
   for (let i = 0; i < bands; i++) {
     const c = lerp3(lo, hi, i / (bands - 1));
-    uBand.push(new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace));
+    const lin = new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
+    band.push([lin.r, lin.g, lin.b]);
   }
-  for (const deg of SKY_EDGES) uEdge.push(Math.sin(THREE.MathUtils.degToRad(deg)));
+  const edge = SKY_EDGES.map((deg) => Math.sin(THREE.MathUtils.degToRad(deg)));
   const mat = new THREE.ShaderMaterial({
-    vertexShader: SKY_VERT, fragmentShader: SKY_FRAG,
-    defines: { BANDS: bands },
-    uniforms: { uBand: { value: uBand }, uEdge: { value: uEdge } },
+    vertexShader: SKY_VERT, fragmentShader: skyFrag(band, edge),
     side: THREE.BackSide, depthTest: false, depthWrite: false,
   });
   const dome = new THREE.Mesh(new THREE.SphereGeometry(SKY_RADIUS, 24, 12), mat);

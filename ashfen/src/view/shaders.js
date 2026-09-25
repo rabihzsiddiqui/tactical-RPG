@@ -478,17 +478,28 @@ export const ASH_FRAG = `
 
    Each band is one flat colour, cut with a comparison rather than a ramp.
    The posteriser eases off during a cut-in, which is when the sky is on
-   screen, so the sky has to carry its own banding. uEdge[i] is where band
-   i starts. Under the horizon it is uBand[0], which the lowland and the
-   ridges cover. uEdge[0] is not read; the lowest band needs no edge. */
+   screen, so the sky has to carry its own banding. `bands` are linear rgb
+   triples, lowest first, and edges[i] is the sine where bands[i + 1]
+   starts. Under the horizon it is bands[0], which the lowland and the
+   ridges cover.
+
+   The colours and edges are written into the source as literals, one
+   comparison per edge. They used to be uniform arrays read in a loop, and
+   an Adreno 750 (a OnePlus 13R) read every band as its red channel alone,
+   so the cut-in sky came out in bands of red, while a Mali (Pixel 8 Pro)
+   and an M2 iPad read them right. None of them change after mount. Nine
+   significant digits name a 32 bit float exactly, so the literals are the
+   same floats the uniforms were, and the dome draws the same pixels. */
 export const SKY_VERT = `varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`;
-export const SKY_FRAG = `
-  uniform vec3 uBand[BANDS];
-  uniform float uEdge[BANDS];
+const glx = (x) => Math.fround(x).toPrecision(9);
+export function skyFrag(bands, edges) {
+  const col = (c) => `vec3(${c.map(glx).join(", ")})`;
+  return `
   varying vec3 vDir;
   void main() {
     float e = normalize(vDir).y;
-    vec3 c = uBand[0];
-    for (int i = 1; i < BANDS; i++) if (e >= uEdge[i]) c = uBand[i];
+    vec3 c = ${col(bands[0])};
+${edges.map((x, i) => `    if (e >= ${glx(x)}) c = ${col(bands[i + 1])};`).join("\n")}
     gl_FragColor = linearToOutputTexel(vec4(c, 1.0));
   }`;
+}
