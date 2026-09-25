@@ -40,7 +40,7 @@
 import * as THREE from "three";
 import { MAP, MW, MH, CX, CZ, cell } from "../core/map.js";
 import { SKY_VERT, skyFrag, WATER_VERT, WATER_FRAG, GROUND_FOG_PARS } from "./shaders.js";
-import { noOutline, NO_OUTLINE_LAYER } from "./meshes.js";
+import { noOutline, NO_OUTLINE_LAYER, SCORCH } from "./meshes.js";
 import { hash, splice } from "./wind.js";
 
 export const SKY_HORIZON = 0x9fc3d8; // the lowest band and everything under the horizon; also the clear colour the outline pass keeps
@@ -99,6 +99,29 @@ const RANGE_ROWS = [              // distance out from the board's edge, and the
   { d: 8, lo: 2.9, hi: 4.6 },     // upper slopes
   { d: 10.5, lo: 3.5, hi: 6 },    // the ridge line
 ];
+/* ash and burnt earth spilled off each flank's river end. Every row of a
+   flank stopped on the same line a little north of the river, rock and
+   ash above it and a strip of green below, and from the home view that
+   line ran straight across the frame on both sides of the board. Now the
+   spill runs on from it toward the river bank in tongues, further here
+   and shorter there, in patches of the apron's ash and the tiles' scorch,
+   so the brown frays into the green instead of stopping on a rule. It
+   lies flat, one colour per face, just over the lowland like the apron's
+   front row. */
+const SPILL_OUT = 10;             // world units out from the board's edge it runs, inside the flank's ridge line so its north edge stays under the rock
+const SPILL_STEP = 0.5;           // world units between points along its ragged south edge
+const SPILL_PATCH = 2.5;          // world units between the noise knots that shape its tongues and pick its colours
+const SPILL_MIN = 0.15;           // the least share of the way to the bank it reaches; its tongues reach nearly all of it
+const SPILL_Y = 0.01;             // its height over the lowland, under the apron front row's 0.02
+const SPILL_BANK = 3;             // how far south it may run on a flank whose side has no river to stop it
+/* and a few drifts of the same ash across the river on its south bank,
+   beside the board, with green between them, so the river is not a
+   second rule with brown on one side and green on the other */
+const DRIFT_FROM = 0.8;           // world units out from the board's edge the drifts start, so green shows between them and the board's own green tiles
+const DRIFT_OUT = 8;              // world units out from the board's edge the drifts run
+const DRIFT_MAX = 3.5;            // world units south of the bank the longest drift reaches
+const DRIFT_COVER = 0.45;         // share of the bank the drifts start from; the rest stays green
+const SCORCH_SHADE = 0x4a3120;    // the spill's scorched patches turned from the sun, a shade under SCORCH
 const ROCK_LIT = 0x5b554f;        // basalt turned full to the sun
 const ROCK_SHADE = 0x2d2b2f;      // basalt turned away from it
 const APRON_LIT = 0x625f59;       // settled ash turned to the sun, a shade under ASHFALL on the tiles in meshes.js
@@ -380,7 +403,7 @@ function buildRidges(sunDir, fog) {
    and the fog round the map at their distance. Only the south faces are
    built; the ridge line hides the rest from every lens. Returns the mesh
    and the crater's vent, for the smoke. */
-function buildRange(sunDir, fog) {
+function buildRange(sunDir, fog, arms) {
   const pos = [], col = [];
   const n = new THREE.Vector3(), e = new THREE.Vector3(), out = new THREE.Color();
   const face = (p, q, r, lit, shade) => {
@@ -456,6 +479,52 @@ function buildRange(sunDir, fog) {
     }
   }
 
+  /* a frayed strip of ash lying south from the line z0, on side sx, from
+     `from` to `out` along x beyond the board's edge. `reach(u, smooth, i)` says how far
+     south it runs at u out from the board, and smooth is noise that rises
+     and falls every SPILL_PATCH; a reach of 0 leaves green. Patches of it
+     take the apron's ash or the tiles' scorch, also by the noise. */
+  const fray = (sx, z0, from, out, seed, reach) => {
+    const smooth = (u, j) => {
+      const t = u / SPILL_PATCH, k = Math.floor(t), f = t - k, e = f * f * (3 - 2 * f);
+      return hash(k, j, seed) + (hash(k + 1, j, seed) - hash(k, j, seed)) * e;
+    };
+    const n = Math.round((out - from) / SPILL_STEP);
+    const edge = [];
+    for (let i = 0; i <= n; i++) {
+      const u = from + (out - from) * i / n;
+      edge.push({ x: sx * (hx + u), z: z0 + reach(u, smooth, i), u });
+    }
+    for (let i = 0; i < n; i++) {
+      const a = edge[i], b = edge[i + 1];
+      if (a.z - z0 < 0.01 && b.z - z0 < 0.01) continue;
+      const [lit, shade] = smooth((a.u + b.u) / 2, 34) < 0.5 ? [APRON_LIT, APRON_SHADE] : [SCORCH, SCORCH_SHADE];
+      const p = V(a.x, SPILL_Y, z0), q = V(b.x, SPILL_Y, z0);
+      face(p, q, V(b.x, SPILL_Y, b.z), lit, shade);
+      face(p, V(b.x, SPILL_Y, b.z), V(a.x, SPILL_Y, a.z), lit, shade);
+    }
+  };
+  for (const sx of [-1, 1]) {
+    const arm = arms.find((m) => m.along === "x" && m.sign === sx);
+    const seed = sx < 0 ? 41 : 43;
+    // the spill, from the line the flank stops on toward the river's north bank
+    const gap = (arm ? arm.lo : southEnd + SPILL_BANK) - southEnd;
+    if (gap > 0.1) {
+      fray(sx, southEnd, 0.02, SPILL_OUT, seed, (u, smooth, i) => {
+        const share = SPILL_MIN + (1 - SPILL_MIN) * smooth(u, 31) + (hash(i, 32, seed) - 0.5) * 0.2;
+        return gap * THREE.MathUtils.clamp(share, 0.08, 0.98) * Math.min(1, (SPILL_OUT - u) / 2 + 0.1);
+      });
+    }
+    // the drifts, from the river's south bank on, with green between them
+    if (arm) {
+      fray(sx, arm.hi, DRIFT_FROM, DRIFT_OUT, seed + 1, (u, smooth) => {
+        const share = (smooth(u, 36) - (1 - DRIFT_COVER)) / DRIFT_COVER;
+        const ends = Math.min(1, (DRIFT_OUT - u) / 2, (u - DRIFT_FROM) / 1.5);
+        return DRIFT_MAX * THREE.MathUtils.clamp(share, 0, 1) * ends;
+      });
+    }
+  }
+
   // the volcano: rings of points around its centre, each jittered a little
   const { x: cx, z: cz, segs } = VOLCANO;
   const ring = VOLCANO_RINGS.map(([r, y], k) => Array.from({ length: segs }, (_, j) => {
@@ -501,7 +570,7 @@ export function createSky({ scene, sun, haze, wind, water }) {
   const arms = riverArms();
   const dome = buildDome();
   const sunDir = sun.position.clone().normalize();
-  const range = buildRange(sunDir, fog);
+  const range = buildRange(sunDir, fog, arms);
   scene.add(dome, buildGround(arms, fog, wind), buildRiver(arms, water, fog), buildRidges(sunDir, fog), range.mesh);
   wind.plume(range.vent);
   return {

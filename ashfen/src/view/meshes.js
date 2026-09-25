@@ -16,7 +16,7 @@ const SWAY_CANOPY = 0.012; // top of a tree; the trunk does not move
    The rest take a light dusting of ash, which carries the board on into
    the range's ash apron. Stonework (the keep and the ridge) never
    scorches. A tile is still one flat colour per face. */
-const SCORCH = 0x7a5232;                      // burnt earth near the volcano
+export const SCORCH = 0x7a5232;               // burnt earth near the volcano; sky.js spills it off the range's flanks too
 const SCORCH_ROWS = [0.7, 0.5, 0.3, 0.12];    // share of the tiles in rows 0 to 3, north first, that scorch
 const SCORCH_MIX = [0.7, 0.9];                // how far a scorched tile goes toward SCORCH, least and most; under half read as olive through the haze
 const ASHFALL = 0x77736d;                     // the dusting on the rest, a shade over the range's apron
