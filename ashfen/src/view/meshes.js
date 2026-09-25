@@ -9,6 +9,15 @@ import { WEAPONS, PALS, SILHOUETTES, SILHOUETTE_DEFAULT } from "../core/data.js"
 const SWAY_TUFT = 0.03;    // tip of the tallest grass blade
 const SWAY_CANOPY = 0.012; // top of a tree; the trunk does not move
 
+/* the ash settled on the board's northern tiles, under the volcano (see
+   the northern range in sky.js): each row north of the river takes its
+   tiles' colours part way to ASHFALL, more the further north, and each
+   tile a share of its row's amount, so the ash lies unevenly rather than
+   in bands. A tile is still one flat colour per face. */
+const ASHFALL = 0x77736d;                     // settled ash, a shade over the range's apron
+const ASHFALL_ROWS = [0.55, 0.4, 0.26, 0.12]; // how far rows 0 to 3, north first, go toward it
+const ASHFALL_VARY = 0.45;                    // how much less than its row's amount one tile can take
+
 /* outlines. POST_FRAG draws them from rt's depth and from a normal pass
    that the camera renders with this layer switched off. noOutline() moves
    an object onto it: overlays, projectiles, effects, water, anything that
@@ -52,7 +61,14 @@ export function fadeOutline(m) {
 export function buildTerrain() {
   const pos = [], nrm = [], col = [];
   const A = new THREE.Vector3(), B = new THREE.Vector3(), N = new THREE.Vector3();
-  const c = new THREE.Color();
+  const c = new THREE.Color(), ash = new THREE.Color(ASHFALL);
+  // a tile's colour under the ashfall; a small integer hash picks its share
+  const ashen = (hex, tx, ty) => {
+    const k = ASHFALL_ROWS[ty];
+    if (!k) return hex;
+    const r = ((Math.imul(tx * 73856093 ^ ty * 19349663, 0x9e3779b1) >>> 0) % 1000) / 1000;
+    return c.setHex(hex).lerp(ash, k * (1 - ASHFALL_VARY * r)).getHex();
+  };
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const UP = V(0, 1, 0);
 
@@ -77,7 +93,7 @@ export function buildTerrain() {
       const t = cell(tx, ty), h = t.h;
       const x0 = tx - CX - 0.5, x1 = tx - CX + 0.5;
       const z0 = ty - CZ - 0.5, z1 = ty - CZ + 0.5;
-      addQuad(V(x0, h, z1), V(x1, h, z1), V(x1, h, z0), V(x0, h, z0), UP, t.top);
+      addQuad(V(x0, h, z1), V(x1, h, z1), V(x1, h, z0), V(x0, h, z0), UP, ashen(t.top, tx, ty));
       const sides = [
         { dx: 1, dy: 0, want: V(1, 0, 0), a: V(x1, h, z1), b: V(x1, h, z0) },
         { dx: -1, dy: 0, want: V(-1, 0, 0), a: V(x0, h, z0), b: V(x0, h, z1) },
@@ -88,7 +104,7 @@ export function buildTerrain() {
         const nx = tx + s.dx, ny = ty + s.dy;
         const nh = inB(nx, ny) ? cell(nx, ny).h : h - 1.6;
         if (nh >= h - 0.001) continue;
-        addQuad(V(s.a.x, h, s.a.z), V(s.b.x, h, s.b.z), V(s.b.x, nh, s.b.z), V(s.a.x, nh, s.a.z), s.want, t.side);
+        addQuad(V(s.a.x, h, s.a.z), V(s.b.x, h, s.b.z), V(s.b.x, nh, s.b.z), V(s.a.x, nh, s.a.z), s.want, ashen(t.side, tx, ty));
       }
     }
   }
