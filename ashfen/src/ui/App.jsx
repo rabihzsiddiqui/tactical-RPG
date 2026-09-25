@@ -10,7 +10,7 @@ import {
 import { forecastOf } from "../core/combat.js";
 import { LEVEL_NAME } from "../core/map.js";
 import { C, MONO, SERIF, DISPLAY, PHASE_BANNER_MS } from "./theme.js";
-import { Card, Eyebrow, Pill, Btn } from "./primitives.jsx";
+import { Card, Eyebrow, Pill, Btn, RuleBtn, RULE_BTN_CSS } from "./primitives.jsx";
 import UnitHud, { UNIT_HUD_CSS } from "./UnitHud.jsx";
 import ZoomButtons, { ZOOM_CSS } from "./ZoomButtons.jsx";
 import Forecast, { FORECAST_CSS } from "./Forecast.jsx";
@@ -299,6 +299,7 @@ export default function App() {
         ${MENU_CSS}
         ${UNIT_HUD_CSS}
         ${FORECAST_CSS}
+        ${RULE_BTN_CSS}
         ${ZOOM_CSS}
       `}</style>
 
@@ -460,10 +461,11 @@ export default function App() {
                 menu. */}
             <div className="mt-2">
               <div className="flex flex-wrap gap-2">
-                <Btn on={api.toggleDanger} active={g.danger}>
+                {/* wide enough for either label, so Help holds still on a toggle */}
+                <RuleBtn on={api.toggleDanger} active={g.danger} style={{ minWidth: 142 }}>
                   {g.danger ? "Hide threat" : "Show threat"}
-                </Btn>
-                <Btn on={() => openHelp()}>Help</Btn>
+                </RuleBtn>
+                <RuleBtn on={() => openHelp()}>Help</RuleBtn>
               </div>
             </div>
           </div>

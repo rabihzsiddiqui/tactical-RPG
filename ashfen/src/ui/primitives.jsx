@@ -1,6 +1,6 @@
 /* small shared ui fragments, used across App and the panel components */
 
-import { C, MONO } from "./theme.js";
+import { C, MONO, DISPLAY, rgba } from "./theme.js";
 
 export function Card({ children }) {
   return (
@@ -39,6 +39,30 @@ export function Btn({ children, on, disabled, active, strong, light }) {
       opacity: disabled ? 0.4 : 1,
       touchAction: "manipulation", WebkitTapHighlightColor: "transparent", userSelect: "none",
     }}>{children}</button>
+  );
+}
+
+/* a button in the map's own dress, the Menu button's (PauseMenu.jsx): a
+   dark panel with the gold rule inside a darker edge and the label in
+   carved capitals. The row under the map and the forecast use it.
+   `strong` tints it gold for the button to press, and `active` does the
+   same for a toggle that is on. RULE_BTN_CSS goes into App's style block. */
+export const RULE_BTN_CSS = `
+  .rbtn { min-height: 44px; padding: 0 calc(14px - 0.18em) 0 14px;
+    background: ${rgba(C.table, 0.82)}; border: 1px solid rgba(0,0,0,0.7);
+    outline: 1px solid ${rgba(C.gold, 0.7)}; outline-offset: -4px;
+    font-family: ${DISPLAY}; font-weight: 600; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: ${C.parch}; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    user-select: none; }
+  .rbtn:hover, .rbtn:focus-visible { outline-color: ${C.gold}; }
+  .rbtn.strong, .rbtn[aria-pressed="true"] { background: ${rgba(C.gold, 0.22)}; }
+`;
+
+export function RuleBtn({ children, on, strong, active, ...rest }) {
+  return (
+    <button className={"rbtn" + (strong ? " strong" : "")} onClick={on} aria-pressed={active} {...rest}>
+      {children}
+    </button>
   );
 }
 

@@ -20,6 +20,7 @@ import { Fragment, useState } from "react";
 import { wep } from "../core/combat.js";
 import { C, MONO, DISPLAY, rgba } from "./theme.js";
 import WeaponIcon from "./WeaponIcon.jsx";
+import { RuleBtn } from "./primitives.jsx";
 import { TOP, LEFT, MENU_CLEAR, FACE, FADE_MS, SLIDE, Face, Rule } from "./UnitHud.jsx";
 
 const WIDTH = 256;     // px; two faces with the numbers between, and "Mercenary" in capitals over one side
@@ -31,7 +32,7 @@ const SMALL = { fontFamily: MONO, fontSize: 9, letterSpacing: "0.14em", textTran
 
 /* added to App.jsx's style block next to the unit panel's. The same
    motion as that panel, and no fill mode on the way in for the same
-   reason. The buttons are the Menu button's. */
+   reason. The buttons are RuleBtn, the Menu button's dress. */
 export const FORECAST_CSS = `
   .fcast { position: absolute; top: ${TOP}px; left: ${LEFT}px; z-index: 22; box-sizing: border-box;
     width: ${WIDTH}px; max-width: calc(100% - ${LEFT + MENU_CLEAR}px); padding: 10px;
@@ -43,13 +44,7 @@ export const FORECAST_CSS = `
     transition: opacity ${FADE_MS}ms ease-in, transform ${FADE_MS}ms ease-in, visibility 0s linear ${FADE_MS}ms; }
   @keyframes fcastIn { from { opacity: 0; transform: translateX(-${SLIDE}px); } }
   @keyframes fcastFade { from { opacity: 0; } }
-  .fcast-btn { flex: 1 1 0; min-height: 40px; padding: 0 calc(10px - 0.18em) 0 10px;
-    background: ${rgba(C.table, 0.82)}; border: 1px solid rgba(0,0,0,0.7);
-    outline: 1px solid ${rgba(C.gold, 0.7)}; outline-offset: -4px;
-    font-family: ${DISPLAY}; font-weight: 600; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
-    color: ${C.parch}; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-  .fcast-btn.go { background: ${rgba(C.gold, 0.22)}; }
-  .fcast-btn:hover, .fcast-btn:focus-visible { outline-color: ${C.gold}; }
+  .fcast .rbtn { flex: 1 1 0; }
   @media (prefers-reduced-motion: reduce) {
     .fcast { animation-name: fcastFade; }
     .fcast, .fcast.off { transform: none; }
@@ -165,8 +160,8 @@ export default function Forecast({ fc, onAttack, onCancel }) {
 
       <Rule />
       <div className="flex" style={{ gap: 8 }}>
-        <button className="fcast-btn go" tabIndex={fc ? 0 : -1} onClick={() => onAttack(d.id)}>Attack</button>
-        <button className="fcast-btn" tabIndex={fc ? 0 : -1} onClick={onCancel}>Back</button>
+        <RuleBtn strong tabIndex={fc ? 0 : -1} on={() => onAttack(d.id)}>Attack</RuleBtn>
+        <RuleBtn tabIndex={fc ? 0 : -1} on={onCancel}>Back</RuleBtn>
       </div>
     </div>
   );
