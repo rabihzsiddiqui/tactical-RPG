@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# headless harness pages for graphics checks, kept locally, never built
+verify-*.html
