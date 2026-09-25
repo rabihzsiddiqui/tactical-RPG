@@ -1006,7 +1006,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       case "levelUp": {
         const u = g.units.find((z) => z.id === e.unitId);
         playLevelUp();
-        g.levelUp = { name: u.name, lvl: e.lvl, gains: e.gains };
+        g.levelUp = { id: u.id, name: u.name, lvl: e.lvl, gains: e.gains };
         tick();
         await sleep(1700);
         g.levelUp = null;

@@ -17,6 +17,7 @@ import Forecast, { FORECAST_CSS } from "./Forecast.jsx";
 import BattleHud, { BATTLE_HUD_CSS } from "./BattleHud.jsx";
 import ActionMenu, { ACTION_MENU_CSS } from "./ActionMenu.jsx";
 import Floaters, { FLOATER_CSS } from "./Floaters.jsx";
+import LevelUp, { LEVEL_UP_CSS } from "./LevelUp.jsx";
 import OnboardingCard from "./OnboardingCard.jsx";
 import TitleCard from "./TitleCard.jsx";
 import PhaseBanner from "./PhaseBanner.jsx";
@@ -295,6 +296,7 @@ export default function App() {
         ${RULE_BTN_CSS}
         ${ACTION_MENU_CSS}
         ${FLOATER_CSS}
+        ${LEVEL_UP_CSS}
         ${ZOOM_CSS}
       `}</style>
 
@@ -375,29 +377,8 @@ export default function App() {
                 top="calc(var(--view-h) * 0.44)" />
             )}
 
-            {/* level up */}
-            {g.levelUp && (
-              <div className="absolute flex items-center justify-center"
-                style={{ inset: 0, zIndex: 30, background: "rgba(10,12,18,0.5)", pointerEvents: "none" }}>
-                <div style={{
-                  background: C.parch, color: C.ink, border: "2px solid " + C.ink,
-                  boxShadow: "4px 4px 0 rgba(0,0,0,0.5)", padding: "10px 14px",
-                  minWidth: 176, animation: "popIn .18s ease-out",
-                }}>
-                  <div className="uppercase" style={{ fontFamily: SERIF, fontSize: 10, letterSpacing: "0.18em" }}>
-                    Level up
-                  </div>
-                  <div style={{ fontSize: 17, marginBottom: 4 }}>
-                    {g.levelUp.name} &rarr; Lv {g.levelUp.lvl}
-                  </div>
-                  <div style={{ fontFamily: SERIF, fontSize: 12, color: C.inkSoft }}>
-                    {Object.keys(g.levelUp.gains).length
-                      ? Object.entries(g.levelUp.gains).map(([k, v]) => k + " +" + v).join("   ")
-                      : "no growth this level"}
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* level up, see LevelUp.jsx */}
+            <LevelUp lv={g.levelUp} units={g.units} />
 
             {/* end screen */}
             {g.status !== "playing" && (
