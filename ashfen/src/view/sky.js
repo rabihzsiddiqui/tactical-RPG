@@ -104,20 +104,16 @@ const ROCK_SHADE = 0x2d2b2f;      // basalt turned away from it
 const APRON_LIT = 0x625f59;       // settled ash turned to the sun, a shade under ASHFALL on the tiles in meshes.js
 const APRON_SHADE = 0x46443f;     // settled ash turned away
 /* the volcano: a cone of rings from its buried base to the crater rim,
-   then the crater's inner wall down to a lava pool */
+   then the crater's inner wall down to its floor. It smokes and nothing
+   more (the smoke is wind.js's); glowing lava runs down its face read
+   badly and went, and so did the lava pool. */
 const VOLCANO = { x: -3.5, z: -16, segs: 16 };  // its centre on the ground, behind the ridge line and left of the keep, and faces around it
-const VOLCANO_RINGS = [           // radius and height of each ring, base first, then the rim and the pool's edge
-  [6.5, 1.5], [4.4, 5], [2.6, 8.2], [1.5, 10], [1, 9.4],
+const VOLCANO_RINGS = [           // radius and height of each ring, base first, then the rim and the floor's edge; the rim clears the ridge line's 6
+  [6.5, 1.5], [4.4, 4.2], [2.6, 6.4], [1.5, 7.6], [1, 7],
 ];
 const VOLCANO_LIT = 0x4f4945;     // its flanks turned to the sun, a little darker than the range
 const VOLCANO_SHADE = 0x262325;   // turned away
-const CRATER_WALL = 0x1d1a1b;     // the inside of the rim
-const LAVA = [0xff7a1e, 0xffa23a]; // the pool, alternate faces
-const LAVA_STREAKS = [            // glowing runs down the south face: angle off due south in radians, and the ring they reach down to
-  [-0.35, 2], [0.12, 1], [0.5, 2],
-];
-const LAVA_COOL = 0xc4401a;       // a streak's lower half, cooling
-const LAVA_LIFT = 0.06;           // how far a streak stands off the flank, so it never fights it for depth
+const CRATER = 0x1d1a1b;          // the inside of the rim and the floor, which the sun never reaches
 
 const srgb = (hex) => [(hex >> 16 & 255) / 255, (hex >> 8 & 255) / 255, (hex & 255) / 255];
 const lerp3 = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
@@ -394,8 +390,8 @@ function buildRange(sunDir, fog) {
     out.setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
     for (const v of [p, q, r]) { pos.push(v.x, v.y, v.z); col.push(out.r, out.g, out.b); }
   };
-  // an unlit face, for the lava, which lights itself; wound upward like the rest
-  const glow = (p, q, r, hex) => {
+  // one colour whatever the sun, for the crater's inside; wound upward like the rest
+  const flat = (p, q, r, hex) => {
     n.subVectors(q, p).cross(e.subVectors(r, p));
     if (n.y < 0) [q, r] = [r, q];
     out.set(hex);
@@ -467,7 +463,7 @@ function buildRange(sunDir, fog) {
     const rr = r * (1 + (hash(j, k + 7, 23) - 0.5) * 0.12);
     return V(cx + Math.cos(ang) * rr, y + (k < 3 ? (hash(j, k + 14, 23) - 0.5) * 0.5 : 0), cz + Math.sin(ang) * rr);
   }));
-  const RIM = 3, POOL = 4;
+  const RIM = 3, FLOOR = 4;
   for (let k = 0; k < RIM; k++) {
     for (let j = 0; j < segs; j++) {
       const j2 = (j + 1) % segs;
@@ -475,30 +471,12 @@ function buildRange(sunDir, fog) {
       face(ring[k][j], ring[k + 1][j2], ring[k + 1][j], VOLCANO_LIT, VOLCANO_SHADE);
     }
   }
-  const vent = V(cx, VOLCANO_RINGS[POOL][1], cz);
+  const vent = V(cx, VOLCANO_RINGS[FLOOR][1], cz);
   for (let j = 0; j < segs; j++) {
     const j2 = (j + 1) % segs;
-    glow(ring[RIM][j], ring[RIM][j2], ring[POOL][j2], CRATER_WALL);
-    glow(ring[RIM][j], ring[POOL][j2], ring[POOL][j], CRATER_WALL);
-    glow(vent, ring[POOL][j2], ring[POOL][j], LAVA[j % 2]);
-  }
-
-  /* the streaks: a narrow strip from the rim down to its ring, following
-     the flank, a little proud of it, hot at the top and cooling below */
-  const at = (k, ang, half) => {
-    const [r, y] = VOLCANO_RINGS[k];
-    const w = half / r;
-    return [-1, 1].map((sgn) => V(
-      cx + Math.cos(ang + sgn * w) * (r + LAVA_LIFT), y + LAVA_LIFT, cz + Math.sin(ang + sgn * w) * (r + LAVA_LIFT)));
-  };
-  for (const [off, lowest] of LAVA_STREAKS) {
-    const ang = Math.PI / 2 + off; // +z is south, toward the board
-    for (let k = RIM; k > lowest; k--) {
-      const [a, b] = at(k, ang, 0.18), [d, c] = at(k - 1, ang, 0.3);
-      const hex = k === RIM ? LAVA[0] : LAVA_COOL;
-      glow(a, b, c, hex);
-      glow(a, c, d, hex);
-    }
+    flat(ring[RIM][j], ring[RIM][j2], ring[FLOOR][j2], CRATER);
+    flat(ring[RIM][j], ring[FLOOR][j2], ring[FLOOR][j], CRATER);
+    flat(vent, ring[FLOOR][j2], ring[FLOOR][j], CRATER);
   }
 
   const geo = new THREE.BufferGeometry();
