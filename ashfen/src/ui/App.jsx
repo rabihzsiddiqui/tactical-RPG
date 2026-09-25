@@ -9,7 +9,7 @@ import {
 } from "../view/audio.js";
 import { forecastOf } from "../core/combat.js";
 import { LEVEL_NAME } from "../core/map.js";
-import { C, SERIF, DISPLAY, PHASE_BANNER_MS } from "./theme.js";
+import { C, SERIF, PHASE_BANNER_MS } from "./theme.js";
 import { Card, Eyebrow, Pill, Btn, RuleBtn, RULE_BTN_CSS } from "./primitives.jsx";
 import UnitHud, { UNIT_HUD_CSS } from "./UnitHud.jsx";
 import ZoomButtons, { ZOOM_CSS } from "./ZoomButtons.jsx";
@@ -18,6 +18,7 @@ import BattleHud, { BATTLE_HUD_CSS } from "./BattleHud.jsx";
 import ActionMenu, { ACTION_MENU_CSS } from "./ActionMenu.jsx";
 import Floaters, { FLOATER_CSS } from "./Floaters.jsx";
 import LevelUp, { LEVEL_UP_CSS } from "./LevelUp.jsx";
+import EndScreen, { END_CSS } from "./EndScreen.jsx";
 import OnboardingCard from "./OnboardingCard.jsx";
 import TitleCard from "./TitleCard.jsx";
 import PhaseBanner from "./PhaseBanner.jsx";
@@ -297,6 +298,7 @@ export default function App() {
         ${ACTION_MENU_CSS}
         ${FLOATER_CSS}
         ${LEVEL_UP_CSS}
+        ${END_CSS}
         ${ZOOM_CSS}
       `}</style>
 
@@ -380,27 +382,8 @@ export default function App() {
             {/* level up, see LevelUp.jsx */}
             <LevelUp lv={g.levelUp} units={g.units} />
 
-            {/* end screen */}
-            {g.status !== "playing" && (
-              <div className="absolute flex flex-col items-center justify-center gap-3"
-                style={{ inset: 0, zIndex: 35, background: "rgba(10,12,18,0.78)" }}>
-                {/* same treatment as the phase banner: Cinzel, Roman capitals,
-                    tracked out. The end screen is the other moment the game
-                    speaks in its own voice, so it should not be in the body
-                    serif the panels use. The tracking is added after the last
-                    letter as well, which would push the word a hair left of
-                    centre, so it comes back off the right edge, the same
-                    trick PhaseBanner uses. */}
-                <div style={{
-                  fontFamily: DISPLAY, fontWeight: 600, fontSize: 40, lineHeight: 1,
-                  textTransform: "uppercase", letterSpacing: "0.18em", marginRight: "-0.18em",
-                  color: g.status === "win" ? C.gold : C.redLite,
-                }}>
-                  {g.status === "win" ? "Victory" : "Defeat"}
-                </div>
-                <Btn light strong on={restart}>Restart</Btn>
-              </div>
-            )}
+            {/* end screen, see EndScreen.jsx */}
+            {g.status !== "playing" && <EndScreen g={g} onRestart={restart} />}
 
             {/* the menu, over the map: its button in the top-right corner and
                 the overlay itself at zIndex 50, above everything else on the
