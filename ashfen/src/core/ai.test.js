@@ -67,11 +67,19 @@ describe("planAuto", () => {
     expect(plan.target).toBe("e");
   });
 
-  test("the lord turns down a fight whose counter could kill him, and holds his ground", () => {
-    // counter: 25 str + 5 mt - 10 def = 20, against his 8 HP
+  test("a badly hurt lord turns down a fight whose counter could kill him, and holds his ground", () => {
+    // counter: 25 str + 5 mt - 10 def = 20, against his 8 HP, with no vulnerary left
     const lord = unit({ id: "k", lord: true, x: 0, y: 5, hp: 8, vulnerary: 0 });
     const e = unit({ id: "e", team: "enemy", x: 3, y: 5, str: 25 });
     expect(planAuto(lord, [lord, e])).toEqual({ kind: "wait", x: 0, y: 5 });
+  });
+
+  test("a healthy lord with nobody in reach advances on the enemy", () => {
+    const lord = unit({ id: "k", lord: true, x: 0, y: 5 });
+    const e = unit({ id: "e", team: "enemy", x: 11, y: 5 });
+    const plan = planAuto(lord, [lord, e]);
+    expect(plan.kind).toBe("wait");
+    expect(man(plan.x, plan.y, e.x, e.y)).toBeLessThan(man(0, 5, e.x, e.y));
   });
 
   test("the lord takes a fight whose counter cannot hurt him", () => {

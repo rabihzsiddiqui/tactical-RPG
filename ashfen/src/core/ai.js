@@ -6,15 +6,13 @@ import { wep, strikeCalc, canCounter } from "./combat.js";
 import { K, man } from "./util.js";
 
 /* the auto battle's tunables (planAuto below) */
-const AUTO_LOW_HP = 0.4;   // share of max HP at or under which a unit with a vulnerary drinks it, unless it has a kill to take
-const AUTO_LORD_RISK = 4;  // how heavily the lord weighs the damage a counter would do him; planFor's own weight is 1.4
+const AUTO_LOW_HP = 0.4;   // share of max HP at or under which a unit with a vulnerary drinks it, unless it has a kill to take; a lord this hurt with none left holds back
 
-/* a unit's best move and attack against the other side. `riskWeight` is
-   how much the damage a counter would do counts against a fight, and
-   `safe` drops any fight whose counter could kill the unit outright. Both
-   are for the auto battle's lord; an enemy takes the defaults. An attack
-   plan says whether it expects a kill. */
-export function planFor(e, units, { riskWeight = 1.4, safe = false } = {}) {
+/* a unit's best move and attack against the other side. `safe` drops any
+   fight whose counter could kill the unit outright; it is for the auto
+   battle's lord, and an enemy never sets it. An attack plan says whether
+   it expects a kill. */
+export function planFor(e, units, { safe = false } = {}) {
   const w = wep(e);
   const foes = units.filter((u) => u.team !== e.team && u.hp > 0);
   if (!foes.length) return null;
@@ -42,7 +40,7 @@ export function planFor(e, units, { riskWeight = 1.4, safe = false } = {}) {
       const back = canCounter(f, ghost) ? strikeCalc(f, ghost) : null;
       if (safe && back && back.dmg * (back.doubles ? 2 : 1) >= e.hp) continue;
       const risk = back ? (back.dmg * (back.doubles ? 2 : 1) * back.acc) / 100 : 0;
-      let score = expect * 3 - risk * riskWeight + t.def * 2 + t.avo / 10;
+      let score = expect * 3 - risk * 1.4 + t.def * 2 + t.avo / 10;
       if (kill) score += 120;
       if (f.lord) score += 12;
       score += (f.maxHp - f.hp) * 0.4;
@@ -99,18 +97,24 @@ export function threatSet(units) {
    Fighters take planFor, the enemy's own reckoning turned on the enemy.
    Two things only the player's side has: a staff heals the ally it can do
    the most for, and a unit at AUTO_LOW_HP or under with a vulnerary drinks
-   it, unless it has a kill to take. The lord only takes a fight no counter
-   can kill him in, weighs a counter's damage heavily, and otherwise holds
-   his ground: losing him loses the battle. */
+   it, unless it has a kill to take.
+
+   The lord fights and advances like everyone else, since a battle where he
+   stands at the back goes stale, with two limits because losing him loses
+   the battle: he turns down a fight whose counter could kill him outright,
+   and at AUTO_LOW_HP or under with no vulnerary left he holds his ground
+   rather than walk up to the enemy. The first cut held him back whenever
+   he had no safe fight, and he spent most battles doing nothing. */
 export function planAuto(u, units) {
   const stay = { kind: "wait", x: u.x, y: u.y };
   const staff = wep(u).staff;
-  const plan = staff ? null : planFor(u, units, u.lord ? { riskWeight: AUTO_LORD_RISK, safe: true } : undefined);
+  const plan = staff ? null : planFor(u, units, u.lord ? { safe: true } : undefined);
   const low = u.vulnerary > 0 && u.hp < u.maxHp && u.hp <= u.maxHp * AUTO_LOW_HP;
   if (low && !(plan && plan.kind === "attack" && plan.kill)) return { kind: "item", x: u.x, y: u.y };
   if (staff) return planHeal(u, units) || planFollow(u, units) || stay;
   if (plan && plan.kind === "attack") return { kind: "attack", x: plan.x, y: plan.y, target: plan.foe };
-  if (plan && plan.kind === "move" && !u.lord) return { kind: "wait", x: plan.x, y: plan.y };
+  const holdBack = u.lord && u.hp <= u.maxHp * AUTO_LOW_HP;
+  if (plan && plan.kind === "move" && !holdBack) return { kind: "wait", x: plan.x, y: plan.y };
   return stay;
 }
 

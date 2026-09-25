@@ -203,9 +203,10 @@ function Controls() {
         </Term>
         <Term k="Auto battle">
           Under the map and in the Menu. While it is on, your units take their turns on their
-          own: fighters strike where they can, the cleric heals, a badly hurt unit drinks its
-          vulnerary, and Kaelen only fights when a counter cannot kill him. It carries on turn
-          after turn until you switch it off, and then the unit already moving finishes first.
+          own: everyone strikes where they can, Kaelen included, the cleric heals, and a badly
+          hurt unit drinks its vulnerary. Kaelen turns down a fight a counter could kill him in,
+          and holds back once badly hurt. It carries on turn after turn until you switch it off,
+          and then the unit already moving finishes first.
         </Term>
         <Term k="Show threat">
           Shades every tile the enemy could attack next phase. Toggle it freely. It changes
