@@ -474,6 +474,9 @@ earlier work. Records decisions the code alone doesn't explain.
 - The pan limit is worked out in closed form from what the zoom leaves off screen (`panLimits`): across, the board's side reaches the frame's side at the target's depth; up and down, the far and near ground edges reach the frame's top and bottom. Every BOARD corner is in frame at the fit, so all three limits are 0 there and a drag at full zoom-out does nothing. A zoom clamps the stored pan too, so zooming out and back in comes back centred. The grab cursor shows only when a drag can move something.
 - Checked headless: a 390x844 phone opens at zoom 12, closer than its fit, so its opening view already pans a little sideways and not at all up or down. A 1280x800 desktop opens at its fit and does not pan until zoomed in.
 
+**Facing at the start of an exchange (outside the sessions).**
+- `playEvents` turns both units of an exchange to face each other before anything else plays, with or without the cut-in. Each strike only ever turned its own striker, so a defender faced wherever it last walked until its counter, and one that could not counter never turned. `faceToward` aims straight at the other unit rather than the nearest grid direction, so a diagonal bow shot two tiles off faces its mark. The dev reference cut-in turns both as well, and puts both back on release.
+
 **Known issues carried forward.** Bystanders behind the fighters are still common on turn 1 with either side chosen; the formation is simply crowded. A close bystander still catches the key light on its helm. Standard materials and the two idle lights are still untested on a phone; the performance budget asked for that check before Session 5 and it has not happened. oxlint reports `react(refs)` warnings for every read of `g` during render, including the new HUD block; that pattern predates this plan.
 
 **At the end of every session:** append anything decided and why, but only where

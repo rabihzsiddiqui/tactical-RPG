@@ -579,11 +579,11 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
     }
   }
 
+  /* turns `u` to look straight at `t`. Straight, not the nearest of the
+     four grid directions: a bow shot two tiles off on a diagonal used to
+     leave the archer looking 45 degrees wide of its mark. */
   function faceToward(u, t) {
-    const dx = t.x - u.x, dy = t.y - u.y;
-    u.anim.targetYaw = Math.abs(dx) > Math.abs(dy)
-      ? (dx > 0 ? Math.PI / 2 : -Math.PI / 2)
-      : (dy > 0 ? 0 : Math.PI);
+    u.anim.targetYaw = Math.atan2(t.x - u.x, t.y - u.y);
   }
 
   function walkPath(u, path, from = { x: u.x, y: u.y }) {
@@ -834,6 +834,15 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
     let i = 0;
     while (i < events.length) {
       const end = exchangeEnd(events, i);
+      /* both sides of an exchange square up to each other as it starts,
+         with or without the cut-in. Each strike only ever turned its own
+         striker, so a defender stood looking wherever it last walked
+         until its counter, and one that could not counter never turned */
+      if (end > i) {
+        const src = g.units.find((z) => z.id === events[i].srcId);
+        const tgt = g.units.find((z) => z.id === events[i].tgtId);
+        if (src && tgt && src !== tgt) { faceToward(src, tgt); faceToward(tgt, src); }
+      }
       if (end > i && director.enabled) {
         const first = events[i];
         const src = g.units.find((z) => z.id === first.srcId);
@@ -1429,12 +1438,12 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
      between sessions. It frames the closest player and enemy by ROSTER start
      position, so a fresh board gives the same pair every time, and shows
      what a real cut-in shows (the HUD, the world bars hidden, bystanders
-     veiled, the player unit squared up as the first strike would turn it)
+     veiled, the two squared up to each other as a real exchange turns them)
      without playing a strike or resolving anything. Holds, with the board
      locked, until called again, then puts the facing back. Vite drops the
      block from the build. */
   if (import.meta.env.DEV) {
-    let held = null;    // { src, yaw, blocked } while the shot holds, null when released
+    let held = null;    // { src, tgt, yaw, tyaw, blocked } while the shot holds, null when released
     let moving = false; // a press during the fly in or out is ignored
     apiRef.current.refCutIn = async () => {
       if (moving || (!held && (busy || director.active))) return;
@@ -1443,6 +1452,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
         g.cutIn.closing = true;
         tick();
         held.src.anim.targetYaw = held.yaw;
+        held.tgt.anim.targetYaw = held.tyaw;
         await Promise.all([director.flyOut(), veilTo(held.blocked, 1, VEIL_IN_MS)]);
         if (held.blocked.length) syncUnitVisuals();
         g.cutIn = null;
@@ -1460,8 +1470,9 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
           busy = true;
           g.cutIn = { srcId: src.id, tgtId: tgt.id, kind: "strike", closing: false, f: forecastOf(src, tgt), amount: 0 };
           tick();
-          held = { src, yaw: src.anim.targetYaw, blocked: inTheWay(src, tgt) };
+          held = { src, tgt, yaw: src.anim.targetYaw, tyaw: tgt.anim.targetYaw, blocked: inTheWay(src, tgt) };
           faceToward(src, tgt);
+          faceToward(tgt, src);
           await Promise.all([director.flyIn(src, tgt, { leftIsSource: true }), veilTo(held.blocked, 0, VEIL_OUT_MS)]);
         }
       }
