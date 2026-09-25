@@ -408,14 +408,18 @@ export default function App() {
               />
             )}
 
-            {/* the under-map row: the threat range and the manual, each one
-                tap from the board. End turn and the settings live in the
-                menu. */}
+            {/* the under-map row: the threat range, auto battle and the
+                manual, each one tap from the board. End turn and the
+                settings live in the menu. */}
             <div className="mt-2">
               <div className="flex flex-wrap gap-2">
                 {/* wide enough for either label, so Help holds still on a toggle */}
                 <RuleBtn on={api.toggleDanger} active={g.danger} style={{ minWidth: 142 }}>
                   {g.danger ? "Hide threat" : "Show threat"}
+                </RuleBtn>
+                {/* the same toggle as the menu's Auto battle; see runAuto in scene.js */}
+                <RuleBtn on={api.toggleAuto} active={g.auto} style={{ minWidth: 142 }}>
+                  {g.auto ? "Stop auto" : "Auto battle"}
                 </RuleBtn>
                 <RuleBtn on={() => openHelp()}>Help</RuleBtn>
               </div>

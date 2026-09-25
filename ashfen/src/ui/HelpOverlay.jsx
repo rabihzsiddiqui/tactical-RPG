@@ -193,13 +193,19 @@ function Controls() {
 
       <Section title="Buttons">
         <Term k="Menu">
-          The button in the top right corner of the map. Holds Resume, End turn, the threat
-          range and this manual. Its Options hold the graphics resolution, the attack
+          The button in the top right corner of the map. Holds Resume, End turn, auto battle
+          and this manual. Its Options hold the graphics resolution, the attack
           cinematics, outlines, music on and off, the track, and both volumes.
         </Term>
         <Term k="Zoom">
           The plus and minus in the bottom right corner of the map step the camera in and out, a
           steadier way than a pinch on a phone. Each dims at the end of its range.
+        </Term>
+        <Term k="Auto battle">
+          Under the map and in the Menu. While it is on, your units take their turns on their
+          own: fighters strike where they can, the cleric heals, a badly hurt unit drinks its
+          vulnerary, and Kaelen only fights when a counter cannot kill him. It carries on turn
+          after turn until you switch it off, and then the unit already moving finishes first.
         </Term>
         <Term k="Show threat">
           Shades every tile the enemy could attack next phase. Toggle it freely. It changes

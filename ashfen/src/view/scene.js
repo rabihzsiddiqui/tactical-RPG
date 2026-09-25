@@ -9,9 +9,9 @@
 import * as THREE from "three";
 import { MW, MH, CX, CZ, cell, lvlH, walkable } from "../core/map.js";
 import { ROSTER, makeUnit } from "../core/data.js";
-import { routeTo, reachTiles } from "../core/path.js";
+import { routeTo, reachTiles, moveField } from "../core/path.js";
 import { wep, forecastOf } from "../core/combat.js";
-import { threatSet } from "../core/ai.js";
+import { threatSet, planAuto, nextAuto } from "../core/ai.js";
 import { K, man, clamp, sleep } from "../core/util.js";
 import {
   resolveMove, resolveAttack, resolveHeal, resolveItem, resolveWait,
@@ -42,6 +42,10 @@ import {
    hand; this cants it forward off the knuckles so the blade, haft or
    staff rises in front of the shoulder rather than over it. */
 const READY_WEP = 1.05;
+
+/* ms the auto battle waits before its first unit and between one unit's
+   action and the next, so the turn reads as one unit at a time */
+const AUTO_GAP_MS = 350;
 
 /* orbit zoom, in world units of vertical frame coverage: the map is 10
    tiles deep, so 22 sees the whole field with room to spare and 4.5 is
@@ -97,6 +101,10 @@ export function newGame() {
     units: ROSTER.map(makeUnit),
     turn: 1, phase: "player", status: "playing",
     sel: null, danger: false, inspect: null, forecast: null,
+    /* auto battle: while true the player's units act on their own, one at
+       a time, and every player phase carries on the same way until it is
+       turned off. See runAuto. */
+    auto: false,
     /* the attack cut-in in progress, or null. { srcId, tgtId, kind, f,
        closing }: `f` is the forecast at the moment the camera flew in,
        `closing` flips true for the fly-out so the HUD can fade while the
@@ -1153,6 +1161,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     paintSel();
     tick();
     scheduleEnemyPhaseIfDone();
+    runAuto();
   }
 
   /* ---- player actions ----
@@ -1222,6 +1231,78 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     await applyResolve(runEnemyPhase(coreState(), Math.random));
     if (my !== phaseToken) return;
     busy = false;
+    runAuto();
+  }
+
+  /* ---- auto battle ----
+     while g.auto is on, the player's units take their turns on their own:
+     planAuto in core/ai.js picks each move and action, and nextAuto the
+     order. Each unit walks and acts through the same resolve functions a
+     tap would call, so moves, cut-ins, heals and level-ups play exactly as
+     they do by hand, and finishGlue ends the turn once everyone has acted.
+     The loop holds `busy` for its whole run, so no tap lands on the board
+     mid-turn. Switching auto off lets the unit in progress finish, then
+     hands the rest of the turn back.
+
+     It starts when the toggle goes on in the player phase, when a player
+     phase begins with it on, and after a hand-played action ends with it
+     on; each of those calls runAuto, which does nothing unless the board
+     is the player's and idle. A unit moved but not yet committed is put
+     back on its tile first, so it cannot move twice. */
+  let autoRunning = false;
+  async function runAuto() {
+    if (autoRunning || busy || !g.auto || g.status !== "playing" || g.phase !== "player") return;
+    autoRunning = true;
+    busy = true;
+    const my = phaseToken;
+    if (g.sel) {
+      const s = g.units.find((z) => z.id === g.sel.id);
+      if (s && (s.x !== g.sel.ox || s.y !== g.sel.oy)) {
+        s.x = g.sel.ox; s.y = g.sel.oy;
+        s.view.root.position.set(s.x - CX, lvlH(s.x, s.y), s.y - CZ);
+      }
+    }
+    g.tutorial = false;
+    g.inspect = null;
+    clearSel();
+    /* the flag always comes down, but `busy` only if the phase is still
+       this loop's: once the enemy phase has started it owns `busy` */
+    try {
+      await sleep(AUTO_GAP_MS);
+      while (g.auto && my === phaseToken && g.status === "playing" && g.phase === "player") {
+        const u = nextAuto(g.units);
+        if (!u) break;
+        await autoAct(u);
+        await sleep(AUTO_GAP_MS);
+      }
+    } finally {
+      autoRunning = false;
+      if (my === phaseToken) busy = false;
+      tick();
+    }
+  }
+
+  /* one unit's auto turn: walk where planAuto says, then act there */
+  async function autoAct(u) {
+    const plan = planAuto(u, g.units);
+    setReady(u);
+    tick();
+    if (plan.x !== u.x || plan.y !== u.y) {
+      const path = routeTo(moveField(u, g.units), u.x, u.y, plan.x, plan.y);
+      if (path.length) await applyResolve(resolveMove(coreState(), u.id, path));
+    }
+    const id = u.id;
+    if (plan.kind === "attack") {
+      await applyResolve(resolveAttack(coreState(), id, plan.target, Math.random));
+    } else if (plan.kind === "heal") {
+      await applyResolve(resolveHeal(coreState(), id, plan.target));
+    } else if (plan.kind === "item") {
+      playHeal();
+      await applyResolve(resolveItem(coreState(), id));
+    } else {
+      await applyResolve(resolveWait(coreState(), id));
+    }
+    finishGlue();
   }
 
   /* ---- zoom ----
@@ -1442,6 +1523,14 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     // both the under-map row and the pause menu route here, so the toggle
     // sounds the same wherever it was pressed, and in both directions
     toggleDanger: () => { g.danger = !g.danger; playThreatCheck(); paintSel(); tick(); },
+    // the under-map row and the pause menu both route here; see runAuto
+    toggleAuto: () => {
+      g.auto = !g.auto;
+      if (g.auto) playActionSelect();
+      else playBack();
+      tick();
+      runAuto();
+    },
     chooseAttack: () => { playActionSelect(); g.sel.mode = "target"; paintSel(); tick(); },
     chooseHeal: () => { playActionSelect(); g.sel.mode = "targetHeal"; paintSel(); tick(); },
     vulnerary: doVulnerary,

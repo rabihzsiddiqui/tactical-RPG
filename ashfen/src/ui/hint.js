@@ -8,6 +8,7 @@ export function hintFor(g) {
       : "Defeat. Press Restart to try again.";
   }
   if (g.phase === "enemy") return "Enemy phase.";
+  if (g.auto) return "Auto battle is playing your turn.";
   if (g.forecast) return "Attack to commit, or Back to reconsider.";
   if (g.sel) {
     if (g.sel.mode === "target") return "Tap a red enemy to see the forecast.";

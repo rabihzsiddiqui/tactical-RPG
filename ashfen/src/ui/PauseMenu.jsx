@@ -376,12 +376,17 @@ export default function PauseMenu({
               visible, so this closes the menu on the way out. No back sound:
               api.endTurn already voices it. */}
           <Cmd id="end" lit={lit("cmds", "end")} label="End turn"
-            disabled={g.phase !== "player" || g.status !== "playing"}
+            disabled={g.phase !== "player" || g.status !== "playing" || g.auto}
             on={() => { api.endTurn(); close(false); }} />
-          {/* api.toggleDanger and openHelp voice themselves, see scene.js
-              and App.jsx; a select sound here would double them up */}
-          <Cmd id="threat" lit={lit("cmds", "threat")} label="Threat range"
-            value={onOff(g.danger)} valueOn={g.danger} on={api.toggleDanger} />
+          {/* auto battle took the threat range's place here; Show threat
+              lives under the map. Switching it on closes the menu, as End
+              turn does, since the turn it plays needs the map visible;
+              switching it off leaves the menu up. api.toggleAuto and
+              openHelp voice themselves, see scene.js and App.jsx, so no
+              sound here on top. */}
+          <Cmd id="auto" lit={lit("cmds", "auto")} label="Auto battle"
+            value={onOff(g.auto)} valueOn={g.auto}
+            on={() => { const on = !g.auto; api.toggleAuto(); if (on) close(false); }} />
           <Cmd id="manual" lit={lit("cmds", "manual")} label="Field manual" on={onHelp} />
           <Cmd id="options" lit={lit("cmds", "options")} label="Options"
             on={view === "options" ? undefined : openOptions} />

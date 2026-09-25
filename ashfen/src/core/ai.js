@@ -1,13 +1,22 @@
-/* SECTION 5: enemy ai */
+/* SECTION 5: enemy ai, and the auto battle's picks for the player's side */
 
 import { cell, inB } from "./map.js";
 import { moveField, fieldFrom, standable, reachTiles } from "./path.js";
 import { wep, strikeCalc, canCounter } from "./combat.js";
 import { K, man } from "./util.js";
 
-export function planFor(e, units) {
+/* the auto battle's tunables (planAuto below) */
+const AUTO_LOW_HP = 0.4;   // share of max HP at or under which a unit with a vulnerary drinks it, unless it has a kill to take
+const AUTO_LORD_RISK = 4;  // how heavily the lord weighs the damage a counter would do him; planFor's own weight is 1.4
+
+/* a unit's best move and attack against the other side. `riskWeight` is
+   how much the damage a counter would do counts against a fight, and
+   `safe` drops any fight whose counter could kill the unit outright. Both
+   are for the auto battle's lord; an enemy takes the defaults. An attack
+   plan says whether it expects a kill. */
+export function planFor(e, units, { riskWeight = 1.4, safe = false } = {}) {
   const w = wep(e);
-  const foes = units.filter((u) => u.team === "player" && u.hp > 0);
+  const foes = units.filter((u) => u.team !== e.team && u.hp > 0);
   if (!foes.length) return null;
 
   let options;
@@ -31,12 +40,13 @@ export function planFor(e, units) {
       const expect = (mine.dmg * hits * mine.acc) / 100;
       const kill = mine.dmg * hits >= f.hp && mine.acc >= 55;
       const back = canCounter(f, ghost) ? strikeCalc(f, ghost) : null;
+      if (safe && back && back.dmg * (back.doubles ? 2 : 1) >= e.hp) continue;
       const risk = back ? (back.dmg * (back.doubles ? 2 : 1) * back.acc) / 100 : 0;
-      let score = expect * 3 - risk * 1.4 + t.def * 2 + t.avo / 10;
+      let score = expect * 3 - risk * riskWeight + t.def * 2 + t.avo / 10;
       if (kill) score += 120;
       if (f.lord) score += 12;
       score += (f.maxHp - f.hp) * 0.4;
-      if (!best || score > best.score) best = { score, x, y, foe: f.id };
+      if (!best || score > best.score) best = { score, x, y, foe: f.id, kill };
     }
   }
   if (best) return { kind: "attack", ...best };
@@ -79,4 +89,84 @@ export function threatSet(units) {
     }
   }
   return s;
+}
+
+/* the auto battle's pick for one of the player's units: where to stand
+   and what to do there, as { kind, x, y, target }. kind is attack, heal,
+   item or wait, and x and y are the unit's own tile when it stays put, so
+   a wait somewhere else is a move and then a wait.
+
+   Fighters take planFor, the enemy's own reckoning turned on the enemy.
+   Two things only the player's side has: a staff heals the ally it can do
+   the most for, and a unit at AUTO_LOW_HP or under with a vulnerary drinks
+   it, unless it has a kill to take. The lord only takes a fight no counter
+   can kill him in, weighs a counter's damage heavily, and otherwise holds
+   his ground: losing him loses the battle. */
+export function planAuto(u, units) {
+  const stay = { kind: "wait", x: u.x, y: u.y };
+  const staff = wep(u).staff;
+  const plan = staff ? null : planFor(u, units, u.lord ? { riskWeight: AUTO_LORD_RISK, safe: true } : undefined);
+  const low = u.vulnerary > 0 && u.hp < u.maxHp && u.hp <= u.maxHp * AUTO_LOW_HP;
+  if (low && !(plan && plan.kind === "attack" && plan.kill)) return { kind: "item", x: u.x, y: u.y };
+  if (staff) return planHeal(u, units) || planFollow(u, units) || stay;
+  if (plan && plan.kind === "attack") return { kind: "attack", x: plan.x, y: plan.y, target: plan.foe };
+  if (plan && plan.kind === "move" && !u.lord) return { kind: "wait", x: plan.x, y: plan.y };
+  return stay;
+}
+
+/* the staff's pick: the ally it can do the most for, from any tile it can
+   reach. A heal gives what the ally is missing up to the staff's power
+   plus the healer's magic (resolveHeal), so the most hurt ally in reach
+   wins, the lord on a tie, then the better cover to heal from. */
+function planHeal(u, units) {
+  const w = wep(u);
+  const power = w.power + u.mag;
+  const hurt = units.filter((a) => a.team === u.team && a.id !== u.id && a.hp > 0 && a.hp < a.maxHp);
+  if (!hurt.length) return null;
+  const { dist } = moveField(u, units);
+  let best = null;
+  for (const k of standable(dist, u, units)) {
+    const [x, y] = k.split(",").map(Number);
+    const t = cell(x, y);
+    for (const a of hurt) {
+      const d = man(x, y, a.x, a.y);
+      if (d < w.rmin || d > w.rmax) continue;
+      const score = Math.min(a.maxHp - a.hp, power) * 10 + (a.lord ? 5 : 0) + t.def * 2 + t.avo / 10;
+      if (!best || score > best.score) best = { score, x, y, target: a.id };
+    }
+  }
+  return best && { kind: "heal", x: best.x, y: best.y, target: best.target };
+}
+
+/* a staff with nobody to heal keeps up with the company: it steps toward
+   the lord, or the nearest ally once he is gone, and keeps off any tile
+   an enemy could reach next phase when it can */
+function planFollow(u, units) {
+  const allies = units.filter((a) => a.team === u.team && a.id !== u.id && a.hp > 0);
+  if (!allies.length) return null;
+  const near = (a) => man(u.x, u.y, a.x, a.y);
+  const lead = allies.find((a) => a.lord) || allies.reduce((n, a) => (near(a) < near(n) ? a : n));
+  const field = fieldFrom(lead.x, lead.y, u, units);
+  const danger = threatSet(units);
+  const { dist } = moveField(u, units);
+  let step = null;
+  for (const k of standable(dist, u, units)) {
+    const v = field.get(k);
+    if (v === undefined) continue;
+    const [x, y] = k.split(",").map(Number);
+    const sc = -v * 10 - (danger.has(k) ? 60 : 0) + cell(x, y).def;
+    if (!step || sc > step.sc) step = { sc, x, y };
+  }
+  return step && { kind: "wait", x: step.x, y: step.y };
+}
+
+/* which of the player's units the auto battle moves next: fighters in
+   roster order, then the lord, then anyone with a staff, so the healer
+   sees what the others took on their counters. Null once all have acted. */
+export function nextAuto(units) {
+  const rank = (u) => (wep(u).staff ? 2 : u.lord ? 1 : 0);
+  const ready = units.filter((u) => u.team === "player" && u.hp > 0 && !u.acted);
+  let best = null;
+  for (const u of ready) if (!best || rank(u) < rank(best)) best = u;
+  return best;
 }
