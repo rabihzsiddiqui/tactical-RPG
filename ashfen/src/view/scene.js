@@ -32,7 +32,6 @@ import { createTileFog, updateTileFog, tileFog, tileFogProp } from "./tilefog.js
 import { createWind } from "./wind.js";
 import { createSky, SKY_HORIZON } from "./sky.js";
 import { renderPortraits } from "./portrait.js";
-import { C } from "../ui/theme.js";
 import {
   playUnitSelect, playActionSelect, playBack, playCritHit, playMiss, playNoDamage, playDeath,
   playFinalHit, playLevelUp, playAttackHit, playHeal, playPlayerPhase, playEnemyPhase as playEnemyPhaseSfx,
@@ -475,11 +474,13 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
   const pt = { x: 0, y: 0 }; // scratch point for placing the action menu and the forecast in frame()
 
+  /* a number rising off a unit, drawn by ui/Floaters.jsx. `kind` is hit,
+     crit, heal or miss, which picks its size and the colour behind it */
   let floatId = 0;
-  function floater(u, text, color) {
+  function floater(u, text, kind) {
     const p = project(u, 1.1);
     const id = ++floatId;
-    setFloats((f) => [...f, { id, ...p, text, color }]);
+    setFloats((f) => [...f, { id, ...p, text, kind }]);
     setTimeout(() => setFloats((f) => f.filter((z) => z.id !== id)), 900);
   }
 
@@ -940,13 +941,13 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
           hit: e.hit, crit,
           onImpact: () => {
             if (!e.hit) {
-              floater(tgt, "miss", C.parchDim);
+              floater(tgt, "miss", "miss");
               playMiss();
               nudge(tgt, ddx / dl, ddz / dl, 0.16, 260);
             } else {
               tgt.hp = e.hpAfter;
               flash(tgt, crit);
-              floater(tgt, e.dmg + (crit ? "!" : ""), crit ? C.gold : C.redLite);
+              floater(tgt, e.dmg + (crit ? "!" : ""), crit ? "crit" : "hit");
               /* impact, in the order the eye reads it: the scene holds on
                  the frame of contact, then the screen jolts and the target
                  recoils together. Shake scales with weapon might, so an
@@ -983,7 +984,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         const tgt = g.units.find((z) => z.id === e.tgtId);
         if (e.instant) {
           tgt.hp += e.amount;
-          floater(tgt, "+" + e.amount, C.green);
+          floater(tgt, "+" + e.amount, "heal");
           tick();
           break;
         }
@@ -994,7 +995,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
           hit: true, crit: false,
           onImpact: () => {
             tgt.hp += e.amount;
-            floater(tgt, "+" + e.amount, C.green);
+            floater(tgt, "+" + e.amount, "heal");
             playHeal();
             tick();
           },

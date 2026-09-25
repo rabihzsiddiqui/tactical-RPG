@@ -16,6 +16,7 @@ import ZoomButtons, { ZOOM_CSS } from "./ZoomButtons.jsx";
 import Forecast, { FORECAST_CSS } from "./Forecast.jsx";
 import BattleHud, { BATTLE_HUD_CSS } from "./BattleHud.jsx";
 import ActionMenu, { ACTION_MENU_CSS } from "./ActionMenu.jsx";
+import Floaters, { FLOATER_CSS } from "./Floaters.jsx";
 import OnboardingCard from "./OnboardingCard.jsx";
 import TitleCard from "./TitleCard.jsx";
 import PhaseBanner from "./PhaseBanner.jsx";
@@ -285,8 +286,6 @@ export default function App() {
           100%{transform:translateX(40px) scale(0.94);opacity:0} }
         @keyframes scrimIn { 0%{opacity:0} 100%{opacity:1} }
         @keyframes scrimOut { 0%{opacity:1} 100%{opacity:0} }
-        @keyframes riseOut { 0%{transform:translate(-50%,0);opacity:0} 20%{transform:translate(-50%,-8px);opacity:1}
-          100%{transform:translate(-50%,-34px);opacity:0} }
         @keyframes popIn { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
         @keyframes hintPulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
         ${MENU_CSS}
@@ -295,6 +294,7 @@ export default function App() {
         ${BATTLE_HUD_CSS}
         ${RULE_BTN_CSS}
         ${ACTION_MENU_CSS}
+        ${FLOATER_CSS}
         ${ZOOM_CSS}
       `}</style>
 
@@ -346,17 +346,8 @@ export default function App() {
               <OnboardingCard onDismiss={dismissOnboarding} onFullGuide={openFullGuide} />
             )}
 
-            {/* damage numbers */}
-            {floats.map((f) => (
-              <div key={f.id} className="absolute"
-                style={{
-                  left: f.x, top: f.y, fontFamily: SERIF, fontSize: 15, color: f.color,
-                  textShadow: "0 1px 2px #000, 0 0 7px #000", pointerEvents: "none",
-                  animation: "riseOut .9s ease-out forwards", zIndex: 12,
-                }}>
-                {f.text}
-              </div>
-            ))}
+            {/* damage and heal numbers, see Floaters.jsx */}
+            <Floaters floats={floats} />
 
             <ActionMenu menuRef={menuRef} sel={sel} selUnit={selUnit} api={api} />
 

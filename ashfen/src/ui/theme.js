@@ -1,4 +1,4 @@
-/* shared presentation tokens, used by both the scene (floater colors) and the ui layer */
+/* shared presentation tokens for the ui layer */
 
 /* the text face, for every label, number and sentence (see the @font-face
    in index.css). Labels are this, uppercased and tracked out. */
@@ -14,6 +14,10 @@ export const C = {
   parch: "#e9e0c8", parchDim: "#d8ccae", ink: "#221c12", inkSoft: "#5c5140",
   rule: "#b3a586", blue: "#2f5d8c", blueLite: "#7fb0e8", red: "#9d2f33",
   redLite: "#e0868a", gold: "#c8a04a", green: "#5f8a4a", table: "#0c0f16",
+  /* the scene's own two, for the bursts behind the rising numbers: the
+     enemy health bar's red in view/scene.js and the staff heal's tint on
+     its target in view/attacks.js */
+  hurt: "#d94f45", mend: "#5fd07a",
 };
 
 /* a theme colour at some alpha, so every tint on a dark panel is one of C's */
