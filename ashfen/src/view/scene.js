@@ -1199,6 +1199,28 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     busy = false;
   }
 
+  /* ---- zoom ----
+     the most a zoom out can show is the zoom that just frames the board
+     from the current angle (see fitDist in the loop); past it the frame
+     does not change. Wheel, pinch and the map's zoom buttons all clamp to
+     it, and to it first, so zooming out past the fit never banks a dead
+     zone the next zoom in has to wind back through before anything moves.
+     Pinching out a few times on a phone used to leave zoom at ZOOM_MAX with
+     the frame parked at the fit, and the next pinch in did nothing for a
+     while. The range is read, not stored, so an orbit or a resize changes
+     it with no bookkeeping. */
+  function zoomRange() {
+    const o = camRef.current;
+    const fit = 2 * Math.tan(THREE.MathUtils.degToRad(o.fov) / 2)
+      * fitDist(THREE.MathUtils.degToRad(o.pitch), THREE.MathUtils.degToRad(o.yaw), o.fov, VW / VH);
+    return { min: ZOOM_MIN, max: Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, fit)) };
+  }
+  // k below 1 zooms in, above 1 zooms out
+  function zoomBy(k) {
+    const { min, max } = zoomRange();
+    setCam((c) => ({ ...c, zoom: clamp(Math.min(c.zoom, max) * k, min, max) }));
+  }
+
   /* ---- input ----
      pointer events cover mouse and touch alike: one finger drags to orbit
      and taps to select/act, two fingers pinch to zoom. `pinched` latches for
@@ -1218,6 +1240,11 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
 
   function onDown(e) {
     try { cv.setPointerCapture(e.pointerId); } catch { /* pointer already gone: a fast tap-and-lift */ }
+    /* the primary pointer is the first finger of a new gesture, so nothing
+       else can still be down. A finger whose lift never reached the canvas
+       would otherwise stay in the map for good, and every drag after it
+       would read as a pinch against a finger that is not there */
+    if (e.isPrimary) { pointers.clear(); pinched = false; pinchDist = 0; }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size >= 2) {
       dragging = false;
@@ -1236,9 +1263,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
 
     if (pointers.size >= 2) {
       const d = pinchDistance();
-      if (pinchDist > 0) {
-        setCam((c) => ({ ...c, zoom: clamp(c.zoom * (pinchDist / Math.max(d, 1)), ZOOM_MIN, ZOOM_MAX) }));
-      }
+      if (pinchDist > 0) zoomBy(pinchDist / Math.max(d, 1));
       pinchDist = d;
       return;
     }
@@ -1273,8 +1298,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
   function onWheel(e) {
     e.preventDefault();
-    const k = e.deltaY > 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-    setCam((c) => ({ ...c, zoom: clamp(c.zoom * k, ZOOM_MIN, ZOOM_MAX) }));
+    zoomBy(e.deltaY > 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
   }
   cv.addEventListener("pointerdown", onDown);
   cv.addEventListener("pointermove", onMove);
@@ -1339,6 +1363,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     confirmAttack: (id) => doAttack(id),
     cancelForecast: backToMove,
     isBusy: () => busy,
+    // the map's zoom buttons; they voice themselves, see ZoomButtons.jsx
+    zoomBy,
+    zoomRange,
   };
 
   /* dev builds only: the reference cut-in, a fixed shot for judging the look
