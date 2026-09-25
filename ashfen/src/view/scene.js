@@ -116,7 +116,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
   const cv = renderer.domElement;
   Object.assign(cv.style, {
     width: "100%", height: "100%", display: "block",
-    imageRendering: "pixelated", cursor: "grab", touchAction: "none",
+    imageRendering: "pixelated", touchAction: "none",
   });
 
   const scene = new THREE.Scene();
@@ -1207,8 +1207,8 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
      zone the next zoom in has to wind back through before anything moves.
      Pinching out a few times on a phone used to leave zoom at ZOOM_MAX with
      the frame parked at the fit, and the next pinch in did nothing for a
-     while. The range is read, not stored, so an orbit or a resize changes
-     it with no bookkeeping. */
+     while. The range is read, not stored, so a resize changes it with no
+     bookkeeping. */
   function zoomRange() {
     const o = camRef.current;
     const fit = 2 * Math.tan(THREE.MathUtils.degToRad(o.fov) / 2)
@@ -1218,11 +1218,58 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
   // k below 1 zooms in, above 1 zooms out
   function zoomBy(k) {
     const { min, max } = zoomRange();
-    setCam((c) => ({ ...c, zoom: clamp(Math.min(c.zoom, max) * k, min, max) }));
+    setCam((c) => {
+      const n = { ...c, zoom: clamp(Math.min(c.zoom, max) * k, min, max) };
+      /* the pan comes in with a zoom out, so the full zoom out is always
+         the centred board and a zoom back in starts from there */
+      const lim = panLimits(n, orbitDist(n, VW / VH), VW / VH);
+      n.panX = clamp(n.panX || 0, -lim.x, lim.x);
+      n.panZ = clamp(n.panZ || 0, lim.zMin, lim.zMax);
+      return n;
+    });
   }
 
+  /* ---- pan ----
+     the camera's angle is fixed: it looks down the board from the south at
+     CAM_HOME's pitch (App.jsx), and a drag moves the look target instead,
+     so a zoomed-in player can look around the map. How far it can go is
+     whatever the zoom leaves off screen, so at the zoom that frames the
+     board there is nowhere to go and a drag does nothing. It lives in cam
+     state next to zoom, as panX and panZ in world units off the board's
+     centre, so the dev reference pose resets it with the rest. */
+  const panLim = { x: 0, zMin: 0, zMax: 0 };
+
+  // the orbit distance frame() uses: the zoom's, capped at the board's fit
+  function orbitDist(o, aspect) {
+    return Math.min(
+      (o.zoom / 2) / Math.tan(THREE.MathUtils.degToRad(o.fov) / 2),
+      fitDist(THREE.MathUtils.degToRad(o.pitch), THREE.MathUtils.degToRad(o.yaw), o.fov, aspect)
+    );
+  }
+
+  /* how far the look target may leave the board's centre at orbit distance
+     `dist`, written into panLim. Assumes yaw 0, the only yaw there is now.
+     Across, the board's side may come in as far as the frame's side at the
+     target's depth. Up and down, the ground at the far edge may come down
+     to the frame's top and the near edge up to its bottom. A ground point
+     at height y and depth z (both from the target) sits on a frame edge
+     when (y*cp - z*sp) / (dist - y*sp - z*cp) = +-tanV, which is linear in
+     z. At the fit every corner of BOARD is in frame, and so is the ground
+     between them, so all three come out at 0 there. */
+  function panLimits(o, dist, aspect) {
+    const pit = THREE.MathUtils.degToRad(o.pitch), sp = Math.sin(pit), cp = Math.cos(pit);
+    const tanV = Math.tan(THREE.MathUtils.degToRad(o.fov) / 2);
+    const y = -orbit.target.y;
+    const k = tanV * (dist - y * sp);
+    panLim.x = Math.max(0, BOARD.x - tanV * aspect * dist);
+    panLim.zMin = Math.min(0, -BOARD.z - (k - y * cp) / (tanV * cp - sp));
+    panLim.zMax = Math.max(0, BOARD.z - (k + y * cp) / (sp + tanV * cp));
+    return panLim;
+  }
+  const canPan = () => panLim.x > 0 || panLim.zMin < 0 || panLim.zMax > 0;
+
   /* ---- input ----
-     pointer events cover mouse and touch alike: one finger drags to orbit
+     pointer events cover mouse and touch alike: one finger drags to pan
      and taps to select/act, two fingers pinch to zoom. `pinched` latches for
      the whole gesture so releasing the first finger after a pinch never
      reads as a tap from the second. Touch gets a wider drag threshold than
@@ -1255,7 +1302,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
     dragging = true; dragged = 0;
     lastX = e.clientX; lastY = e.clientY;
     dragThreshold = e.pointerType === "touch" ? 10 : 6;
-    cv.style.cursor = "grabbing";
+    if (canPan()) cv.style.cursor = "grabbing";
   }
   function onMove(e) {
     if (!pointers.has(e.pointerId)) return;
@@ -1272,17 +1319,27 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
     lastX = e.clientX; lastY = e.clientY;
     dragged += Math.abs(dx) + Math.abs(dy);
     if (dragged > dragThreshold) {
+      /* the ground under the finger follows it. A pixel at the look
+         target's depth spans 2 * dist * tanV / VH world units, and up the
+         screen that stretches by 1 / sin(pitch) along the ground */
+      const o = camRef.current;
+      const dist = orbitDist(o, VW / VH);
+      const lim = panLimits(o, dist, VW / VH);
+      if (!canPan()) return;
+      const k = 2 * dist * Math.tan(THREE.MathUtils.degToRad(o.fov) / 2) / VH;
+      const kz = k / Math.sin(THREE.MathUtils.degToRad(o.pitch));
+      const { x, zMin, zMax } = lim;
       setCam((c) => ({
         ...c,
-        yaw: (c.yaw - dx * 0.4 + 360) % 360,
-        pitch: clamp(c.pitch + dy * 0.25, 20, 78),
+        panX: clamp((c.panX || 0) - dx * k, -x, x),
+        panZ: clamp((c.panZ || 0) - dy * kz, zMin, zMax),
       }));
     }
   }
   function endPointer(e) {
     const wasSingle = pointers.size === 1 && !pinched;
     pointers.delete(e.pointerId);
-    cv.style.cursor = "grab";
+    cv.style.cursor = canPan() ? "grab" : "";
     if (pointers.size < 2) pinchDist = 0;
     if (pointers.size === 0) pinched = false;
 
@@ -1424,6 +1481,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
 
   /* ---- loop ---- */
   let raf = 0, prevT = performance.now();
+  let couldPan = null; // whether the cursor last showed a drag could pan
   /* the orbit distance at which BOARD exactly fills the frame.
 
      The camera always looks at `orbit.target`, so work in the camera's own
@@ -1433,7 +1491,7 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
      d is the orbit distance minus how far the corner already lies along
      `dir`. Solving each of those for the distance and taking the largest
      over the eight corners is the closed-form fit: no iteration, and it
-     tracks a pitch drag or a Rotate 90 on the frame it happens. */
+     tracks a resize on the frame it happens. */
   function fitDist(pit, yaw, fov, aspect) {
     const sy = Math.sin(yaw), cy = Math.cos(yaw), sp = Math.sin(pit), cp = Math.cos(pit);
     const dir = [cp * sy, sp, cp * cy];
@@ -1473,16 +1531,25 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
        long before it fills that height, and the surplus was sky, so the
        ask is capped at the distance that just frames the board. Pulling
        back further only shrinks the map, never shows more of it. */
-    const dist = Math.min(
-      (o.zoom / 2) / Math.tan(THREE.MathUtils.degToRad(o.fov) / 2),
-      fitDist(pit, yaw, o.fov, camera.aspect)
-    );
+    const dist = orbitDist(o, camera.aspect);
     camera.far = dist + 80;
+    /* the pan, held to what this zoom leaves off screen: a resize can
+       shrink that under a stored pan. See panLimits */
+    panLimits(o, dist, camera.aspect);
+    const px = clamp(o.panX || 0, -panLim.x, panLim.x);
+    const pz = clamp(o.panZ || 0, panLim.zMin, panLim.zMax);
+    orbit.target.set(px, 0.4, pz);
     orbit.pos.set(
-      Math.cos(pit) * Math.sin(yaw) * dist,
+      px + Math.cos(pit) * Math.sin(yaw) * dist,
       Math.sin(pit) * dist + 0.4,
-      Math.cos(pit) * Math.cos(yaw) * dist
+      pz + Math.cos(pit) * Math.cos(yaw) * dist
     );
+    // the grab cursor only where a drag can move something
+    const pannable = canPan();
+    if (pannable !== couldPan && !dragging) {
+      couldPan = pannable;
+      cv.style.cursor = pannable ? "grab" : "";
+    }
     orbit.fov = o.fov;
     director.apply(camera, orbit, dt * 1000);
     updateTileFog(haze, camera.position.distanceTo(director.target), director.mix);

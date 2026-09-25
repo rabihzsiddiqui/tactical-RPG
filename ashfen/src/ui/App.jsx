@@ -32,8 +32,10 @@ const CINEMATICS_KEY = "tactical-rpg-cinematics";
 /* the post pass outlines. Persisted the same way: off is also the cheaper
    setting, and a phone that needs it should not lose it on relaunch. */
 const OUTLINES_KEY = "tactical-rpg-outlines";
-/* the orbit pose a fresh board opens on. The dev reference-pose key snaps back to it. */
-const CAM_HOME = { pitch: 48, yaw: 0, fov: 30, zoom: 12 };
+/* the camera a fresh board opens on. Pitch and yaw never change now; a
+   drag pans instead (see the pan section in scene.js). The dev
+   reference-pose key snaps back to it. */
+const CAM_HOME = { pitch: 48, yaw: 0, fov: 30, zoom: 12, panX: 0, panZ: 0 };
 /* dev builds only: fixed shots for graphics work, so screenshots from one
    session line up with the next. Clear of "?" and "h" below and the
    manual's Escape. The cut-in lives in scene.js as apiRef.refCutIn. */
@@ -135,8 +137,8 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [help, openHelp, closeHelp, paused, began, g, openMenu]);
 
-  /* see DEV_KEYS. The orbit target is fixed at the board's centre, so
-     restoring the four camera fields is the whole reference pose. */
+  /* see DEV_KEYS. The pan is in the camera fields too, so restoring them
+     is the whole reference pose. */
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     function onKey(e) {
@@ -453,16 +455,13 @@ export default function App() {
               />
             )}
 
-            {/* the under-map row: the threat range, a quarter turn of the
-                camera and the manual, each one tap from the board. End turn
-                and the settings live in the menu. */}
+            {/* the under-map row: the threat range and the manual, each one
+                tap from the board. End turn and the settings live in the
+                menu. */}
             <div className="mt-2">
               <div className="flex flex-wrap gap-2">
                 <Btn on={api.toggleDanger} active={g.danger}>
                   {g.danger ? "Hide threat" : "Show threat"}
-                </Btn>
-                <Btn on={() => { playActionSelect(); setCam((c) => ({ ...c, yaw: (c.yaw + 90) % 360 })); }}>
-                  Rotate 90&deg;
                 </Btn>
                 <Btn on={() => openHelp()}>Help</Btn>
               </div>
@@ -475,8 +474,8 @@ export default function App() {
               <Eyebrow>Orders</Eyebrow>
               <p style={{ color: C.inkSoft, fontSize: 13, margin: "4px 0 0" }}>
                 Tap a unit to see its movement in blue and its reach in red. Tap a tile to
-                move, then pick an action. Drag the map to orbit. Zoom with the buttons at its
-                bottom right, or scroll.
+                move, then pick an action. Zoom with the buttons at the map&rsquo;s bottom
+                right, or scroll, then drag to look around.
               </p>
               <div className="mt-2">
                 <Btn light on={() => openHelp()}>New here? Read the manual</Btn>

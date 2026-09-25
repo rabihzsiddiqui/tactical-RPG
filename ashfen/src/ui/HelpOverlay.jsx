@@ -184,7 +184,10 @@ function Controls() {
           forecast opens in one step.
         </Term>
         <Term k="Tap empty ground">Deselects, undoing a move you have not confirmed yet.</Term>
-        <Term k="Drag">Orbits the camera around the battlefield.</Term>
+        <Term k="Drag">
+          Once you are zoomed in, moves the view around the map. All the way out, the whole
+          board is already in view, so a drag does nothing.
+        </Term>
         <Term k="Scroll or pinch">Zooms in and out. The zoom buttons below do the same in steps.</Term>
       </Section>
 
@@ -201,9 +204,6 @@ function Controls() {
         <Term k="Show threat">
           Shades every tile the enemy could attack next phase. Toggle it freely. It changes
           nothing in the game state.
-        </Term>
-        <Term k="Rotate 90&deg;">
-          Spins the board a quarter turn, which helps when a hill or tree hides what is behind it.
         </Term>
         <Term k="Back">
           In the action menu or the forecast, Back undoes the move you just made and puts the unit
