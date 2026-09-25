@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LEVEL_NAME } from "../core/map.js";
 import { playActionSelect, playBack, playDrag } from "../view/audio.js";
-import { C, MONO, DISPLAY, SCRIM_RGB, SCRIM_RAMP as RAMP } from "./theme.js";
+import { C, MONO, DISPLAY, SCRIM_RGB, SCRIM_RAMP as RAMP, rgba } from "./theme.js";
 import { Slider } from "./primitives.jsx";
 
 /* the map menu. It opens over the battlefield, the way the map menu does
@@ -41,10 +41,6 @@ const SLIDE = 14;         // px the panels travel in from their sides
 const NARROW = 599;       // px of map width at or below which the panels stack (a phone, or any window from 640 to 1023, where the map is 430 wide)
 const SCRIM_EDGE = 0.82;  // scrim alpha behind the panels
 const SCRIM_FLOOR = 0.36; // scrim alpha in the gap between them, where the board shows through
-
-/* a theme colour at some alpha, so every tint here is one of C's */
-const rgba = (hex, a) =>
-  `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
 
 /* sized off the map viewport, like the phase banner, so the rows grow with
    the board and still fit the smallest one */

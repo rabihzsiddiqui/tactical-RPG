@@ -11,7 +11,7 @@ import { forecastOf } from "../core/combat.js";
 import { LEVEL_NAME } from "../core/map.js";
 import { C, MONO, SERIF, DISPLAY, PHASE_BANNER_MS } from "./theme.js";
 import { Card, Eyebrow, Pill, Btn } from "./primitives.jsx";
-import UnitCard from "./UnitCard.jsx";
+import UnitHud, { UNIT_HUD_CSS } from "./UnitHud.jsx";
 import Forecast from "./Forecast.jsx";
 import BattleHud from "./BattleHud.jsx";
 import ActionMenu from "./ActionMenu.jsx";
@@ -231,6 +231,10 @@ export default function App() {
   const sel = g.sel;
   const selUnit = sel ? g.units.find((u) => u.id === sel.id) : null;
   const inspected = g.inspect ? g.units.find((u) => u.id === g.inspect) : null;
+  /* the unit panel's unit, while the map is the thing being looked at: not
+     through a cut-in (the battle HUD has it), the menu or the end screen */
+  const hudUnit = began && !paused && !g.cutIn && g.status === "playing" && inspected && inspected.hp > 0
+    ? inspected : null;
   const fc = g.forecast
     ? (() => {
         const a = g.units.find((u) => u.id === g.forecast.attackerId);
@@ -290,6 +294,7 @@ export default function App() {
           .bhud-fill { transition: none; }
         }
         ${MENU_CSS}
+        ${UNIT_HUD_CSS}
       `}</style>
 
       {!began && <TitleCard onBegin={onBegin} onHelp={() => openHelp()} />}
@@ -370,6 +375,9 @@ export default function App() {
                 <BattleHud cut={g.cutIn} units={g.units} />
               </div>
             )}
+
+            {/* unit panel, top right beside the Menu button, see UnitHud.jsx */}
+            <UnitHud u={hudUnit} />
 
             {/* phase banner */}
             {g.banner.n >= 0 && (
@@ -461,20 +469,16 @@ export default function App() {
 
           {/* ---- side panels ---- */}
           <div className="flex flex-col gap-3" style={{ flex: "0 0 268px", width: "100%", maxWidth: 300 }}>
-            {inspected ? (
-              <UnitCard u={inspected} />
-            ) : (
-              <Card>
-                <Eyebrow>Orders</Eyebrow>
-                <p style={{ color: C.inkSoft, fontSize: 13, margin: "4px 0 0" }}>
-                  Tap a unit to see its movement in blue and its reach in red. Tap a tile to
-                  move, then pick an action. Drag the map to orbit, scroll to zoom.
-                </p>
-                <div className="mt-2">
-                  <Btn light on={() => openHelp()}>New here? Read the manual</Btn>
-                </div>
-              </Card>
-            )}
+            <Card>
+              <Eyebrow>Orders</Eyebrow>
+              <p style={{ color: C.inkSoft, fontSize: 13, margin: "4px 0 0" }}>
+                Tap a unit to see its movement in blue and its reach in red. Tap a tile to
+                move, then pick an action. Drag the map to orbit, scroll to zoom.
+              </p>
+              <div className="mt-2">
+                <Btn light on={() => openHelp()}>New here? Read the manual</Btn>
+              </div>
+            </Card>
 
             <Card>
               <Eyebrow>Weapon triangle</Eyebrow>

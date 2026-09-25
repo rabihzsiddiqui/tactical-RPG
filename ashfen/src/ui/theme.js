@@ -15,6 +15,10 @@ export const C = {
   redLite: "#e0868a", gold: "#c8a04a", green: "#5f8a4a", table: "#0c0f16",
 };
 
+/* a theme colour at some alpha, so every tint on a dark panel is one of C's */
+export const rgba = (hex, a) =>
+  `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
+
 /* the dark scrim the phase banner and the pause menu lay over the map, and
    the ramp both fade it by: [fraction of the ramp back from its inner edge,
    fraction of full alpha]. PhaseBanner.jsx explains the shape. */

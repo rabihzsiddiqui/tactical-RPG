@@ -31,6 +31,7 @@ import { createEffects } from "./effects.js";
 import { createTileFog, updateTileFog, tileFog, tileFogProp } from "./tilefog.js";
 import { createWind } from "./wind.js";
 import { createSky, SKY_HORIZON } from "./sky.js";
+import { renderPortraits } from "./portrait.js";
 import { C } from "../ui/theme.js";
 import {
   playUnitSelect, playActionSelect, playBack, playCritHit, playMiss, playNoDamage, playDeath,
@@ -1302,6 +1303,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         tick();
         return;
       }
+      // open ground: the unit panel goes with the selection
+      g.inspect = null;
       clearSel();
       return;
     }
@@ -1540,6 +1543,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     }
   }
   syncUnitVisuals();
+  /* last, for the same seeded-draw reason as the sky: see portrait.js */
+  renderPortraits(renderer, g.units);
   raf = requestAnimationFrame(frame);
 
   return () => {
