@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LEVEL_NAME } from "../core/map.js";
 import { playActionSelect, playBack, playDrag } from "../view/audio.js";
-import { C, MONO, DISPLAY, SCRIM_RGB, SCRIM_RAMP as RAMP, rgba } from "./theme.js";
+import { C, SERIF, DISPLAY, SCRIM_RGB, SCRIM_RAMP as RAMP, rgba } from "./theme.js";
 import { Slider } from "./primitives.jsx";
 
 /* the map menu. It opens over the battlefield, the way the map menu does
@@ -15,7 +15,7 @@ import { Slider } from "./primitives.jsx";
    manual (70) stay above it, so the manual opens on top and hands back.
 
    It speaks in the phase banner's voice: a dark scrim ramped the same way,
-   thin gold rules, parchment text, headings in DISPLAY and labels in MONO.
+   thin gold rules, parchment text, headings in DISPLAY and labels in SERIF.
    No backdrop blur: the render loop keeps running behind it, and a blur
    over a live WebGL canvas is expensive on a phone.
 
@@ -150,7 +150,7 @@ function Bar({ b, dim }) {
   );
 }
 
-/* a command: carved capitals, with an optional MONO value on the right */
+/* a command: carved capitals, with an optional SERIF value on the right */
 function Cmd({ id, lit, label, value, valueOn, on, disabled }) {
   return (
     <button className="pm-row" data-pm-row={id} data-lit={lit ? "" : undefined} onClick={on} disabled={disabled}
@@ -166,7 +166,7 @@ function Cmd({ id, lit, label, value, valueOn, on, disabled }) {
       }}>{label}</span>
       {value != null && (
         <span style={{
-          fontFamily: MONO, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase",
+          fontFamily: SERIF, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase",
           minWidth: "2.3em", textAlign: "right", color: valueOn ? C.gold : C.rule,
         }}>
           {value}
@@ -176,7 +176,7 @@ function Cmd({ id, lit, label, value, valueOn, on, disabled }) {
   );
 }
 
-/* a setting: MONO label and value, the way labels read everywhere else */
+/* a setting: SERIF label and value, the way labels read everywhere else */
 function Opt({ id, lit, label, value, valueOn, on, half }) {
   return (
     <button className="pm-row" data-pm-row={id} data-lit={lit ? "" : undefined} onClick={on}
@@ -185,7 +185,7 @@ function Opt({ id, lit, label, value, valueOn, on, half }) {
         flex: half ? "1 1 0" : undefined, width: half ? undefined : "100%", minWidth: 0,
         minHeight: 44, padding: "0 12px 0 16px", background: "transparent", border: "none",
         textAlign: "left", cursor: "pointer",
-        fontFamily: MONO, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase",
+        fontFamily: SERIF, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase",
         touchAction: "manipulation", WebkitTapHighlightColor: "transparent", userSelect: "none",
       }}>
       <span style={{ color: lit ? C.parch : C.parchDim }}>{label}</span>
@@ -206,7 +206,7 @@ function Heading({ children, aside }) {
         letterSpacing: TRACK, color: C.parch,
       }}>{children}</span>
       {aside && (
-        <span className="pm-obj-inline" style={{ fontFamily: MONO, fontSize: 11, color: C.parchDim }}>{aside}</span>
+        <span className="pm-obj-inline" style={{ fontFamily: SERIF, fontSize: 11, color: C.parchDim }}>{aside}</span>
       )}
     </div>
   );
@@ -227,7 +227,7 @@ function GroupLabel({ children }) {
 
 function Stat({ k, v, className = "" }) {
   return (
-    <div className={"pm-stat " + className} style={{ fontFamily: MONO }}>
+    <div className={"pm-stat " + className} style={{ fontFamily: SERIF }}>
       <span style={{ fontSize: 10, letterSpacing: "0.2em", color: C.rule, textTransform: "uppercase" }}>{k}</span>
       <span style={{ fontSize: 13, color: C.parch }}>{v}</span>
     </div>

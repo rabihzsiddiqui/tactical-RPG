@@ -1,7 +1,8 @@
 /* shared presentation tokens, used by both the scene (floater colors) and the ui layer */
 
-export const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-export const SERIF = "Georgia, 'Iowan Old Style', 'Times New Roman', serif";
+/* the text face, for every label, number and sentence (see the @font-face
+   in index.css). Labels are this, uppercased and tracked out. */
+export const SERIF = "Spectral, Georgia, 'Iowan Old Style', 'Times New Roman', serif";
 /* the display face, for the phase banner and anything else that wants
    carved capitals. The web font behind it is subset to uppercase (see the
    @font-face in index.css), so only set this on text that is uppercased,

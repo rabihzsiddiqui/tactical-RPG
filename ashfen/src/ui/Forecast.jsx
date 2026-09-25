@@ -3,7 +3,7 @@
    places it every frame, above the pair when it fits and below them when
    it does not. It speaks in the unit panel's voice (UnitHud.jsx): the dark
    panel with the gold rule inside a darker edge, names in carved capitals,
-   everything else in MONO. App.jsx hides the unit panel while it is up,
+   everything else in SERIF. App.jsx hides the unit panel while it is up,
    since this shows both faces anyway.
 
    The two faces meet across the numbers, the attacker's on the left
@@ -22,7 +22,7 @@
 
 import { Fragment, useState } from "react";
 import { wep } from "../core/combat.js";
-import { C, MONO, DISPLAY, rgba } from "./theme.js";
+import { C, SERIF, DISPLAY, rgba } from "./theme.js";
 import WeaponIcon from "./WeaponIcon.jsx";
 import { RuleBtn } from "./primitives.jsx";
 import { MENU_CLEAR, FACE, FADE_MS, Face, Rule } from "./UnitHud.jsx";
@@ -34,7 +34,7 @@ const RISE = 6;        // px it rises as it fades in, and sinks as it fades out
 const LABELS = ["Dmg", "Hit", "Crit", "Atks"]; // four letters at most: a 360px phone leaves the middle column about 27px
 
 /* the unit panel's small label */
-const SMALL = { fontFamily: MONO, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: C.rule };
+const SMALL = { fontFamily: SERIF, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: C.rule };
 
 /* added to App.jsx's style block next to the unit panel's. The unit
    panel's fade timing, and no fill mode on the way in for the same
@@ -88,7 +88,7 @@ function Head({ u, tri, right }) {
       <div className="flex items-center gap-1" style={{ flexDirection: right ? "row-reverse" : "row", marginTop: 2 }}>
         <WeaponIcon type={w.type} size={12} color={C.gold} />
         <span className="truncate" style={{
-          fontFamily: MONO, fontSize: 10, lineHeight: "12px", letterSpacing: "0.08em", textTransform: "uppercase",
+          fontFamily: SERIF, fontSize: 10, lineHeight: "12px", letterSpacing: "0.08em", textTransform: "uppercase",
           color: C.parchDim,
         }}>{w.name}</span>
         <Tri t={tri} />
@@ -109,7 +109,7 @@ export function Numbers({ l, r, heal, style }) {
     : LABELS.map((k, i) => [k, l ? vals(l)[i] : null, r ? vals(r)[i] : null]);
   const cell = (v, right) => (
     <div style={{
-      fontFamily: MONO, fontSize: 13, lineHeight: ROW + "px", textAlign: right ? "right" : "left",
+      fontFamily: SERIF, fontSize: 13, lineHeight: ROW + "px", textAlign: right ? "right" : "left",
       color: v == null ? C.rule : C.parch,
     }}>{v ?? "--"}</div>
   );
@@ -137,7 +137,7 @@ function Hp({ u, right }) {
       }}>
         <div style={{ width: (hp / u.maxHp) * 100 + "%", background: u.team === "player" ? C.blueLite : C.redLite }} />
       </div>
-      <span style={{ fontFamily: MONO, fontSize: 11, lineHeight: "14px", color: C.parch }}>{hp}/{u.maxHp}</span>
+      <span style={{ fontFamily: SERIF, fontSize: 11, lineHeight: "14px", color: C.parch }}>{hp}/{u.maxHp}</span>
     </div>
   );
 }

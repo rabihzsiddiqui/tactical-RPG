@@ -25,7 +25,7 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { wep } from "../core/combat.js";
-import { C, MONO, DISPLAY, rgba } from "./theme.js";
+import { C, SERIF, DISPLAY, rgba } from "./theme.js";
 import WeaponIcon from "./WeaponIcon.jsx";
 import { Face } from "./UnitHud.jsx";
 import { Numbers, Tri } from "./Forecast.jsx";
@@ -37,7 +37,7 @@ const BODY_MS = 160;    // the contents' fade
 const WIDE = 420;       // px of content width from which each name carries its weapon
 const GAUGE = 5;        // px, the health bar's height along the foot of a face
 
-const SMALL = { fontFamily: MONO, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: C.rule };
+const SMALL = { fontFamily: SERIF, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: C.rule };
 
 /* added to App.jsx's style block. No fill mode on the rise in: a held
    keyframe would pin the transform and the closing drop would never run.
@@ -80,12 +80,12 @@ function Side({ u, tri, right }) {
       <div className="bhud-wep items-center gap-1" style={{ flexDirection: right ? "row-reverse" : "row", flex: "1 1 0", minWidth: 0 }}>
         <WeaponIcon type={w.type} size={12} color={C.gold} />
         <span className="truncate" style={{
-          fontFamily: MONO, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: C.parchDim,
+          fontFamily: SERIF, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: C.parchDim,
         }}>{w.name}</span>
         <Tri t={tri} />
       </div>
       <span style={{
-        flex: "0 0 auto", fontFamily: MONO, fontSize: 11, lineHeight: "17px", color: C.parch,
+        flex: "0 0 auto", fontFamily: SERIF, fontSize: 11, lineHeight: "17px", color: C.parch,
         [right ? "marginRight" : "marginLeft"]: "auto",
       }}>{Math.max(0, u.hp)}/{u.maxHp}</span>
     </div>

@@ -17,6 +17,31 @@
   unicode-range: U+20-21, U+27, U+2c-2e, U+30-39, U+3f, U+41-5a;
 }
 
+/* Spectral, the text face: every label, number and sentence that is not
+   carved capitals. It took over from a monospace that read as a terminal,
+   and from Georgia, which Android does not have. A book serif made for
+   screens, with lining figures, so a stat grid or an HP count sits level,
+   and capitals close to Cinzel's Roman proportions. SIL Open Font License
+   1.1, (c) Production Type. Self-hosted like Cinzel, as Google Fonts'
+   Latin subset of each weight: 400, and 600 for <b> and anything bold,
+   which would otherwise be a smeared fake. index.html preloads the 400. */
+@font-face {
+  font-family: "Spectral";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/spectral-400-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Spectral";
+  font-style: normal;
+  font-weight: 600 700;
+  font-display: swap;
+  src: url("/fonts/spectral-600-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
 }
@@ -28,6 +53,9 @@ body {
      covers its content height, so a tall viewport with short content would
      otherwise show the browser's default white below it */
   background: #0c0f16;
+  /* level figures of one width everywhere, so a draining HP count does
+     not jiggle and a column of numbers lines up */
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 /* the pause menu's volume sliders. The track and thumb live in vendor

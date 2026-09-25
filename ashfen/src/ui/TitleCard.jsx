@@ -1,6 +1,6 @@
 import { LEVEL_NAME } from "../core/map.js";
 import { GAME_TITLE, TAGLINE } from "./meta.js";
-import { C, MONO, SERIF } from "./theme.js";
+import { C, SERIF } from "./theme.js";
 import { Btn } from "./primitives.jsx";
 
 /* the very first thing a visitor sees, and also the deliberate user gesture
@@ -15,16 +15,16 @@ export default function TitleCard({ onBegin, onHelp }) {
     <div className="fixed inset-0 flex items-center justify-center"
       style={{ zIndex: 60, background: C.table }}>
       <div className="flex flex-col items-center text-center" style={{ padding: "0 24px", maxWidth: 420 }}>
-        <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.28em", color: C.gold, marginBottom: 10 }}>
+        <div style={{ fontFamily: SERIF, fontSize: 11, letterSpacing: "0.28em", color: C.gold, marginBottom: 10 }}>
           ROUT THE ENEMY COMPANY
         </div>
         <div style={{ fontFamily: SERIF, fontSize: 44, color: C.parch, lineHeight: 1.1 }}>
           {GAME_TITLE}
         </div>
-        <div style={{ fontFamily: MONO, fontSize: 13, color: C.parchDim, marginTop: 14 }}>
+        <div style={{ fontFamily: SERIF, fontSize: 13, color: C.parchDim, marginTop: 14 }}>
           {TAGLINE}
         </div>
-        <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.18em", color: C.rule, marginTop: 18, marginBottom: 26 }}>
+        <div style={{ fontFamily: SERIF, fontSize: 11, letterSpacing: "0.18em", color: C.rule, marginTop: 18, marginBottom: 26 }}>
           LEVEL &middot; {LEVEL_NAME.toUpperCase()}
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2">

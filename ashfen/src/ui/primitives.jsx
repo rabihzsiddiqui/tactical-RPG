@@ -1,6 +1,6 @@
 /* small shared ui fragments, used across App and the panel components */
 
-import { C, MONO, DISPLAY, rgba } from "./theme.js";
+import { C, SERIF, DISPLAY, rgba } from "./theme.js";
 
 export function Card({ children }) {
   return (
@@ -14,7 +14,7 @@ export function Card({ children }) {
 export function Eyebrow({ children }) {
   return (
     <div className="uppercase" style={{
-      fontFamily: MONO, fontSize: 9, letterSpacing: "0.22em", color: C.inkSoft,
+      fontFamily: SERIF, fontSize: 9, letterSpacing: "0.22em", color: C.inkSoft,
       borderBottom: "1px solid " + C.rule, paddingBottom: 4, marginBottom: 6,
     }}>{children}</div>
   );
@@ -31,7 +31,7 @@ export function Pill({ k, v, tone }) {
 export function Btn({ children, on, disabled, active, strong, light }) {
   return (
     <button onClick={on} disabled={disabled} style={{
-      fontFamily: MONO, fontSize: 11, letterSpacing: "0.08em", padding: "10px 14px",
+      fontFamily: SERIF, fontSize: 11, letterSpacing: "0.08em", padding: "10px 14px",
       minHeight: 40, cursor: disabled ? "default" : "pointer",
       background: active ? C.gold : light && strong ? C.ink : strong ? C.gold : "transparent",
       color: active || (strong && !light) ? C.ink : light && strong ? C.parch : light ? C.ink : C.parch,
@@ -76,7 +76,7 @@ export function Slider({ label, value, on, onGrab, ...rest }) {
   return (
     <label style={{ display: "block" }}>
       <div className="flex items-center justify-between" style={{
-        fontFamily: MONO, fontSize: 10, letterSpacing: "0.14em", color: C.rule,
+        fontFamily: SERIF, fontSize: 10, letterSpacing: "0.14em", color: C.rule,
       }}>
         <span className="uppercase">{label}</span>
         <span style={{ color: C.parch }}>{Math.round(value * 100)}%</span>

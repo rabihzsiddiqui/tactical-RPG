@@ -12,7 +12,7 @@ import { TYPES, LEVEL_NAME } from "../core/map.js";
 import { WEAPONS } from "../core/data.js";
 import { GAME_TITLE } from "./meta.js";
 import { playHelp } from "../view/audio.js";
-import { C, MONO, SERIF } from "./theme.js";
+import { C, SERIF } from "./theme.js";
 import { Eyebrow, Btn } from "./primitives.jsx";
 
 const TABS = [
@@ -55,7 +55,7 @@ function Steps({ items }) {
 function Term({ k, children }) {
   return (
     <div style={{ marginBottom: 9 }}>
-      <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.1em", color: C.ink }}>
+      <div style={{ fontFamily: SERIF, fontSize: 11, letterSpacing: "0.1em", color: C.ink }}>
         {k.toUpperCase()}
       </div>
       <div style={{ fontSize: 12.5, lineHeight: 1.6, color: C.inkSoft }}>{children}</div>
@@ -67,7 +67,7 @@ function Table({ cols, head, rows }) {
   const cell = { padding: "4px 6px", borderBottom: "1px dotted " + C.rule };
   return (
     <div style={{ overflowX: "auto" }}>
-      <div style={{ fontFamily: MONO, fontSize: 11, color: C.ink, minWidth: 300 }}>
+      <div style={{ fontFamily: SERIF, fontSize: 11, color: C.ink, minWidth: 300 }}>
         <div style={{ display: "grid", gridTemplateColumns: cols }}>
           {head.map((h, i) => (
             <div key={i} className="uppercase" style={{
@@ -279,7 +279,7 @@ function Combat() {
       </Section>
 
       <Section title="The weapon triangle">
-        <div style={{ fontFamily: MONO, fontSize: 12, color: C.ink, lineHeight: 1.9, marginBottom: 6 }}>
+        <div style={{ fontFamily: SERIF, fontSize: 12, color: C.ink, lineHeight: 1.9, marginBottom: 6 }}>
           <div>Sword &rarr; beats &rarr; Axe</div>
           <div>Axe &rarr; beats &rarr; Lance</div>
           <div>Lance &rarr; beats &rarr; Sword</div>
@@ -520,13 +520,13 @@ export default function HelpOverlay({ onClose, startTab = "basics" }) {
         <div style={{ padding: "12px 14px 8px", borderBottom: "2px solid " + C.ink, flex: "0 0 auto" }}>
           <div className="flex items-start justify-between gap-2">
             <div>
-              <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.22em", color: C.inkSoft }}>
+              <div style={{ fontFamily: SERIF, fontSize: 9, letterSpacing: "0.22em", color: C.inkSoft }}>
                 HOW TO PLAY
               </div>
               <div style={{ fontSize: 20 }}>Field Manual</div>
             </div>
             <button onClick={onClose} aria-label="Close the field manual" style={{
-              fontFamily: MONO, fontSize: 15, lineHeight: 1, padding: "8px 11px", minHeight: 36,
+              fontFamily: SERIF, fontSize: 15, lineHeight: 1, padding: "8px 11px", minHeight: 36,
               background: "transparent", color: C.ink, border: "2px solid " + C.ink,
               cursor: "pointer", touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
             }}>&times;</button>
@@ -534,7 +534,7 @@ export default function HelpOverlay({ onClose, startTab = "basics" }) {
           <div className="flex flex-wrap gap-1" style={{ marginTop: 10 }}>
             {TABS.map(([id, label]) => (
               <button key={id} onClick={() => pickTab(id)} style={{
-                fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", padding: "7px 9px", minHeight: 32,
+                fontFamily: SERIF, fontSize: 10, letterSpacing: "0.1em", padding: "7px 9px", minHeight: 32,
                 background: tab === id ? C.ink : "transparent",
                 color: tab === id ? C.parch : C.inkSoft,
                 border: "1px solid " + (tab === id ? C.ink : C.rule),

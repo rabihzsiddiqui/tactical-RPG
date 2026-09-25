@@ -9,7 +9,7 @@ import {
 } from "../view/audio.js";
 import { forecastOf } from "../core/combat.js";
 import { LEVEL_NAME } from "../core/map.js";
-import { C, MONO, SERIF, DISPLAY, PHASE_BANNER_MS } from "./theme.js";
+import { C, SERIF, DISPLAY, PHASE_BANNER_MS } from "./theme.js";
 import { Card, Eyebrow, Pill, Btn, RuleBtn, RULE_BTN_CSS } from "./primitives.jsx";
 import UnitHud, { UNIT_HUD_CSS } from "./UnitHud.jsx";
 import ZoomButtons, { ZOOM_CSS } from "./ZoomButtons.jsx";
@@ -304,17 +304,17 @@ export default function App() {
       <div className="mx-auto" style={{ maxWidth: "min(100%, 1440px)" }}>
         <div className="flex items-end justify-between flex-wrap gap-2 mb-2">
           <div>
-            <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.22em", color: C.gold }}>
+            <div style={{ fontFamily: SERIF, fontSize: 10, letterSpacing: "0.22em", color: C.gold }}>
               ROUT THE ENEMY COMPANY
             </div>
             <div className="flex items-baseline gap-2">
               <div style={{ fontSize: 21 }}>{LEVEL_NAME}</div>
-              <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.2em", color: C.rule }}>
+              <div style={{ fontFamily: SERIF, fontSize: 9, letterSpacing: "0.2em", color: C.rule }}>
                 LEVEL
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2" style={{ fontFamily: MONO, fontSize: 11 }}>
+          <div className="flex items-center gap-2" style={{ fontFamily: SERIF, fontSize: 11 }}>
             <Pill k="Turn" v={String(g.turn)} />
             <Pill k="Phase" v={g.phase === "player" ? "Player" : "Enemy"}
               tone={g.phase === "player" ? C.blueLite : C.redLite} />
@@ -335,7 +335,7 @@ export default function App() {
 
             {/* hint line: always names the next action; HTML, never inside the render buffer */}
             <div style={{
-              fontFamily: MONO, fontSize: 12, letterSpacing: "0.04em", textAlign: "center",
+              fontFamily: SERIF, fontSize: 12, letterSpacing: "0.04em", textAlign: "center",
               padding: "6px 4px", color: nudge ? C.gold : C.parchDim,
               animation: nudge ? "hintPulse 1.1s ease-in-out infinite" : "none",
             }}>
@@ -350,7 +350,7 @@ export default function App() {
             {floats.map((f) => (
               <div key={f.id} className="absolute"
                 style={{
-                  left: f.x, top: f.y, fontFamily: MONO, fontSize: 15, color: f.color,
+                  left: f.x, top: f.y, fontFamily: SERIF, fontSize: 15, color: f.color,
                   textShadow: "0 1px 2px #000, 0 0 7px #000", pointerEvents: "none",
                   animation: "riseOut .9s ease-out forwards", zIndex: 12,
                 }}>
@@ -393,13 +393,13 @@ export default function App() {
                   boxShadow: "4px 4px 0 rgba(0,0,0,0.5)", padding: "10px 14px",
                   minWidth: 176, animation: "popIn .18s ease-out",
                 }}>
-                  <div className="uppercase" style={{ fontFamily: MONO, fontSize: 10, letterSpacing: "0.18em" }}>
+                  <div className="uppercase" style={{ fontFamily: SERIF, fontSize: 10, letterSpacing: "0.18em" }}>
                     Level up
                   </div>
                   <div style={{ fontSize: 17, marginBottom: 4 }}>
                     {g.levelUp.name} &rarr; Lv {g.levelUp.lvl}
                   </div>
-                  <div style={{ fontFamily: MONO, fontSize: 12, color: C.inkSoft }}>
+                  <div style={{ fontFamily: SERIF, fontSize: 12, color: C.inkSoft }}>
                     {Object.keys(g.levelUp.gains).length
                       ? Object.entries(g.levelUp.gains).map(([k, v]) => k + " +" + v).join("   ")
                       : "no growth this level"}
@@ -483,7 +483,7 @@ export default function App() {
 
             <Card>
               <Eyebrow>Weapon triangle</Eyebrow>
-              <div style={{ fontFamily: MONO, fontSize: 12, color: C.ink, lineHeight: 1.8 }}>
+              <div style={{ fontFamily: SERIF, fontSize: 12, color: C.ink, lineHeight: 1.8 }}>
                 <div>Sword &rarr; beats &rarr; Axe</div>
                 <div>Axe &rarr; beats &rarr; Lance</div>
                 <div>Lance &rarr; beats &rarr; Sword</div>
@@ -491,7 +491,7 @@ export default function App() {
                   Advantage gives +1 damage and +15 hit. Tomes hit Res and ignore terrain cover.
                 </div>
                 <button onClick={() => openHelp("combat")} style={{
-                  fontFamily: MONO, fontSize: 10, letterSpacing: "0.1em", marginTop: 6, padding: 0,
+                  fontFamily: SERIF, fontSize: 10, letterSpacing: "0.1em", marginTop: 6, padding: 0,
                   background: "transparent", color: C.inkSoft, border: "none",
                   borderBottom: "1px solid " + C.rule, cursor: "pointer",
                 }}>HOW COMBAT WORKS &rarr;</button>
@@ -500,7 +500,7 @@ export default function App() {
 
             <Card>
               <Eyebrow>Field log</Eyebrow>
-              <div style={{ fontFamily: MONO, fontSize: 11, color: C.inkSoft, maxHeight: 110, overflowY: "auto" }}>
+              <div style={{ fontFamily: SERIF, fontSize: 11, color: C.inkSoft, maxHeight: 110, overflowY: "auto" }}>
                 {g.log.map((l, i) => (
                   <div key={i} style={{ padding: "2px 0", borderBottom: "1px dotted " + C.rule }}>{l}</div>
                 ))}

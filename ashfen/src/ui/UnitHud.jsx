@@ -5,7 +5,7 @@
    from the side panel's unit card, which on a phone sat below the map, out
    of sight. It speaks in the menu's voice (PauseMenu.jsx): a dark panel
    with the gold rule inside a darker edge, the name in carved capitals,
-   everything else in MONO.
+   everything else in SERIF.
 
    It stays in the strip above the board's far edge at the opening pose,
    level with the Menu button. The first cut hung under that button and,
@@ -23,7 +23,7 @@ import { wep, wepBonus } from "../core/combat.js";
 import { cell } from "../core/map.js";
 import { portraitOf } from "../view/portrait.js";
 import { playDrag } from "../view/audio.js";
-import { C, MONO, DISPLAY, rgba } from "./theme.js";
+import { C, SERIF, DISPLAY, rgba } from "./theme.js";
 import WeaponIcon from "./WeaponIcon.jsx";
 
 /* the Menu button's clearance, the face and the fade timing are shared
@@ -36,7 +36,7 @@ export const FACE = 56;        // px, the portrait's side; portrait.js renders a
 export const FADE_MS = 160;    // the fade and slide, in and out, and the chevron's turn
 const SLIDE = 8;               // px the panel travels in from the left
 
-const LABEL = { fontFamily: MONO, fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: C.rule };
+const LABEL = { fontFamily: SERIF, fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: C.rule };
 const SMALL = { ...LABEL, fontSize: 9, letterSpacing: "0.14em" };
 const STATS = [["Str", "str"], ["Mag", "mag"], ["Skl", "skl"], ["Spd", "spd"],
   ["Lck", "lck"], ["Def", "def"], ["Res", "res"]];
@@ -75,7 +75,7 @@ function Cell({ k, v, bonus }) {
   return (
     <div>
       <div style={{ ...SMALL, lineHeight: "12px" }}>{k}</div>
-      <div style={{ fontFamily: MONO, fontSize: 13, lineHeight: "16px", color: C.parch }}>
+      <div style={{ fontFamily: SERIF, fontSize: 13, lineHeight: "16px", color: C.parch }}>
         {v}{bonus ? <span style={{ color: C.gold }}>+{bonus}</span> : null}
       </div>
     </div>
@@ -88,7 +88,7 @@ function Line({ k, v }) {
     <div className="flex items-baseline justify-between gap-3" style={{ lineHeight: "17px" }}>
       <span style={SMALL}>{k}</span>
       <span className="truncate" style={{
-        fontFamily: MONO, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: C.parch,
+        fontFamily: SERIF, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: C.parch,
       }}>{v}</span>
     </div>
   );
@@ -193,7 +193,7 @@ export default function UnitHud({ u }) {
           <div className="flex items-center gap-1.5" style={{ marginTop: 3 }}>
             <WeaponIcon type={w.type} color={C.gold} />
             <span className="truncate" style={{
-              fontFamily: MONO, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: C.parchDim,
+              fontFamily: SERIF, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: C.parchDim,
             }}>{w.name}</span>
           </div>
 
@@ -206,7 +206,7 @@ export default function UnitHud({ u }) {
                 transform: `scaleX(${hp / shown.maxHp})`, background: ally ? C.blueLite : C.redLite,
               }} />
             </div>
-            <span style={{ fontFamily: MONO, fontSize: 12, color: C.parch, minWidth: 38, textAlign: "right" }}>
+            <span style={{ fontFamily: SERIF, fontSize: 12, color: C.parch, minWidth: 38, textAlign: "right" }}>
               {hp}/{shown.maxHp}
             </span>
           </div>
