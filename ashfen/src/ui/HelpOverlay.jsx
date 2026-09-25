@@ -241,9 +241,10 @@ function Combat() {
     <>
       <Section title="Reading the battle forecast">
         <P>
-          Before any attack lands, the forecast takes the unit panel&rsquo;s corner and shows both
+          Before any attack lands, the forecast opens over the enemy you picked and shows both
           sides of the exchange, with you on the left and the defender on the right. Dashes on the
-          right mean that enemy cannot strike back.
+          right mean that enemy cannot strike back. Press Attack and it drops to the bottom of the
+          view, where the same numbers stay up while the exchange plays out.
         </P>
         <Term k="Dmg">Damage per hit, after their defence and terrain. 0 means you cannot hurt them.</Term>
         <Term k="Hit">Percent chance each strike lands.</Term>

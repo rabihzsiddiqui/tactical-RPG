@@ -14,7 +14,7 @@ import { Card, Eyebrow, Pill, Btn, RuleBtn, RULE_BTN_CSS } from "./primitives.js
 import UnitHud, { UNIT_HUD_CSS } from "./UnitHud.jsx";
 import ZoomButtons, { ZOOM_CSS } from "./ZoomButtons.jsx";
 import Forecast, { FORECAST_CSS } from "./Forecast.jsx";
-import BattleHud from "./BattleHud.jsx";
+import BattleHud, { BATTLE_HUD_CSS } from "./BattleHud.jsx";
 import ActionMenu from "./ActionMenu.jsx";
 import OnboardingCard from "./OnboardingCard.jsx";
 import TitleCard from "./TitleCard.jsx";
@@ -47,6 +47,7 @@ if (import.meta.env.DEV) {
 export default function App() {
   const mountRef = useRef(null);
   const menuRef = useRef(null);
+  const forecastRef = useRef(null);
   const apiRef = useRef({});
   const gs = useRef(null);
   if (!gs.current) gs.current = newGame();
@@ -84,7 +85,7 @@ export default function App() {
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
-    return mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick, apiRef });
+    return mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, setFloats, tick, apiRef });
   }, [resetKey]);
 
   /* every way into and out of the manual routes through these two, so the
@@ -288,17 +289,10 @@ export default function App() {
           100%{transform:translate(-50%,-34px);opacity:0} }
         @keyframes popIn { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
         @keyframes hintPulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
-        @keyframes hudIn { 0%{transform:translateY(10px);opacity:0} 100%{transform:translateY(0);opacity:1} }
-        .bhud { animation: hudIn .22s ease-out; transition: opacity .3s ease-in, transform .3s ease-in; }
-        .bhud.closing { opacity: 0; transform: translateY(10px); }
-        .bhud-fill { transition: width .22s ease-out; }
-        @media (prefers-reduced-motion: reduce) {
-          .bhud { animation: none; transition: none; }
-          .bhud-fill { transition: none; }
-        }
         ${MENU_CSS}
         ${UNIT_HUD_CSS}
         ${FORECAST_CSS}
+        ${BATTLE_HUD_CSS}
         ${RULE_BTN_CSS}
         ${ZOOM_CSS}
       `}</style>
@@ -365,8 +359,10 @@ export default function App() {
 
             <ActionMenu menuRef={menuRef} sel={sel} selUnit={selUnit} api={api} />
 
-            {/* battle forecast, in the unit panel's place, see Forecast.jsx */}
-            <Forecast fc={fc} onAttack={api.confirmAttack} onCancel={api.cancelForecast} />
+            {/* battle forecast, over the enemy it is about (scene.js places
+                it), and the battle HUD's starting box on Attack. See Forecast.jsx */}
+            <Forecast fc={fc} boxRef={forecastRef} into={!!g.cutIn}
+              onAttack={api.confirmAttack} onCancel={api.cancelForecast} />
 
             {/* battle HUD: sits along the bottom edge of the canvas for the
                 length of a cut-in. Above the damage numbers, below the

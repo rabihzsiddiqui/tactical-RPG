@@ -59,6 +59,13 @@ const ZOOM_MIN = 4.5, ZOOM_MAX = 22, ZOOM_STEP = 1.18;
    default zoom out over empty sky. */
 const BOARD = { x: MW / 2 + 0.3, z: MH / 2 + 0.3, yLo: -0.6, yHi: 1.9 };
 
+/* where the battle forecast (ui/Forecast.jsx) sits: over the enemy it is
+   about, so Attack is a short reach from the tap that opened it. Above the
+   pair when it fits, below them when it does not. */
+const FORECAST_GAP = 12;         // px between the forecast and the pair's heads, or their health bars below
+const FORECAST_EDGE = 8;         // px it keeps from the map's edges
+const FORECAST_RIGHT_CLEAR = 92; // px kept free down the map's right for the Menu and zoom buttons, UnitHud's MENU_CLEAR
+
 /* every light on the board, tuned for this map specifically. If a second
    map ever ships, this becomes a per-map parameter handed to mountScene
    rather than a shared constant.
@@ -104,9 +111,9 @@ export function newGame() {
 }
 
 /* mounts the three.js scene into `mount`, wires input and the game flow,
-   and returns a cleanup function. `menuRef` and `apiRef` are React refs so
-   the frame loop and the api object stay live across renders. */
-export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick, apiRef }) {
+   and returns a cleanup function. `menuRef`, `forecastRef` and `apiRef` are
+   React refs so the frame loop and the api object stay live across renders. */
+export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, setFloats, tick, apiRef }) {
   /* ---- renderer ---- */
   const renderer = new THREE.WebGLRenderer({ antialias: false });
   renderer.setPixelRatio(1);
@@ -454,11 +461,15 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
 
   /* ---- screen projection ---- */
   const tmp = new THREE.Vector3();
-  function project(u, lift) {
+  // `out` lets the frame loop project without allocating
+  function project(u, lift, out = { x: 0, y: 0 }) {
     tmp.set(u.view.root.position.x, u.view.root.position.y + (lift ?? 1.0), u.view.root.position.z);
     tmp.project(camera);
-    return { x: ((tmp.x + 1) / 2) * VW, y: ((-tmp.y + 1) / 2) * VH };
+    out.x = ((tmp.x + 1) / 2) * VW;
+    out.y = ((-tmp.y + 1) / 2) * VH;
+    return out;
   }
+  const fcP = { x: 0, y: 0 }; // the forecast's scratch point, see frame()
 
   let floatId = 0;
   function floater(u, text, color) {
@@ -1598,6 +1609,25 @@ export function mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick,
         const p = project(u, 1.15);
         menuRef.current.style.left = clamp(p.x + 18, 4, VW - 116) + "px";
         menuRef.current.style.top = clamp(p.y - 20, 4, VH - 150) + "px";
+      }
+    }
+    /* the forecast, centred over its enemy, above the pair when it fits
+       and below them when it does not, else on whichever side has more
+       room. It never enters the column the Menu and zoom buttons use. */
+    if (forecastRef.current && g.forecast) {
+      const a = g.units.find((z) => z.id === g.forecast.attackerId);
+      const d = g.units.find((z) => z.id === g.forecast.targetId);
+      if (a && d) {
+        const el = forecastRef.current, w = el.offsetWidth, h = el.offsetHeight, E = FORECAST_EDGE;
+        const headY = Math.min(project(a, 1.15, fcP).y, project(d, 1.15, fcP).y);
+        const cx = fcP.x; // fcP still holds the second projection above, the enemy's head
+        const footY = Math.max(project(a, -0.45, fcP).y, project(d, -0.45, fcP).y);
+        const above = headY - FORECAST_GAP - h, below = footY + FORECAST_GAP;
+        const top = above >= E ? above
+          : below + h <= VH - E ? below
+          : headY > VH - footY ? above : below;
+        el.style.left = clamp(cx - w / 2, E, VW - w - FORECAST_RIGHT_CLEAR) + "px";
+        el.style.top = clamp(top, E, VH - h - E) + "px";
       }
     }
 

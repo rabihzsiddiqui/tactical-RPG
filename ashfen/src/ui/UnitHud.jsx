@@ -14,9 +14,9 @@
    call, and a second tap folds it away.
 
    App.jsx decides when it shows; it hides for the cut-in, where the
-   battle HUD does the same job, and for the forecast, which takes its
-   place. On the way out it fades on the last unit it showed rather than
-   going blank first. */
+   battle HUD does the same job, and for the forecast, which shows both
+   faces anyway. On the way out it fades on the last unit it showed rather
+   than going blank first. */
 
 import { useState } from "react";
 import { wep, wepBonus } from "../core/combat.js";
@@ -26,15 +26,15 @@ import { playDrag } from "../view/audio.js";
 import { C, MONO, DISPLAY, rgba } from "./theme.js";
 import WeaponIcon from "./WeaponIcon.jsx";
 
-/* the slot, the face and the motion are shared with the forecast
-   (Forecast.jsx), which takes this panel's place while it is up */
-export const TOP = 8;          // px from the map's top edge, level with the Menu button
-export const LEFT = 8;         // px from the map's left edge, the Menu button's own inset mirrored
+/* the Menu button's clearance, the face and the fade timing are shared
+   with the forecast (Forecast.jsx), and the face with the battle HUD */
+const TOP = 8;                 // px from the map's top edge, level with the Menu button
+const LEFT = 8;                // px from the map's left edge, the Menu button's own inset mirrored
 export const MENU_CLEAR = 92;  // px kept free at the right for the Menu button: its 76 width (75.1 in Cinzel), its 8 inset and 8 between
 const WIDTH = 224;             // px, fixed, so the panel keeps its size from one unit to the next; fits "Mercenary" in capitals
 export const FACE = 56;        // px, the portrait's side; portrait.js renders at twice this
 export const FADE_MS = 160;    // the fade and slide, in and out, and the chevron's turn
-export const SLIDE = 8;        // px the panel travels in from the left
+const SLIDE = 8;               // px the panel travels in from the left
 
 const LABEL = { fontFamily: MONO, fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: C.rule };
 const SMALL = { ...LABEL, fontSize: 9, letterSpacing: "0.14em" };
@@ -95,15 +95,18 @@ function Line({ k, v }) {
 }
 
 /* the unit's portrait, with the team's colour behind the face, the way a
-   portrait window says whose side a unit is on before the name does */
-export function Face({ u }) {
+   portrait window says whose side a unit is on before the name does.
+   `children` lie over it, for the battle HUD's health gauge. */
+export function Face({ u, children }) {
   const src = portraitOf(u);
   return (
     <div style={{
-      width: FACE, height: FACE, flex: "0 0 auto", background: u.team === "player" ? C.blue : C.red,
+      position: "relative", width: FACE, height: FACE, flex: "0 0 auto",
+      background: u.team === "player" ? C.blue : C.red,
       border: "1px solid rgba(0,0,0,0.7)", boxSizing: "content-box", overflow: "hidden",
     }}>
       {src && <img src={src} alt="" width={FACE} height={FACE} style={{ display: "block" }} draggable={false} />}
+      {children}
     </div>
   );
 }
