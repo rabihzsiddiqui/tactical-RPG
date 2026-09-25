@@ -59,12 +59,16 @@ const ZOOM_MIN = 4.5, ZOOM_MAX = 22, ZOOM_STEP = 1.18;
    default zoom out over empty sky. */
 const BOARD = { x: MW / 2 + 0.3, z: MH / 2 + 0.3, yLo: -0.6, yHi: 1.9 };
 
-/* where the battle forecast (ui/Forecast.jsx) sits: over the enemy it is
-   about, so Attack is a short reach from the tap that opened it. Above the
+/* where the html panels on the board sit. The action menu (ui/ActionMenu.jsx)
+   opens beside its unit, to the right unless that runs into the buttons'
+   column. The battle forecast (ui/Forecast.jsx) opens over the enemy it is
+   about, so Attack is a short reach from the tap that opened it: above the
    pair when it fits, below them when it does not. */
-const FORECAST_GAP = 12;         // px between the forecast and the pair's heads, or their health bars below
-const FORECAST_EDGE = 8;         // px it keeps from the map's edges
-const FORECAST_RIGHT_CLEAR = 92; // px kept free down the map's right for the Menu and zoom buttons, UnitHud's MENU_CLEAR
+const MENU_BESIDE = 18;       // px between the unit and the action menu beside it
+const MENU_RISE = 20;         // px the action menu's top sits above the unit's head
+const FORECAST_GAP = 12;      // px between the forecast and the pair's heads, or their health bars below
+const PANEL_EDGE = 8;         // px both keep from the map's edges
+const PANEL_RIGHT_CLEAR = 92; // px both keep free down the map's right for the Menu and zoom buttons, UnitHud's MENU_CLEAR
 
 /* every light on the board, tuned for this map specifically. If a second
    map ever ships, this becomes a per-map parameter handed to mountScene
@@ -469,7 +473,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     out.y = ((-tmp.y + 1) / 2) * VH;
     return out;
   }
-  const fcP = { x: 0, y: 0 }; // the forecast's scratch point, see frame()
+  const pt = { x: 0, y: 0 }; // scratch point for placing the action menu and the forecast in frame()
 
   let floatId = 0;
   function floater(u, text, color) {
@@ -1606,9 +1610,12 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
         ring.position.set(u.view.root.position.x, u.view.root.position.y + 0.05, u.view.root.position.z);
       }
       if (menuRef.current && g.sel.mode === "action") {
-        const p = project(u, 1.15);
-        menuRef.current.style.left = clamp(p.x + 18, 4, VW - 116) + "px";
-        menuRef.current.style.top = clamp(p.y - 20, 4, VH - 150) + "px";
+        const el = menuRef.current, w = el.offsetWidth, h = el.offsetHeight, E = PANEL_EDGE;
+        project(u, 1.15, pt);
+        const right = pt.x + MENU_BESIDE;
+        const x = right + w <= VW - PANEL_RIGHT_CLEAR ? right : pt.x - MENU_BESIDE - w;
+        el.style.left = clamp(x, E, VW - w - PANEL_RIGHT_CLEAR) + "px";
+        el.style.top = clamp(pt.y - MENU_RISE, E, VH - h - E) + "px";
       }
     }
     /* the forecast, centred over its enemy, above the pair when it fits
@@ -1618,15 +1625,15 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       const a = g.units.find((z) => z.id === g.forecast.attackerId);
       const d = g.units.find((z) => z.id === g.forecast.targetId);
       if (a && d) {
-        const el = forecastRef.current, w = el.offsetWidth, h = el.offsetHeight, E = FORECAST_EDGE;
-        const headY = Math.min(project(a, 1.15, fcP).y, project(d, 1.15, fcP).y);
-        const cx = fcP.x; // fcP still holds the second projection above, the enemy's head
-        const footY = Math.max(project(a, -0.45, fcP).y, project(d, -0.45, fcP).y);
+        const el = forecastRef.current, w = el.offsetWidth, h = el.offsetHeight, E = PANEL_EDGE;
+        const headY = Math.min(project(a, 1.15, pt).y, project(d, 1.15, pt).y);
+        const cx = pt.x; // pt still holds the second projection above, the enemy's head
+        const footY = Math.max(project(a, -0.45, pt).y, project(d, -0.45, pt).y);
         const above = headY - FORECAST_GAP - h, below = footY + FORECAST_GAP;
         const top = above >= E ? above
           : below + h <= VH - E ? below
           : headY > VH - footY ? above : below;
-        el.style.left = clamp(cx - w / 2, E, VW - w - FORECAST_RIGHT_CLEAR) + "px";
+        el.style.left = clamp(cx - w / 2, E, VW - w - PANEL_RIGHT_CLEAR) + "px";
         el.style.top = clamp(top, E, VH - h - E) + "px";
       }
     }

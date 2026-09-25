@@ -97,16 +97,3 @@ export function Slider({ label, value, on, onGrab, ...rest }) {
     </label>
   );
 }
-
-export function Item({ label, on, disabled, muted }) {
-  return (
-    <button onClick={disabled ? undefined : on} disabled={disabled} style={{
-      display: "block", width: "100%", textAlign: "left", fontFamily: MONO, fontSize: 12,
-      padding: "11px 10px", minHeight: 40, background: "transparent",
-      color: disabled ? "#a99e88" : muted ? C.inkSoft : C.ink,
-      border: "none", borderBottom: "1px solid " + C.rule,
-      cursor: disabled ? "default" : "pointer",
-      touchAction: "manipulation", WebkitTapHighlightColor: "transparent", userSelect: "none",
-    }}>{label}</button>
-  );
-}

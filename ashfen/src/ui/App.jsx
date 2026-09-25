@@ -15,7 +15,7 @@ import UnitHud, { UNIT_HUD_CSS } from "./UnitHud.jsx";
 import ZoomButtons, { ZOOM_CSS } from "./ZoomButtons.jsx";
 import Forecast, { FORECAST_CSS } from "./Forecast.jsx";
 import BattleHud, { BATTLE_HUD_CSS } from "./BattleHud.jsx";
-import ActionMenu from "./ActionMenu.jsx";
+import ActionMenu, { ACTION_MENU_CSS } from "./ActionMenu.jsx";
 import OnboardingCard from "./OnboardingCard.jsx";
 import TitleCard from "./TitleCard.jsx";
 import PhaseBanner from "./PhaseBanner.jsx";
@@ -294,6 +294,7 @@ export default function App() {
         ${FORECAST_CSS}
         ${BATTLE_HUD_CSS}
         ${RULE_BTN_CSS}
+        ${ACTION_MENU_CSS}
         ${ZOOM_CSS}
       `}</style>
 
