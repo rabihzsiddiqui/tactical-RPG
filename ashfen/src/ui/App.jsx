@@ -12,6 +12,7 @@ import { LEVEL_NAME } from "../core/map.js";
 import { C, MONO, SERIF, DISPLAY, PHASE_BANNER_MS } from "./theme.js";
 import { Card, Eyebrow, Pill, Btn } from "./primitives.jsx";
 import UnitHud, { UNIT_HUD_CSS } from "./UnitHud.jsx";
+import ZoomButtons, { ZOOM_CSS } from "./ZoomButtons.jsx";
 import Forecast from "./Forecast.jsx";
 import BattleHud from "./BattleHud.jsx";
 import ActionMenu from "./ActionMenu.jsx";
@@ -295,6 +296,7 @@ export default function App() {
         }
         ${MENU_CSS}
         ${UNIT_HUD_CSS}
+        ${ZOOM_CSS}
       `}</style>
 
       {!began && <TitleCard onBegin={onBegin} onHelp={() => openHelp()} />}
@@ -437,6 +439,9 @@ export default function App() {
                 Gated on status==="playing" so it can't get stuck open (or
                 reachable) behind the end screen. */}
             {began && g.status === "playing" && !paused && <MenuButton on={openMenu} />}
+            {/* zoom, bottom left. Not through a cut-in, which the director
+                frames on its own and the battle HUD spans; see ZoomButtons.jsx */}
+            {began && g.status === "playing" && !paused && !g.cutIn && <ZoomButtons api={api} zoom={cam.zoom} />}
             {paused && g.status === "playing" && (
               <PauseMenu
                 onClosed={closeMenu} keysRef={menuKeys} helpOpen={!!help}
@@ -473,7 +478,8 @@ export default function App() {
               <Eyebrow>Orders</Eyebrow>
               <p style={{ color: C.inkSoft, fontSize: 13, margin: "4px 0 0" }}>
                 Tap a unit to see its movement in blue and its reach in red. Tap a tile to
-                move, then pick an action. Drag the map to orbit, scroll to zoom.
+                move, then pick an action. Drag the map to orbit. Zoom with the buttons at its
+                bottom left, or scroll.
               </p>
               <div className="mt-2">
                 <Btn light on={() => openHelp()}>New here? Read the manual</Btn>

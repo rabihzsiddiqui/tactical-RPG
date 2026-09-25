@@ -185,7 +185,7 @@ function Controls() {
         </Term>
         <Term k="Tap empty ground">Deselects, undoing a move you have not confirmed yet.</Term>
         <Term k="Drag">Orbits the camera around the battlefield.</Term>
-        <Term k="Scroll or pinch">Zooms in and out.</Term>
+        <Term k="Scroll or pinch">Zooms in and out. The zoom buttons below do the same in steps.</Term>
       </Section>
 
       <Section title="Buttons">
@@ -193,6 +193,10 @@ function Controls() {
           The button in the top right corner of the map. Holds Resume, End turn, the threat
           range and this manual. Its Options hold the graphics resolution, the attack
           cinematics, outlines, music on and off, the track, and both volumes.
+        </Term>
+        <Term k="Zoom">
+          The plus and minus in the bottom left corner of the map step the camera in and out, a
+          steadier way than a pinch on a phone. Each dims at the end of its range.
         </Term>
         <Term k="Show threat">
           Shades every tile the enemy could attack next phase. Toggle it freely. It changes

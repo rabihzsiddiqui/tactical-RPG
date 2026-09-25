@@ -18,7 +18,7 @@ export default function OnboardingCard({ onDismiss, onFullGuide }) {
         <div style={{ fontFamily: MONO, fontSize: 12, color: C.ink, lineHeight: 1.7 }}>
           <div>Defeat every enemy unit to win.</div>
           <div>Tap a unit, tap a tile to move, then choose an action.</div>
-          <div>Drag to orbit the camera. Scroll or pinch to zoom.</div>
+          <div>Drag to orbit the camera. Zoom with the buttons at the bottom left, or scroll or pinch.</div>
           <div>Sword beats Axe &middot; Axe beats Lance &middot; Lance beats Sword.</div>
           <div>Lose Kaelen and the battle is lost.</div>
         </div>
