@@ -195,7 +195,7 @@ function Controls() {
           cinematics, outlines, music on and off, the track, and both volumes.
         </Term>
         <Term k="Zoom">
-          The plus and minus in the bottom left corner of the map step the camera in and out, a
+          The plus and minus in the bottom right corner of the map step the camera in and out, a
           steadier way than a pinch on a phone. Each dims at the end of its range.
         </Term>
         <Term k="Show threat">

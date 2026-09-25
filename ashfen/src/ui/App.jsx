@@ -439,7 +439,7 @@ export default function App() {
                 Gated on status==="playing" so it can't get stuck open (or
                 reachable) behind the end screen. */}
             {began && g.status === "playing" && !paused && <MenuButton on={openMenu} />}
-            {/* zoom, bottom left. Not through a cut-in, which the director
+            {/* zoom, bottom right. Not through a cut-in, which the director
                 frames on its own and the battle HUD spans; see ZoomButtons.jsx */}
             {began && g.status === "playing" && !paused && !g.cutIn && <ZoomButtons api={api} zoom={cam.zoom} />}
             {paused && g.status === "playing" && (
@@ -479,7 +479,7 @@ export default function App() {
               <p style={{ color: C.inkSoft, fontSize: 13, margin: "4px 0 0" }}>
                 Tap a unit to see its movement in blue and its reach in red. Tap a tile to
                 move, then pick an action. Drag the map to orbit. Zoom with the buttons at its
-                bottom left, or scroll.
+                bottom right, or scroll.
               </p>
               <div className="mt-2">
                 <Btn light on={() => openHelp()}>New here? Read the manual</Btn>

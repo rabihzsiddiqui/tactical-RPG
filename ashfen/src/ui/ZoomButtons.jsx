@@ -1,4 +1,4 @@
-/* the map's zoom buttons, in its bottom-left corner: plus over minus, in
+/* the map's zoom buttons, in its bottom-right corner: plus over minus, in
    the Menu button's dress, a dark panel with the gold rule inside a darker
    edge. On a phone a pinch is quick to overshoot and easy to lose track of,
    and these step the same zoom a fixed amount per tap. Each press plays the
@@ -13,13 +13,13 @@ import { C, rgba } from "./theme.js";
 
 const STEP = 1.4;   // zoom factor per press, about two wheel notches
 const SIZE = 44;    // px, each button's side: a full touch target
-const INSET = 8;    // px from the map's left and bottom edges, the Menu button's own inset
+const INSET = 8;    // px from the map's right and bottom edges, the Menu button's own inset
 
 /* added to App.jsx's style block, like MENU_CSS. The button glyphs take
    the gold on hover and focus, and the panel's rule lights with them, the
    way the Menu button's does. */
 export const ZOOM_CSS = `
-  .zoom { position: absolute; left: ${INSET}px; top: calc(var(--view-h) - ${INSET}px); transform: translateY(-100%);
+  .zoom { position: absolute; right: ${INSET}px; top: calc(var(--view-h) - ${INSET}px); transform: translateY(-100%);
     z-index: 19; display: flex; flex-direction: column; width: ${SIZE}px;
     background: ${rgba(C.table, 0.82)}; border: 1px solid rgba(0,0,0,0.7);
     outline: 1px solid ${rgba(C.gold, 0.7)}; outline-offset: -4px; }
