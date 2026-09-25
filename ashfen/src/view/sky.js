@@ -3,11 +3,11 @@
 
    The lowland is flush with the map's edge tiles, so the board is a piece
    of the land rather than something set on it, and it runs out under two
-   rings of ridges. What makes the map the subject is fog: the lowland
-   fades by distance from the board's edge, and reaches the sky's own
-   haze colour before the ridges (see GROUND_FOG_PARS in shaders.js). The
-   board stays clear in the middle, and nothing out at the rim ever shows
-   an edge. The orbit never
+   rings of ridges. What makes the map the subject is fog: the lowland and
+   the ridges haze by distance from the board's edge, at one rate, so the
+   land recedes toward the hills with nothing going flat on the way (see
+   GROUND_FOG_PARS in shaders.js). The board stays clear in the middle,
+   and the ridges hide the lowland's rim from every pose. The orbit never
    sees above the horizon (its pitch stops at 20 degrees down); the cut-in
    drops the camera to a unit's eye line, and there the lowland runs back
    to the ridges and the dome's bands rise over them, behind both fighters
@@ -26,7 +26,7 @@
    draws them, and the ridges take no lines. The ridges carry their
    shading baked into vertex colours, one flat colour per face. The dome
    takes no fog or cloud; the ridges take no cloud, and the fog round the
-   map only as the mist up their slopes (see GROUND_FOG_PARS). */
+   map at their own distance, like the plain in front of them. */
 
 import * as THREE from "three";
 import { MW, MH, CX, CZ, cell } from "../core/map.js";
@@ -56,10 +56,11 @@ const RIDGE_MID = 0.45;              // how far up each face the break between i
    wobble: how far it wanders in and out. lean: how far in from the ridge
    line the faces meet the lowland. count: columns around the ring,
    alternating peak and saddle. low and high: the range of ridge heights.
-   mist: how far every face is mixed toward SKY_HORIZON. */
+   mist: how far every face is mixed toward SKY_HORIZON before the fog round
+   the map adds its own haze for the ring's distance. */
 const RIDGES = [
-  { radius: 46, wobble: 2, lean: 5, count: 48, low: 1.8, high: 4.4, mist: 0.15 },   // near: darker and more saturated
-  { radius: 62, wobble: 2.7, lean: 8, count: 40, low: 4.0, high: 8.6, mist: 0.45 }, // far: paler, rises over the near one
+  { radius: 46, wobble: 2, lean: 5, count: 48, low: 1.8, high: 4.4, mist: 0 },   // near: its distance gives it all the haze it needs
+  { radius: 62, wobble: 2.7, lean: 8, count: 40, low: 4.0, high: 8.6, mist: 0.2 }, // far: a little more than its distance gives, so it sits back behind the near one
 ];
 
 const srgb = (hex) => [(hex >> 16 & 255) / 255, (hex >> 8 & 255) / 255, (hex & 255) / 255];
@@ -266,10 +267,10 @@ function buildRiver(arms, water, fog) {
    Each triangle gets one colour, from how squarely it faces the sun,
    mixed toward the horizon by the ring's mist. Every face points up, so
    a triangle whose normal comes out pointing down is flipped, which also
-   fixes its winding for front-face culling. On top of that the ground
-   fog lays a mist up each slope, full at the feet and gone by
-   GROUND_MIST_TOP: POST_FRAG draws it after the quantiser, or with post
-   off the material draws it itself, like the lowland. */
+   fixes its winding for front-face culling. On top of that the fog round
+   the map hazes each ridge for its distance, as it does the plain, so a
+   ridge's foot matches the ground it stands on: POST_FRAG draws it after
+   the quantiser, or with post off the material draws it itself. */
 function buildRidges(sunDir, fog) {
   const pos = [], col = [];
   const lit = srgb(RIDGE_LIT), shade = srgb(RIDGE_SHADE), sky = srgb(SKY_HORIZON);

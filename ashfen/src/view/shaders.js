@@ -11,11 +11,10 @@ const OUTLINE_RUSH = 8.0;       // the lines are gone once the director's rush p
 
 /* ground fog tunables, templated into GROUND_FOG_PARS: the fog over the
    lowland round the map (sky.js), by distance from the map's edge */
-const GROUND_FOG_EDGE = 0.35;   // fog on the lowland right at the map's edge
-const GROUND_FOG_FULL = 18;     // distance from the map's edge where it is all fog, the dome's own colour under the horizon
-const GROUND_FOG_TOP = 0.05;    // world height over which nothing takes the fog or the map's outline: the lowland, the river run-out and its banks all sit at or under it
-const GROUND_MIST_TOP = 4.0;    // height where the mist up the ridges clears; their feet sit in full fog, as the plain in front of them does, and it is half gone at half this
-const GROUND_MIST_NEAR = 10;    // distance from the map's edge inside which nothing standing takes the mist: canopies and ash overhang the edge a little
+const GROUND_FOG_EDGE = 0.25;   // fog on the lowland right at the map's edge, one deliberate step up from the board
+const GROUND_FOG_REACH = 110;   // distance from the map's edge over which the clear share left falls to 1/e; the near ridge's foot sits near 0.46, the far ridge near 0.54
+const GROUND_FOG_TOP = 0.05;    // world height over which the map's outline never draws: the lowland, the river run-out and its banks all sit at or under it
+const GROUND_FOG_NEAR = 10;     // distance from the map's edge inside which nothing standing over GROUND_FOG_TOP takes the fog: canopies and ash overhang the edge a little
 
 /* wind tunables, templated into the wind GLSL at the end of this file.
    Speeds and reaches are at wind strength 1; direction and strength are
@@ -40,35 +39,33 @@ const glf = (x) => x.toFixed(3);
 /* GROUND_FOG_PARS: the fog round the map. d is the distance from the
    board's rectangle, so the fog follows its outline, rounded at the
    corners. It starts at GROUND_FOG_EDGE right at the map's edge, one
-   deliberate step, and eases out to 1, the dome's colour under the
-   horizon, by GROUND_FOG_FULL, so the lowland meets the sky with no edge.
-   Nothing on the board takes it (d is 0 there).
+   deliberate step, and thickens from there as haze does with distance,
+   1 - exp(-d / GROUND_FOG_REACH) of what is left: quicker near, slower
+   far, never quite full. Nothing on the board takes it (d is 0 there).
 
-   Over GROUND_FOG_TOP it is a mist lying on the plain: full at the ground,
-   holding thick for a while and then clearing by GROUND_MIST_TOP, so it has
-   a body and a top rather than fading from the first unit up. Only the ridges
-   stand up out there, past GROUND_MIST_NEAR. Before this they were hazed
-   less than the plain in front of them, and stood with a hard foot on a
-   flat strip of full fog, which read as a blue cut across the horizon.
-   Now their feet sink into the same fog and they clear toward the peaks.
+   The ridges take the same fog at their own distance, so the plain and
+   the hills recede together and nothing out there goes flat. Two earlier
+   versions did. The first reached full fog 18 units out, well short of
+   the ridges at 38 to 62, so the plain ended in a uniform strip that read
+   as a blue cut across the horizon, with the hills stood on it far
+   clearer than the ground in front of them. The second laid a mist up
+   the ridges' slopes to hide their feet, and from the low orbit it
+   washed them into a blank wall. Anything standing over GROUND_FOG_TOP
+   inside GROUND_FOG_NEAR is left out: canopies and ash overhang the
+   board's edge a little.
 
    It is a smooth ramp, which the posteriser would cut into contour
    bands. So with post on, POST_FRAG applies it after the quantiser,
-   working back from depth to the world position. The lowland and the
-   river apply it themselves only with post off, where there is no
-   quantiser to band it. */
+   working back from depth to the world position. The lowland, the river
+   and the ridges apply it themselves only with post off, where there is
+   no quantiser to band it. */
 export const GROUND_FOG_PARS = `
   uniform highp vec2 uGroundHalf;
   float boardDist(highp vec3 w){ return length(max(abs(w.xz) - uGroundHalf, 0.0)); }
   float groundFog(highp vec3 w){
     float d = boardDist(w);
-    if (d <= 0.0) return 0.0;
-    if (w.y > ${glf(GROUND_FOG_TOP)}) {
-      if (d < ${glf(GROUND_MIST_NEAR)}) return 0.0;
-      return 1.0 - smoothstep(${glf(GROUND_FOG_TOP)}, ${glf(GROUND_MIST_TOP)}, w.y);
-    }
-    float t = 1.0 - clamp(d / ${glf(GROUND_FOG_FULL)}, 0.0, 1.0);
-    return mix(${glf(GROUND_FOG_EDGE)}, 1.0, 1.0 - t*t);
+    if (d <= 0.0 || (w.y > ${glf(GROUND_FOG_TOP)} && d < ${glf(GROUND_FOG_NEAR)})) return 0.0;
+    return 1.0 - ${glf(1 - GROUND_FOG_EDGE)} * exp(-d / ${glf(GROUND_FOG_REACH)});
   }`;
 
 export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
