@@ -14,6 +14,8 @@ const OUTLINE_RUSH = 8.0;       // the lines are gone once the director's rush p
 const GROUND_FOG_EDGE = 0.35;   // fog on the lowland right at the map's edge
 const GROUND_FOG_FULL = 18;     // distance from the map's edge where it is all fog, the dome's own colour under the horizon
 const GROUND_FOG_TOP = 0.05;    // world height over which nothing takes the fog or the map's outline: the lowland, the river run-out and its banks all sit at or under it
+const GROUND_MIST_TOP = 4.0;    // height where the mist up the ridges clears; their feet sit in full fog, as the plain in front of them does, and it is half gone at half this
+const GROUND_MIST_NEAR = 10;    // distance from the map's edge inside which nothing standing takes the mist: canopies and ash overhang the edge a little
 
 /* wind tunables, templated into the wind GLSL at the end of this file.
    Speeds and reaches are at wind strength 1; direction and strength are
@@ -40,8 +42,15 @@ const glf = (x) => x.toFixed(3);
    corners. It starts at GROUND_FOG_EDGE right at the map's edge, one
    deliberate step, and eases out to 1, the dome's colour under the
    horizon, by GROUND_FOG_FULL, so the lowland meets the sky with no edge.
-   Nothing on the board takes it (d is 0 there), nor anything standing on
-   the lowland (over GROUND_FOG_TOP).
+   Nothing on the board takes it (d is 0 there).
+
+   Over GROUND_FOG_TOP it is a mist lying on the plain: full at the ground,
+   holding thick for a while and then clearing by GROUND_MIST_TOP, so it has
+   a body and a top rather than fading from the first unit up. Only the ridges
+   stand up out there, past GROUND_MIST_NEAR. Before this they were hazed
+   less than the plain in front of them, and stood with a hard foot on a
+   flat strip of full fog, which read as a blue cut across the horizon.
+   Now their feet sink into the same fog and they clear toward the peaks.
 
    It is a smooth ramp, which the posteriser would cut into contour
    bands. So with post on, POST_FRAG applies it after the quantiser,
@@ -53,7 +62,11 @@ export const GROUND_FOG_PARS = `
   float boardDist(highp vec3 w){ return length(max(abs(w.xz) - uGroundHalf, 0.0)); }
   float groundFog(highp vec3 w){
     float d = boardDist(w);
-    if (w.y > ${glf(GROUND_FOG_TOP)} || d <= 0.0) return 0.0;
+    if (d <= 0.0) return 0.0;
+    if (w.y > ${glf(GROUND_FOG_TOP)}) {
+      if (d < ${glf(GROUND_MIST_NEAR)}) return 0.0;
+      return 1.0 - smoothstep(${glf(GROUND_FOG_TOP)}, ${glf(GROUND_MIST_TOP)}, w.y);
+    }
     float t = 1.0 - clamp(d / ${glf(GROUND_FOG_FULL)}, 0.0, 1.0);
     return mix(${glf(GROUND_FOG_EDGE)}, 1.0, 1.0 - t*t);
   }`;
@@ -203,9 +216,14 @@ export const POST_FRAG = `
     if (uLevels < 63.0) c = floor(c*uLevels + 0.5)/uLevels;
     if (uOutline > 0.5) c *= outline();
     if (texture2D(tDepth, vUv).r < 1.0) {
+      highp vec3 w = worldAt(vUv);
       vec3 fc = linearToOutputTexel(vec4(uFogColor, 1.0)).rgb;
       if (uLevels < 63.0) fc = floor(fc*uLevels + 0.5)/uLevels;
-      c = mix(c, fc, groundFog(worldAt(vUv)) * texture2D(tDiffuse, vUv).a);
+      /* rt's alpha keeps the fog off overlays and ash on the ground. The
+         ridges write 0 there (noOutline), and over the ground groundFog
+         reaches nothing else, so up there it is not asked */
+      float a = w.y > ${glf(GROUND_FOG_TOP)} ? 1.0 : texture2D(tDiffuse, vUv).a;
+      c = mix(c, fc, groundFog(w) * a);
     }
     c = mix(c, c*vec3(1.06,1.01,0.93), 0.5);
     c *= 1.0 - dot(d,d)*uVignette;

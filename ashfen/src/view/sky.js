@@ -24,8 +24,9 @@
    banks, the river, and both ridge rings in one mesh. The dome, the river
    and the ridges sit on the no-outline layer, so the normal pass never
    draws them, and the ridges take no lines. The ridges carry their
-   shading baked into vertex colours, one flat colour per face; the dome
-   and the ridges take no fog or cloud. */
+   shading baked into vertex colours, one flat colour per face. The dome
+   takes no fog or cloud; the ridges take no cloud, and the fog round the
+   map only as the mist up their slopes (see GROUND_FOG_PARS). */
 
 import * as THREE from "three";
 import { MW, MH, CX, CZ, cell } from "../core/map.js";
@@ -265,8 +266,11 @@ function buildRiver(arms, water, fog) {
    Each triangle gets one colour, from how squarely it faces the sun,
    mixed toward the horizon by the ring's mist. Every face points up, so
    a triangle whose normal comes out pointing down is flipped, which also
-   fixes its winding for front-face culling. */
-function buildRidges(sunDir) {
+   fixes its winding for front-face culling. On top of that the ground
+   fog lays a mist up each slope, full at the feet and gone by
+   GROUND_MIST_TOP: POST_FRAG draws it after the quantiser, or with post
+   off the material draws it itself, like the lowland. */
+function buildRidges(sunDir, fog) {
   const pos = [], col = [];
   const lit = srgb(RIDGE_LIT), shade = srgb(RIDGE_SHADE), sky = srgb(SKY_HORIZON);
   const n = new THREE.Vector3(), e = new THREE.Vector3(), out = new THREE.Color();
@@ -315,7 +319,7 @@ function buildRidges(sunDir) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
-  return noOutline(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true })));
+  return noOutline(new THREE.Mesh(geo, groundFog(new THREE.MeshBasicMaterial({ vertexColors: true }), fog)));
 }
 
 /* adds the dome, the lowland, the river's run out and the ridges to the
@@ -332,7 +336,7 @@ export function createSky({ scene, sun, haze, wind, water }) {
   };
   const arms = riverArms();
   const dome = buildDome();
-  scene.add(dome, buildGround(arms, fog, wind), buildRiver(arms, water, fog), buildRidges(sun.position.clone().normalize()));
+  scene.add(dome, buildGround(arms, fog, wind), buildRiver(arms, water, fog), buildRidges(sun.position.clone().normalize(), fog));
   return {
     follow(camera, post) {
       dome.position.copy(camera.position);
