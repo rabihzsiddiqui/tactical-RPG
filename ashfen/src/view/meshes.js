@@ -9,14 +9,18 @@ import { WEAPONS, PALS, SILHOUETTES, SILHOUETTE_DEFAULT } from "../core/data.js"
 const SWAY_TUFT = 0.03;    // tip of the tallest grass blade
 const SWAY_CANOPY = 0.012; // top of a tree; the trunk does not move
 
-/* the ash settled on the board's northern tiles, under the volcano (see
-   the northern range in sky.js): each row north of the river takes its
-   tiles' colours part way to ASHFALL, more the further north, and each
-   tile a share of its row's amount, so the ash lies unevenly rather than
-   in bands. A tile is still one flat colour per face. */
-const ASHFALL = 0x77736d;                     // settled ash, a shade over the range's apron
-const ASHFALL_ROWS = [0.55, 0.4, 0.26, 0.12]; // how far rows 0 to 3, north first, go toward it
-const ASHFALL_VARY = 0.45;                    // how much less than its row's amount one tile can take
+/* the ground under the volcano (see the northern range in sky.js). North
+   of the river some tiles are scorched brown: a share of each row, more
+   of them the further north, picked by a small hash so they lie in
+   patches rather than bands, each part way to SCORCH by its own amount.
+   The rest take a light dusting of ash, which carries the board on into
+   the range's ash apron. Stonework (the keep and the ridge) never
+   scorches. A tile is still one flat colour per face. */
+const SCORCH = 0x7a5232;                      // burnt earth near the volcano
+const SCORCH_ROWS = [0.7, 0.5, 0.3, 0.12];    // share of the tiles in rows 0 to 3, north first, that scorch
+const SCORCH_MIX = [0.7, 0.9];                // how far a scorched tile goes toward SCORCH, least and most; under half read as olive through the haze
+const ASHFALL = 0x77736d;                     // the dusting on the rest, a shade over the range's apron
+const ASHFALL_ROWS = [0.3, 0.2, 0.12, 0.05];  // how far the unscorched tiles in rows 0 to 3 go toward it
 
 /* outlines. POST_FRAG draws them from rt's depth and from a normal pass
    that the camera renders with this layer switched off. noOutline() moves
@@ -61,13 +65,19 @@ export function fadeOutline(m) {
 export function buildTerrain() {
   const pos = [], nrm = [], col = [];
   const A = new THREE.Vector3(), B = new THREE.Vector3(), N = new THREE.Vector3();
-  const c = new THREE.Color(), ash = new THREE.Color(ASHFALL);
-  // a tile's colour under the ashfall; a small integer hash picks its share
-  const ashen = (hex, tx, ty) => {
-    const k = ASHFALL_ROWS[ty];
-    if (!k) return hex;
-    const r = ((Math.imul(tx * 73856093 ^ ty * 19349663, 0x9e3779b1) >>> 0) % 1000) / 1000;
-    return c.setHex(hex).lerp(ash, k * (1 - ASHFALL_VARY * r)).getHex();
+  const c = new THREE.Color(), ash = new THREE.Color(ASHFALL), scorch = new THREE.Color(SCORCH);
+  // a small integer hash of a tile and a salt, 0..1
+  const roll = (tx, ty, salt) =>
+    ((Math.imul(tx * 73856093 ^ ty * 19349663 ^ salt * 83492791, 0x9e3779b1) >>> 0) % 1000) / 1000;
+  // a tile's colour under the volcano: scorched, dusted, or as it was south of the river
+  const ashen = (hex, t, tx, ty) => {
+    if (ty >= ASHFALL_ROWS.length) return hex;
+    const stone = t.keep || t.h >= 0.6;
+    if (!stone && roll(tx, ty, 1) < SCORCH_ROWS[ty]) {
+      const k = SCORCH_MIX[0] + (SCORCH_MIX[1] - SCORCH_MIX[0]) * roll(tx, ty, 2);
+      return c.setHex(hex).lerp(scorch, k).getHex();
+    }
+    return c.setHex(hex).lerp(ash, ASHFALL_ROWS[ty]).getHex();
   };
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const UP = V(0, 1, 0);
@@ -93,7 +103,7 @@ export function buildTerrain() {
       const t = cell(tx, ty), h = t.h;
       const x0 = tx - CX - 0.5, x1 = tx - CX + 0.5;
       const z0 = ty - CZ - 0.5, z1 = ty - CZ + 0.5;
-      addQuad(V(x0, h, z1), V(x1, h, z1), V(x1, h, z0), V(x0, h, z0), UP, ashen(t.top, tx, ty));
+      addQuad(V(x0, h, z1), V(x1, h, z1), V(x1, h, z0), V(x0, h, z0), UP, ashen(t.top, t, tx, ty));
       const sides = [
         { dx: 1, dy: 0, want: V(1, 0, 0), a: V(x1, h, z1), b: V(x1, h, z0) },
         { dx: -1, dy: 0, want: V(-1, 0, 0), a: V(x0, h, z0), b: V(x0, h, z1) },
@@ -104,7 +114,7 @@ export function buildTerrain() {
         const nx = tx + s.dx, ny = ty + s.dy;
         const nh = inB(nx, ny) ? cell(nx, ny).h : h - 1.6;
         if (nh >= h - 0.001) continue;
-        addQuad(V(s.a.x, h, s.a.z), V(s.b.x, h, s.b.z), V(s.b.x, nh, s.b.z), V(s.a.x, nh, s.a.z), s.want, ashen(t.side, tx, ty));
+        addQuad(V(s.a.x, h, s.a.z), V(s.b.x, h, s.b.z), V(s.b.x, nh, s.b.z), V(s.a.x, nh, s.a.z), s.want, ashen(t.side, t, tx, ty));
       }
     }
   }
