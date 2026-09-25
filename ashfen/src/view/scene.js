@@ -1420,12 +1420,17 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
       clearSel();
       return;
     }
+    /* picking the target is a committed choice like any other, so it
+       sounds like one: the same select as tapping an enemy straight from
+       a selection, which moves and opens the forecast in one go */
     if (s.mode === "target" && here && s.targets.includes(here.id)) {
+      playActionSelect();
       g.forecast = { attackerId: u.id, targetId: here.id };
       tick();
       return;
     }
     if (s.mode === "targetHeal" && here && s.targets.includes(here.id)) {
+      playActionSelect();
       doHeal(here.id);
     }
   }

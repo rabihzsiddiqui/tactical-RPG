@@ -22,7 +22,8 @@
    choice: picking a move-destination tile (commitMove) or clicking an
    enemy/ally directly to skip past it (the engageAttack/engageHeal
    click-to-engage bypass), picking an action-menu entry (Attack/Heal/
-   Vulnerary/Wait), confirming an attack from the forecast, and End Turn.
+   Vulnerary/Wait), picking the target after Attack or Heal, confirming an
+   attack from the forecast, and End Turn.
    Backing out of the action menu or the forecast (both routed through
    scene.js's backToMove) plays back.wav instead. Phase banners use their
    own sourced stingers, one per banner text (playerphase/enemyphase.wav;
