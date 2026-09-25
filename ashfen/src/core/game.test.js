@@ -124,6 +124,29 @@ describe("resolveAttack: event order", () => {
   });
 });
 
+describe("kills", () => {
+  test("the unit that lands the killing blow is credited, even on a counter", () => {
+    // the attacker's 5 damage leaves the defender alive; the defender's
+    // 100 str counter kills the attacker, so the kill is the defender's
+    const att = unit({ id: "att", team: "player", x: 0, y: 5, weaponKey: "ironSword", hp: 20, maxHp: 20 });
+    const def = unit({ id: "def", team: "enemy", x: 1, y: 5, weaponKey: "ironSword", str: 100 });
+    const filler = unit({ id: "filler", team: "player", x: 11, y: 9 }); // keeps the company alive
+    const alwaysLand = () => 0;
+    const { state: next } = resolveAttack(state([att, def, filler]), "att", "def", alwaysLand);
+    expect(next.units.find((u) => u.id === "def").kills).toBe(1);
+    expect(next.units.find((u) => u.id === "att").kills ?? 0).toBe(0);
+  });
+
+  test("a kill adds one to what the attacker already had, and the fallen gets nothing", () => {
+    const att = unit({ id: "att", team: "player", x: 0, y: 5, weaponKey: "ironSword", str: 100, kills: 2 });
+    const def = unit({ id: "def", team: "enemy", x: 1, y: 5, weaponKey: "ironSword" });
+    const filler = unit({ id: "filler", team: "enemy", x: 11, y: 9 });
+    const { state: next } = resolveAttack(state([att, def, filler]), "att", "def", () => 0);
+    expect(next.units.find((u) => u.id === "att").kills).toBe(3);
+    expect(next.units.find((u) => u.id === "def").kills ?? 0).toBe(0);
+  });
+});
+
 describe("runEnemyPhase / endPlayerPhase", () => {
   test("a full phase-boundary round trip advances the turn and resets acted", () => {
     const player = unit({ id: "p", team: "player", x: 0, y: 5, acted: true });

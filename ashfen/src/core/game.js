@@ -48,6 +48,7 @@ function resolveCombatExchange(units, attackerId, defenderId, rng) {
       }
     }
     if (killed) {
+      src.kills = (src.kills || 0) + 1;
       events.push({ type: "death", unitId: tgt.id });
       logLines.push(tgt.name + " was defeated.");
       break;

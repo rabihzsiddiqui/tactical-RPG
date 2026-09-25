@@ -107,5 +107,6 @@ export function makeUnit(d, i) {
     ai: d.ai || "charge", boss: !!d.boss, lord: !!d.lord,
     vulnerary: d.team === "player" ? 1 : 0,
     acted: false,
+    kills: 0, // foes this unit has struck down, counters included; the victory screen's MVP is read from it
   };
 }
