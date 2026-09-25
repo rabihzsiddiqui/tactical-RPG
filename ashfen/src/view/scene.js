@@ -1130,11 +1130,15 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     scheduleEnemyPhaseIfDone();
   }
 
-  /* ---- player actions ---- */
+  /* ---- player actions ----
+     each one closes the unit panel as it commits, not when it finishes:
+     after an attack the cut-in closes before the level-up and EXP beats,
+     and a panel cleared in finishGlue came back for those and went again */
   async function doAttack(targetId) {
     playActionSelect();
     const attackerId = g.sel.id;
     g.forecast = null;
+    g.inspect = null;
     releaseAll();
     ring.visible = false;
     busy = true;
@@ -1146,6 +1150,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
 
   async function doHeal(targetId) {
     const healerId = g.sel.id;
+    g.inspect = null;
     busy = true;
     tick();
     await applyResolve(resolveHeal(coreState(), healerId, targetId));
@@ -1157,6 +1162,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     playActionSelect();
     playHeal();
     const unitId = g.sel.id;
+    g.inspect = null;
     busy = true;
     tick();
     await applyResolve(resolveItem(coreState(), unitId));
@@ -1167,6 +1173,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   async function doWait() {
     playActionSelect();
     const unitId = g.sel.id;
+    g.inspect = null;
     busy = true;
     tick();
     await applyResolve(resolveWait(coreState(), unitId));
