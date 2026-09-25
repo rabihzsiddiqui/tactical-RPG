@@ -174,9 +174,9 @@ function Controls() {
     <>
       <Section title="On the map">
         <Term k="Tap a unit">
-          Selects it if it is one of yours and has not acted. Otherwise it just shows that
-          unit&rsquo;s stats in the side panel. Tapping an enemy is always safe and never commits
-          you to anything.
+          Selects it if it is one of yours and has not acted. Either way its panel opens in the
+          map&rsquo;s top-left corner, and tapping the panel shows the rest of its stats. Tapping
+          an enemy is always safe and never commits you to anything.
         </Term>
         <Term k="Tap a blue tile">Moves the selected unit there and opens its action menu.</Term>
         <Term k="Tap an enemy while a unit is selected">

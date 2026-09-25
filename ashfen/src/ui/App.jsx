@@ -376,7 +376,7 @@ export default function App() {
               </div>
             )}
 
-            {/* unit panel, top right beside the Menu button, see UnitHud.jsx */}
+            {/* unit panel, top left, level with the Menu button, see UnitHud.jsx */}
             <UnitHud u={hudUnit} />
 
             {/* phase banner */}
