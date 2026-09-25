@@ -1,6 +1,7 @@
 /* wind: the grass and the tree canopies sway, cloud shadows drift over the
-   board, and ash falls through it. All three read one uWind uniform, so
-   they agree on which way the wind blows, and one uTime, the same seconds
+   board, ash falls through it, and smoke leans off the volcano to the
+   north. All of them read one uWind uniform, so they agree on which way
+   the wind blows, and one uTime, the same seconds
    the other scene shaders get. Everything moves in the shaders. After
    mount the CPU writes one float a frame.
 
@@ -10,23 +11,29 @@
    runtime would jump every cloud and flake to wherever the new speed puts
    them. It is set once. Gusts come from the sway shader, not from here.
 
-   None of this adds a render pass. The ash is one draw call, the tree
-   canopies swap their shadow material for one that sways, and the rest is
-   a few lines spliced into shaders the board already runs. */
+   None of this adds a render pass. The ash is one draw call and so is the
+   smoke, the tree canopies swap their shadow material for one that sways,
+   and the rest is a few lines spliced into shaders the board already
+   runs. */
 
 import * as THREE from "three";
 import { MW, MH } from "../core/map.js";
-import { SWAY_VERT, CLOUD_VERT, CLOUD_FRAG, ASH_VERT, ASH_FRAG } from "./shaders.js";
+import { SWAY_VERT, CLOUD_VERT, CLOUD_FRAG, ASH_VERT, ASH_FRAG, PLUME_VERT, PLUME_FRAG } from "./shaders.js";
 import { noOutline } from "./meshes.js";
 
 const WIND_DIR = [1, -0.4];  // which way it blows, world x and z: left to right from the home pose, a little away from the camera
 const WIND_STRENGTH = 1;     // scales every speed and reach in the wind GLSL
 const CLOUD_TEX = 64;        // noise texture size, texels per side
 const CLOUD_CELLS = 8;       // value noise cells across the texture; the second octave has twice as many
-const ASH_COUNT = 320;       // flakes over the whole board
+const ASH_COUNT = 240;       // flakes in the whole volume; ASH_NORTH_BIAS in shaders.js crowds most of them north, so the board itself has far fewer than the old 320
 const ASH_FLOOR = -0.4;      // bottom of the ash volume, just under the river bed
 const ASH_CEIL = 3.2;        // top of the ash volume, well above anything standing on the board
-const ASH_MARGIN = 0.5;      // how far the volume reaches past the board's edge
+const ASH_MARGIN = 0.5;      // how far the volume reaches past the board's south edge
+const ASH_SIDE = 2.5;        // how far it reaches past the east and west edges, out over the range's flanks
+const ASH_NORTH = 5.5;       // how far it reaches past the north edge, over the ash apron to the foothills
+const PLUME_COUNT = 56;      // puffs in the volcano's smoke
+const PLUME_DARK = 0x2b2826; // a new puff, near the vent
+const PLUME_PALE = 0x8d8781; // an old puff, thinning downwind
 const ASH_GREY = 0xc9c6bf;   // most flakes
 const ASH_EMBER = 0xff8a3c;  // the ember share, ASH_EMBERS in shaders.js
 
@@ -103,12 +110,12 @@ function buildAsh(uniforms) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   geo.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
-  const w = MW + ASH_MARGIN * 2, d = MH + ASH_MARGIN * 2;
+  const w = MW + ASH_SIDE * 2, d = MH + ASH_MARGIN + ASH_NORTH;
   const mat = new THREE.ShaderMaterial({
     vertexShader: ASH_VERT, fragmentShader: ASH_FRAG,
     uniforms: {
       uWind: uniforms.uWind, uTime: uniforms.uTime,
-      uBoxMin: { value: new THREE.Vector3(-w / 2, ASH_FLOOR, -d / 2) },
+      uBoxMin: { value: new THREE.Vector3(-w / 2, ASH_FLOOR, -MH / 2 - ASH_NORTH) },
       uBoxSize: { value: new THREE.Vector3(w, ASH_CEIL - ASH_FLOOR, d) },
       uGrey: { value: new THREE.Color(ASH_GREY) },
       uEmber: { value: new THREE.Color(ASH_EMBER) },
@@ -118,6 +125,43 @@ function buildAsh(uniforms) {
   const pts = new THREE.Points(geo, mat);
   pts.frustumCulled = false; // the stored positions are seeds, not places
   pts.renderOrder = 1;
+  return noOutline(pts);
+}
+
+/* the volcano's smoke, see PLUME_VERT. Puffs start out of step with each
+   other by their seed, so the column is always full. Transparent for its
+   thinning puffs, and like the ash it writes no depth and takes no lines.
+   uViewH is read off whatever target it is drawn into, just before it is
+   drawn, since the post pass renders at a lower resolution than the
+   canvas and a puff's width is in world units. */
+function buildPlume(uniforms, vent) {
+  const pos = new Float32Array(PLUME_COUNT * 3), seed = new Float32Array(PLUME_COUNT);
+  for (let i = 0; i < PLUME_COUNT; i++) {
+    pos.set([hash(i, 1, 11) * 2 - 1, 0, hash(i, 3, 11) * 2 - 1], i * 3);
+    seed[i] = (i + hash(i, 4, 11) * 0.5) / PLUME_COUNT;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: PLUME_VERT, fragmentShader: PLUME_FRAG,
+    uniforms: {
+      uWind: uniforms.uWind, uTime: uniforms.uTime,
+      uVent: { value: vent.clone() },
+      uViewH: { value: 240 },
+      uDark: { value: new THREE.Color(PLUME_DARK) },
+      uPale: { value: new THREE.Color(PLUME_PALE) },
+    },
+    transparent: true, depthWrite: false,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false; // the stored positions are offsets from the vent, not places
+  pts.renderOrder = 1;
+  const size = new THREE.Vector2();
+  pts.onBeforeRender = (renderer) => {
+    const t = renderer.getRenderTarget();
+    mat.uniforms.uViewH.value = t ? t.height : renderer.getDrawingBufferSize(size).y;
+  };
   return noOutline(pts);
 }
 
@@ -202,6 +246,8 @@ export function createWind({ scene, sun }) {
     sway: (m) => patch(m, true, false),
     // for a lit solid added after the traverse above: sky.js's lowland
     cloud: (m) => patch(m, false, true),
+    // the volcano's smoke, rising from `vent`, a world position; sky.js calls it, last, for the seeded draws
+    plume: (vent) => scene.add(buildPlume(uniforms, vent)),
     update(t) { uniforms.uTime.value = t; },
   };
 }

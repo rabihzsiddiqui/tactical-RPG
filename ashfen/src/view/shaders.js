@@ -14,7 +14,8 @@ const OUTLINE_RUSH = 8.0;       // the lines are gone once the director's rush p
 const GROUND_FOG_EDGE = 0.25;   // fog on the lowland right at the map's edge, one deliberate step up from the board
 const GROUND_FOG_REACH = 110;   // distance from the map's edge over which the clear share left falls to 1/e; the near ridge's foot sits near 0.46, the far ridge near 0.54
 const GROUND_FOG_TOP = 0.05;    // world height over which the map's outline never draws: the lowland, the river run-out and its banks all sit at or under it
-const GROUND_FOG_NEAR = 10;     // distance from the map's edge inside which nothing standing over GROUND_FOG_TOP takes the fog: canopies and ash overhang the edge a little
+const GROUND_FOG_NEAR = 20;     // distance from the map's edge by which anything standing over GROUND_FOG_TOP takes the full fog for its distance; the near range sits inside it and hazes only lightly
+const GROUND_FOG_NEAR0 = 1;     // and inside which it takes none: canopies and ash overhang the edge a little. In between, a ramp, so the northern range's slopes haze without a seam
 
 /* wind tunables, templated into the wind GLSL at the end of this file.
    Speeds and reaches are at wind strength 1; direction and strength are
@@ -34,6 +35,13 @@ const ASH_WOBBLE = 0.08;       // how far a flake wanders off its line, world un
 const ASH_WOBBLE_RATE = 0.9;   // wander speed, radians per second
 const ASH_EMBERS = 0.1;        // share of the flakes that are embers
 const ASH_EMBER_GAIN = 1.3;    // embers burn this much brighter than their colour
+const ASH_NORTH_BIAS = 2.0;     // crowds the flakes north toward the range and the volcano: a flake at depth u of the volume sits at u^this, north first
+const PLUME_LIFE = 11;          // seconds a puff takes from the crater to gone
+const PLUME_RISE = 8;           // world units a puff climbs over its life
+const PLUME_BEND = 7;           // world units downwind a puff has been carried by the end, the most of it late
+const PLUME_SPREAD = 1.8;       // world units either side the column has widened to by the end
+const PLUME_SIZE = [0.7, 2.6];  // a puff's width in world units at birth and at the end
+const PLUME_ALPHA = 0.8;        // a new puff's opacity; it thins to nothing over its life
 const glf = (x) => x.toFixed(3);
 
 /* GROUND_FOG_PARS: the fog round the map. d is the distance from the
@@ -64,8 +72,10 @@ export const GROUND_FOG_PARS = `
   float boardDist(highp vec3 w){ return length(max(abs(w.xz) - uGroundHalf, 0.0)); }
   float groundFog(highp vec3 w){
     float d = boardDist(w);
-    if (d <= 0.0 || (w.y > ${glf(GROUND_FOG_TOP)} && d < ${glf(GROUND_FOG_NEAR)})) return 0.0;
-    return 1.0 - ${glf(1 - GROUND_FOG_EDGE)} * exp(-d / ${glf(GROUND_FOG_REACH)});
+    if (d <= 0.0) return 0.0;
+    float f = 1.0 - ${glf(1 - GROUND_FOG_EDGE)} * exp(-d / ${glf(GROUND_FOG_REACH)});
+    if (w.y > ${glf(GROUND_FOG_TOP)}) f *= clamp((d - ${glf(GROUND_FOG_NEAR0)}) / ${glf(GROUND_FOG_NEAR - GROUND_FOG_NEAR0)}, 0.0, 1.0);
+    return f;
   }`;
 
 export const POST_VERT = `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`;
@@ -457,7 +467,9 @@ export const CLOUD_FRAG = `
 
    The point size is a fixed 2 pixels whatever the distance, so a flake
    drifting past the lens in a cut-in stays a speck rather than a blob.
-   One flat colour per flake, so there is nothing to band. */
+   One flat colour per flake, so there is nothing to band. The wrap runs
+   first and the depth is bent after it, so the flakes stay crowded toward
+   the volcano however far they have drifted. */
 export const ASH_VERT = `
   uniform vec3 uWind;
   uniform float uTime;
@@ -477,6 +489,7 @@ export const ASH_VERT = `
     p.x += sin(uTime * ${glf(ASH_WOBBLE_RATE)} + ph) * ${glf(ASH_WOBBLE)};
     p.z += sin(uTime * ${glf(ASH_WOBBLE_RATE * 1.3)} + ph * 1.7) * ${glf(ASH_WOBBLE)};
     p = mod(p, uBoxSize);
+    p.z = pow(p.z / uBoxSize.z, ${glf(ASH_NORTH_BIAS)}) * uBoxSize.z;
     gl_Position = projectionMatrix * viewMatrix * vec4(uBoxMin + p, 1.0);
     gl_PointSize = 2.0;
     vColor = aSeed < ${glf(ASH_EMBERS)} ? uEmber * ${glf(ASH_EMBER_GAIN)} : uGrey;
@@ -484,6 +497,47 @@ export const ASH_VERT = `
 export const ASH_FRAG = `
   varying vec3 vColor;
   void main() { gl_FragColor = linearToOutputTexel(vec4(vColor, 1.0)); }`;
+
+/* PLUME_VERT and PLUME_FRAG: the smoke over the volcano, one THREE.Points
+   (see wind.js). Every puff runs the same life on its own phase: it
+   leaves the vent, climbs, widens, is bent downwind by the same uWind as
+   the ash, most of it late, and thins out. `position` holds its offset
+   from the column's centre line, -1..1 on x and z. Its width is in world
+   units, turned into pixels with the target's height (uViewH), so a puff
+   keeps its size at every resolution. Each puff is a hard-edged disc of
+   one colour at one opacity, dark new and paler as it goes, so there is
+   no ramp inside it for the posteriser to band. */
+export const PLUME_VERT = `
+  uniform vec3 uWind;
+  uniform float uTime;
+  uniform vec3 uVent;
+  uniform float uViewH;
+  uniform vec3 uDark;
+  uniform vec3 uPale;
+  attribute float aSeed;
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    float age = fract(aSeed + uTime / ${glf(PLUME_LIFE)});
+    vec3 p = uVent;
+    p.y += age * ${glf(PLUME_RISE)};
+    p.xz += uWind.xy * (uWind.z * age * age * ${glf(PLUME_BEND)});
+    p.xz += position.xz * (0.2 + age * ${glf(PLUME_SPREAD)});
+    vec4 mv = viewMatrix * vec4(p, 1.0);
+    gl_Position = projectionMatrix * mv;
+    float width = mix(${glf(PLUME_SIZE[0])}, ${glf(PLUME_SIZE[1])}, age);
+    gl_PointSize = clamp(width * projectionMatrix[1][1] * uViewH * 0.5 / -mv.z, 1.0, 64.0);
+    vColor = mix(uDark, uPale, age);
+    vAlpha = ${glf(PLUME_ALPHA)} * (1.0 - age) * step(0.02, age);
+  }`;
+export const PLUME_FRAG = `
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    vec2 c = gl_PointCoord - 0.5;
+    if (dot(c, c) > 0.25) discard;
+    gl_FragColor = linearToOutputTexel(vec4(vColor, vAlpha));
+  }`;
 
 /* SKY_VERT and SKY_FRAG: the sky dome, see sky.js. The dome is centred on
    the camera and never rotated, so a vertex's own position is the view

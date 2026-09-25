@@ -1,5 +1,5 @@
 /* the world past the board's edge: the sky, the lowland, the river's run
-   out across it, and the ridges.
+   out across it, the ridges, and the northern range with its volcano.
 
    The lowland is flush with the map's edge tiles, so the board is a piece
    of the land rather than something set on it, and it runs out under two
@@ -26,10 +26,19 @@
    draws them, and the ridges take no lines. The ridges carry their
    shading baked into vertex colours, one flat colour per face. The dome
    takes no fog or cloud; the ridges take no cloud, and the fog round the
-   map at their own distance, like the plain in front of them. */
+   map at their own distance, like the plain in front of them.
+
+   The northern range is a fifth draw call and the volcano's smoke a sixth
+   (wind.js owns the smoke, for its wind). The range starts at the board's
+   north edge as an apron of settled ash, climbs through foothills to a
+   ridge line, and bends south past the board's corners. The volcano
+   stands out of it behind the keep's left, the reason for the ash. It is
+   built like the ridges, one flat colour per face, and it keeps clear of
+   every lens: the cut-in camera never goes more than about 2.3 units
+   from the pair it frames, and the apron stays under it that far out. */
 
 import * as THREE from "three";
-import { MW, MH, CX, CZ, cell } from "../core/map.js";
+import { MAP, MW, MH, CX, CZ, cell } from "../core/map.js";
 import { SKY_VERT, skyFrag, WATER_VERT, WATER_FRAG, GROUND_FOG_PARS } from "./shaders.js";
 import { noOutline, NO_OUTLINE_LAYER } from "./meshes.js";
 import { hash, splice } from "./wind.js";
@@ -62,6 +71,53 @@ const RIDGES = [
   { radius: 46, wobble: 2, lean: 5, count: 48, low: 1.8, high: 4.4, mist: 0 },   // near: its distance gives it all the haze it needs
   { radius: 62, wobble: 2.7, lean: 8, count: 40, low: 4.0, high: 8.6, mist: 0.2 }, // far: a little more than its distance gives, so it sits back behind the near one
 ];
+
+/* the northern range. It wraps the board's northern half: up the west
+   side from just north of the river, round the north edge, and down the
+   east side to the river again, so the river still runs out both ways.
+   Its front is that edge of the board; columns stand along it, and each
+   has a point at every entry of RANGE_ROWS, set that far out from the
+   board along the edge's outward normal, fanning round the two corners.
+   Heights are jittered per column between lo and hi, with a slow swell
+   along the range so the skyline does not read as a saw, and they fall
+   to the ground over the last RANGE_TAPER at each river end.
+
+   The home view looks down at 48 degrees, so what it shows past the
+   north edge is the apron and the foot of the slopes; the peaks and the
+   volcano are for the cut-in and a zoomed-in look. On a wide screen the
+   flanks beside the board stand in full view. */
+const RANGE_STEP = 1;             // world units between columns along the straight edges
+const RANGE_CORNER = 7;           // columns round each northern corner
+const RANGE_RIVER = 1.2;          // how far north of the river's north bank the flanks end
+const RANGE_TAPER = 3;            // world units along the front over which each flank falls to the ground at its river end
+const RANGE_ROWS = [              // distance out from the board's edge, and the height range of that row
+  { d: 0, lo: 0.02, hi: 0.02 },   // the front, on the board's edge, just over the lowland
+  { d: 2.3, lo: 0.08, hi: 0.22 }, // the back of the ash apron, under any cut-in lens: the lens never gets 2.3 past the edge
+  { d: 3.2, lo: 0.6, hi: 1.4 },   // the foot of the slopes
+  { d: 4.4, lo: 1.4, hi: 2.5 },   // foothills
+  { d: 6, lo: 2.1, hi: 3.5 },     // shoulders
+  { d: 8, lo: 2.9, hi: 4.6 },     // upper slopes
+  { d: 10.5, lo: 3.5, hi: 6 },    // the ridge line
+];
+const ROCK_LIT = 0x5b554f;        // basalt turned full to the sun
+const ROCK_SHADE = 0x2d2b2f;      // basalt turned away from it
+const APRON_LIT = 0x625f59;       // settled ash turned to the sun, a shade under ASHFALL on the tiles in meshes.js
+const APRON_SHADE = 0x46443f;     // settled ash turned away
+/* the volcano: a cone of rings from its buried base to the crater rim,
+   then the crater's inner wall down to a lava pool */
+const VOLCANO = { x: -3.5, z: -16, segs: 16 };  // its centre on the ground, behind the ridge line and left of the keep, and faces around it
+const VOLCANO_RINGS = [           // radius and height of each ring, base first, then the rim and the pool's edge
+  [6.5, 1.5], [4.4, 5], [2.6, 8.2], [1.5, 10], [1, 9.4],
+];
+const VOLCANO_LIT = 0x4f4945;     // its flanks turned to the sun, a little darker than the range
+const VOLCANO_SHADE = 0x262325;   // turned away
+const CRATER_WALL = 0x1d1a1b;     // the inside of the rim
+const LAVA = [0xff7a1e, 0xffa23a]; // the pool, alternate faces
+const LAVA_STREAKS = [            // glowing runs down the south face: angle off due south in radians, and the ring they reach down to
+  [-0.35, 2], [0.12, 1], [0.5, 2],
+];
+const LAVA_COOL = 0xc4401a;       // a streak's lower half, cooling
+const LAVA_LIFT = 0.06;           // how far a streak stands off the flank, so it never fights it for depth
 
 const srgb = (hex) => [(hex >> 16 & 255) / 255, (hex >> 8 & 255) / 255, (hex & 255) / 255];
 const lerp3 = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
@@ -323,6 +379,135 @@ function buildRidges(sunDir, fog) {
   return noOutline(new THREE.Mesh(geo, groundFog(new THREE.MeshBasicMaterial({ vertexColors: true }), fog)));
 }
 
+/* the northern range and the volcano in one mesh, like the ridges: flat
+   colours baked per face from how squarely each faces the sun, no lines,
+   and the fog round the map at their distance. Only the south faces are
+   built; the ridge line hides the rest from every lens. Returns the mesh
+   and the crater's vent, for the smoke. */
+function buildRange(sunDir, fog) {
+  const pos = [], col = [];
+  const n = new THREE.Vector3(), e = new THREE.Vector3(), out = new THREE.Color();
+  const face = (p, q, r, lit, shade) => {
+    n.subVectors(q, p).cross(e.subVectors(r, p)).normalize();
+    if (n.y < 0) { [q, r] = [r, q]; n.negate(); }
+    const c = lerp3(srgb(shade), srgb(lit), THREE.MathUtils.clamp(n.dot(sunDir), 0, 1));
+    out.setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
+    for (const v of [p, q, r]) { pos.push(v.x, v.y, v.z); col.push(out.r, out.g, out.b); }
+  };
+  // an unlit face, for the lava, which lights itself; wound upward like the rest
+  const glow = (p, q, r, hex) => {
+    n.subVectors(q, p).cross(e.subVectors(r, p));
+    if (n.y < 0) [q, r] = [r, q];
+    out.set(hex);
+    for (const v of [p, q, r]) { pos.push(v.x, v.y, v.z); col.push(out.r, out.g, out.b); }
+  };
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+
+  /* the front: the board's edge from the west flank's river end, round
+     the north, to the east flank's, as points with their outward normals
+     and their distance along it */
+  const hx = MW / 2, hz = MH / 2;
+  const riverNorth = MAP.findIndex((row) => row.includes("~")) - CZ - 0.5;
+  const southEnd = riverNorth - RANGE_RIVER;
+  const front = [];
+  const put = (x, z, nx, nz) => front.push({ x, z, nx, nz });
+  const run = (x0, z0, x1, z1, nx, nz) => {
+    const n = Math.max(1, Math.round(Math.hypot(x1 - x0, z1 - z0) / RANGE_STEP));
+    for (let i = 0; i < n; i++) put(x0 + (x1 - x0) * i / n, z0 + (z1 - z0) * i / n, nx, nz);
+  };
+  const corner = (x, z, a0, a1) => {
+    for (let i = 0; i < RANGE_CORNER; i++) {
+      const a = a0 + (a1 - a0) * i / RANGE_CORNER;
+      put(x, z, Math.cos(a), Math.sin(a));
+    }
+  };
+  run(-hx, southEnd, -hx, -hz, -1, 0);
+  corner(-hx, -hz, Math.PI, Math.PI * 1.5);
+  run(-hx, -hz, hx, -hz, 0, -1);
+  corner(hx, -hz, Math.PI * 1.5, Math.PI * 2);
+  run(hx, -hz, hx, southEnd, 1, 0);
+  put(hx, southEnd, 1, 0);
+  let along = 0;
+  front.forEach((f, i) => {
+    if (i) along += Math.hypot(f.x - front[i - 1].x, f.z - front[i - 1].z) || 0.4;
+    f.along = along;
+  });
+
+  // the range: a grid of columns by rows, two faces per cell, split on alternate diagonals
+  const cols = front.length - 1;
+  const cells = 9;
+  const swell = (i) => {
+    const u = (i / cols) * cells, k = Math.floor(u), f = u - k, s2 = f * f * (3 - 2 * f);
+    const a = hash(k, 5, 21), b = hash(k + 1, 5, 21);
+    return a + (b - a) * s2;
+  };
+  const grid = front.map((f, i) => {
+    const taper = Math.min(1, f.along / RANGE_TAPER, (along - f.along) / RANGE_TAPER);
+    return RANGE_ROWS.map((row, k) => {
+      const t = k === 0 ? 0 : 0.55 * swell(i) + 0.45 * hash(i, 2 + k, 21);
+      const peak = k === RANGE_ROWS.length - 1 && i % 2 === 0 ? 1 : 0.8;
+      const y = k === 0 ? row.lo : row.lo * taper + (row.hi - row.lo) * t * peak * taper;
+      const d = row.d + (k === 0 ? 0 : (hash(i, 9 + k, 21) - 0.5) * 0.5);
+      return V(f.x + f.nx * d, y, f.z + f.nz * d);
+    });
+  });
+  for (let i = 0; i < cols; i++) {
+    for (let k = 0; k < RANGE_ROWS.length - 1; k++) {
+      const a = grid[i][k], b = grid[i + 1][k], c = grid[i + 1][k + 1], d = grid[i][k + 1];
+      const [lit, shade] = k === 0 ? [APRON_LIT, APRON_SHADE] : [ROCK_LIT, ROCK_SHADE];
+      if ((i + k) % 2) { face(a, b, d, lit, shade); face(b, c, d, lit, shade); }
+      else { face(a, b, c, lit, shade); face(a, c, d, lit, shade); }
+    }
+  }
+
+  // the volcano: rings of points around its centre, each jittered a little
+  const { x: cx, z: cz, segs } = VOLCANO;
+  const ring = VOLCANO_RINGS.map(([r, y], k) => Array.from({ length: segs }, (_, j) => {
+    const ang = ((j + (hash(j, k, 23) - 0.5) * 0.3) / segs) * Math.PI * 2;
+    const rr = r * (1 + (hash(j, k + 7, 23) - 0.5) * 0.12);
+    return V(cx + Math.cos(ang) * rr, y + (k < 3 ? (hash(j, k + 14, 23) - 0.5) * 0.5 : 0), cz + Math.sin(ang) * rr);
+  }));
+  const RIM = 3, POOL = 4;
+  for (let k = 0; k < RIM; k++) {
+    for (let j = 0; j < segs; j++) {
+      const j2 = (j + 1) % segs;
+      face(ring[k][j], ring[k][j2], ring[k + 1][j2], VOLCANO_LIT, VOLCANO_SHADE);
+      face(ring[k][j], ring[k + 1][j2], ring[k + 1][j], VOLCANO_LIT, VOLCANO_SHADE);
+    }
+  }
+  const vent = V(cx, VOLCANO_RINGS[POOL][1], cz);
+  for (let j = 0; j < segs; j++) {
+    const j2 = (j + 1) % segs;
+    glow(ring[RIM][j], ring[RIM][j2], ring[POOL][j2], CRATER_WALL);
+    glow(ring[RIM][j], ring[POOL][j2], ring[POOL][j], CRATER_WALL);
+    glow(vent, ring[POOL][j2], ring[POOL][j], LAVA[j % 2]);
+  }
+
+  /* the streaks: a narrow strip from the rim down to its ring, following
+     the flank, a little proud of it, hot at the top and cooling below */
+  const at = (k, ang, half) => {
+    const [r, y] = VOLCANO_RINGS[k];
+    const w = half / r;
+    return [-1, 1].map((sgn) => V(
+      cx + Math.cos(ang + sgn * w) * (r + LAVA_LIFT), y + LAVA_LIFT, cz + Math.sin(ang + sgn * w) * (r + LAVA_LIFT)));
+  };
+  for (const [off, lowest] of LAVA_STREAKS) {
+    const ang = Math.PI / 2 + off; // +z is south, toward the board
+    for (let k = RIM; k > lowest; k--) {
+      const [a, b] = at(k, ang, 0.18), [d, c] = at(k - 1, ang, 0.3);
+      const hex = k === RIM ? LAVA[0] : LAVA_COOL;
+      glow(a, b, c, hex);
+      glow(a, c, d, hex);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  const mesh = noOutline(new THREE.Mesh(geo, groundFog(new THREE.MeshBasicMaterial({ vertexColors: true }), fog)));
+  return { mesh, vent };
+}
+
 /* adds the dome, the lowland, the river's run out and the ridges to the
    scene. `haze` is the board's tile fog uniforms, for its colour; `wind`
    the board's wind, for the lowland's cloud; `water` the board's water
@@ -337,7 +522,10 @@ export function createSky({ scene, sun, haze, wind, water }) {
   };
   const arms = riverArms();
   const dome = buildDome();
-  scene.add(dome, buildGround(arms, fog, wind), buildRiver(arms, water, fog), buildRidges(sun.position.clone().normalize(), fog));
+  const sunDir = sun.position.clone().normalize();
+  const range = buildRange(sunDir, fog);
+  scene.add(dome, buildGround(arms, fog, wind), buildRiver(arms, water, fog), buildRidges(sunDir, fog), range.mesh);
+  wind.plume(range.vent);
   return {
     follow(camera, post) {
       dome.position.copy(camera.position);
