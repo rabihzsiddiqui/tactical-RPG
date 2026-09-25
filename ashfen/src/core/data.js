@@ -24,8 +24,11 @@ export const PALS = {
   archer: { tunic: 0x4d7a45, trim: 0xcfc089, cape: 0x385c32, pants: 0x574d38, boot: 0x4a3323, skin: "#e9b88f", eye: "#241a14", hair: "#6f4a22", helm: 0x6f5233, plume: 0x8fb45a, blade: 0xc9b083, grip: 0x7a5a34 },
   mage: { tunic: 0x6a4a9d, trim: 0xd9ab45, cape: 0x4e3676, pants: 0x413a52, boot: 0x3d3244, skin: "#efc79f", eye: "#241a14", hair: "#c2a35e", helm: 0x7d5ab0, plume: 0xd9ab45, blade: 0xd9ab45, grip: 0x5a4030 },
   cleric: { tunic: 0xd6cdb4, trim: 0x8fa8c4, cape: 0xc0b79c, pants: 0x9a927c, boot: 0x6a5f4a, skin: "#efc79f", eye: "#241a14", hair: "#8a6a3a", helm: 0xe4dcc6, plume: 0x8fa8c4, blade: 0xe8e2cf, grip: 0x9a8a6a },
-  foe: { tunic: 0x9d3339, trim: 0x3a2020, cape: 0x6d2228, pants: 0x483837, boot: 0x3d2a22, skin: "#c9926c", eye: "#1b1210", hair: "#2b1a16", helm: 0x8e5b52, plume: 0xc04a44, blade: 0xd8cfc6, grip: 0x6a4a34 },
-  boss: { tunic: 0x7a2228, trim: 0xc8a04a, cape: 0x4d1418, pants: 0x3d3130, boot: 0x2f211c, skin: "#b9805e", eye: "#1b1210", hair: "#1f1310", helm: 0x6d4a44, plume: 0xc8a04a, blade: 0xe4dcd2, grip: 0x4a3324 },
+  /* the enemy reds (tunic, cape, plume) are pushed well past the player
+     colours in saturation: the haze lifts green and blue to a floor at map
+     distance, so only more red reads as red rather than brick */
+  foe: { tunic: 0xc4222b, trim: 0x3a2020, cape: 0x8c1820, pants: 0x483837, boot: 0x3d2a22, skin: "#c9926c", eye: "#1b1210", hair: "#2b1a16", helm: 0x8e5b52, plume: 0xdc2e36, blade: 0xd8cfc6, grip: 0x6a4a34 },
+  boss: { tunic: 0x9c1820, trim: 0xc8a04a, cape: 0x5f1016, pants: 0x3d3130, boot: 0x2f211c, skin: "#b9805e", eye: "#1b1210", hair: "#1f1310", helm: 0x6d4a44, plume: 0xc8a04a, blade: 0xe4dcd2, grip: 0x4a3324 },
 };
 
 /* class silhouettes: what buildUnitMesh in src/view/meshes.js changes
