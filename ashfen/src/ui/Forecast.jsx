@@ -126,8 +126,10 @@ export function Numbers({ l, r, heal, style }) {
   );
 }
 
-/* one side's health, the bar draining toward the middle of the panel */
-function Hp({ u, right }) {
+/* one side's health, the bar in a bordered track draining toward the middle
+   of the panel, so how much is left reads against the whole. Shared with
+   the battle HUD, where `drain` lets the fill slide as each strike lands. */
+export function Hp({ u, right, drain }) {
   const hp = Math.max(0, u.hp);
   return (
     <div className="flex items-center gap-1.5 min-w-0" style={{ flexDirection: right ? "row-reverse" : "row" }}>
@@ -135,7 +137,8 @@ function Hp({ u, right }) {
         height: 6, background: C.table, border: "1px solid " + rgba(C.rule, 0.55),
         justifyContent: right ? "flex-end" : "flex-start",
       }}>
-        <div style={{ width: (hp / u.maxHp) * 100 + "%", background: u.team === "player" ? C.blueLite : C.redLite }} />
+        <div className={drain ? "bhud-fill" : undefined}
+          style={{ width: (hp / u.maxHp) * 100 + "%", background: u.team === "player" ? C.blueLite : C.redLite }} />
       </div>
       <span style={{ fontFamily: SERIF, fontSize: 11, lineHeight: "14px", color: C.parch }}>{hp}/{u.maxHp}</span>
     </div>

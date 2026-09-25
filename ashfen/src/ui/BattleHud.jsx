@@ -3,11 +3,14 @@
    duration (animUnit hides them, see scene.js). It is the forecast in a
    wider cut (Forecast.jsx): the same dark panel with the gold rule, the
    two faces on the outer edges, the numbers and their labels between
-   them. It keeps the old parchment HUD's size, the full width to 520px
-   and about 100px tall, so it covers no more of the fight than that did.
-   To fit, each side's HP rides in the names row, either side of an HP
-   label over the numbers' labels, and its bar lies along the foot of the
-   face. From WIDE up there is room for each weapon beside its name.
+   them. It keeps the old parchment HUD's width, the full width to 520px.
+   Under the faces is the forecast's own HP row: each side's bar in a
+   bordered track beside its numbers, an HP label between them, so a half
+   or a quarter left reads at a glance. The bar used to lie along the foot
+   of each face with no track round it and its numbers up in the names
+   row, and how much was gone was hard to judge mid-exchange. The row
+   makes the panel about 20px taller than the old HUD. From WIDE up there
+   is room for each weapon beside its name.
 
    The numbers come from `cut.f`, the forecast scene.js took the moment the
    cut-in began, so they do not move while strikes land. The HP comes from
@@ -28,14 +31,13 @@ import { wep } from "../core/combat.js";
 import { C, SERIF, DISPLAY, rgba } from "./theme.js";
 import WeaponIcon from "./WeaponIcon.jsx";
 import { Face } from "./UnitHud.jsx";
-import { Numbers, Tri } from "./Forecast.jsx";
+import { Numbers, Tri, Hp } from "./Forecast.jsx";
 import { takeOver } from "./morph.js";
 
 const MORPH_MS = 240;   // the frame's flight from the forecast's box to its own
 const BODY_DELAY = 150; // ms into that flight before the contents start to fade in
 const BODY_MS = 160;    // the contents' fade
 const WIDE = 420;       // px of content width from which each name carries its weapon
-const GAUGE = 5;        // px, the health bar's height along the foot of a face
 
 const SMALL = { fontFamily: SERIF, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: C.rule };
 
@@ -64,15 +66,13 @@ export const BATTLE_HUD_CSS = `
   }
 `;
 
-/* one side's name, weapon (when there is room) and HP, mirrored on the
-   right so the HP sits toward the middle. A size down from the forecast's
-   names, so "Mercenary" and its HP share a side of a 320px HUD. The
-   weapon only takes what the name and HP leave, so it is the one that
-   gives way. */
+/* one side's name and weapon (when there is room), mirrored on the
+   right. A size down from the forecast's names. The weapon only takes
+   what the name leaves, so it is the one that gives way. */
 function Side({ u, tri, right }) {
   const w = wep(u);
   return (
-    <div className="flex items-center min-w-0" style={{ gap: 6, flexDirection: right ? "row-reverse" : "row" }}>
+    <div className="flex flex-1 items-center min-w-0" style={{ gap: 6, flexDirection: right ? "row-reverse" : "row" }}>
       <div className="truncate" style={{
         fontFamily: DISPLAY, fontWeight: 600, fontSize: 12, lineHeight: "17px", textTransform: "uppercase",
         letterSpacing: "0.1em", color: C.parch, marginRight: right ? "-0.1em" : 0,
@@ -84,26 +84,6 @@ function Side({ u, tri, right }) {
         }}>{w.name}</span>
         <Tri t={tri} />
       </div>
-      <span style={{
-        flex: "0 0 auto", fontFamily: SERIF, fontSize: 11, lineHeight: "17px", color: C.parch,
-        [right ? "marginRight" : "marginLeft"]: "auto",
-      }}>{Math.max(0, u.hp)}/{u.maxHp}</span>
-    </div>
-  );
-}
-
-/* the health bar along the foot of a face, draining toward the middle of
-   the panel */
-function Gauge({ u, right }) {
-  return (
-    <div className="flex" style={{
-      position: "absolute", left: 0, right: 0, bottom: 0, height: GAUGE,
-      background: rgba(C.table, 0.85), justifyContent: right ? "flex-end" : "flex-start",
-    }}>
-      <div className="bhud-fill" style={{
-        width: (Math.max(0, u.hp) / u.maxHp) * 100 + "%",
-        background: u.team === "player" ? C.blueLite : C.redLite,
-      }} />
     </div>
   );
 }
@@ -150,15 +130,19 @@ export default function BattleHud({ cut, units }) {
     <div className={"bhud" + (from ? " morph" : "") + (cut.closing ? " closing" : "")}>
       <div ref={frameRef} className="bhud-frame" />
       <div className="bhud-body">
-        <div className="grid items-center" style={{ gridTemplateColumns: "1fr auto 1fr", columnGap: 6 }}>
+        <div className="flex" style={{ gap: 10 }}>
           <Side u={left} tri={triFor(left)} />
-          <div style={{ ...SMALL, lineHeight: "17px", paddingLeft: "0.14em" }}>HP</div>
           <Side u={right} tri={triFor(right)} right />
         </div>
         <div className="flex items-center justify-between" style={{ gap: 8, marginTop: 6 }}>
-          <Face u={left}><Gauge u={left} /></Face>
+          <Face u={left} />
           <Numbers l={statFor(left)} r={statFor(right)} heal={heal} style={{ flex: "0 1 170px", minWidth: 0 }} />
-          <Face u={right}><Gauge u={right} right /></Face>
+          <Face u={right} />
+        </div>
+        <div className="grid items-center" style={{ gridTemplateColumns: "1fr auto 1fr", columnGap: 6, marginTop: 7 }}>
+          <Hp u={left} drain />
+          <div style={{ ...SMALL, lineHeight: "14px", paddingLeft: "0.14em" }}>HP</div>
+          <Hp u={right} right drain />
         </div>
       </div>
     </div>
