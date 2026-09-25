@@ -241,9 +241,9 @@ function Combat() {
     <>
       <Section title="Reading the battle forecast">
         <P>
-          Before any attack lands, the forecast shows both sides of the exchange, with you on the
-          left and the defender on the right. A blank right column means that enemy cannot strike
-          back.
+          Before any attack lands, the forecast takes the unit panel&rsquo;s corner and shows both
+          sides of the exchange, with you on the left and the defender on the right. Dashes on the
+          right mean that enemy cannot strike back.
         </P>
         <Term k="Dmg">Damage per hit, after their defence and terrain. 0 means you cannot hurt them.</Term>
         <Term k="Hit">Percent chance each strike lands.</Term>
@@ -251,7 +251,7 @@ function Combat() {
           Percent chance a landed strike is a critical hit, which deals <b>triple</b> damage. Enemy
           crits kill units that looked perfectly safe.
         </Term>
-        <Term k="Hits">
+        <Term k="Atks">
           x1 or x2. See Doubling below. x2 means that side swings twice in the exchange.
         </Term>
         <P>
@@ -286,7 +286,8 @@ function Combat() {
         <P>
           Holding the advantage gives <b>+1 damage and +15 hit</b>. Being on the wrong side costs
           the same. Bows and tomes sit outside the triangle entirely, so they neither gain nor
-          lose.
+          lose. In the forecast, an arrow after each weapon shows the triangle: up for the side
+          with the edge, down for the other.
         </P>
       </Section>
 

@@ -14,8 +14,9 @@
    call, and a second tap folds it away.
 
    App.jsx decides when it shows; it hides for the cut-in, where the
-   battle HUD does the same job. On the way out it fades on the last unit
-   it showed rather than going blank first. */
+   battle HUD does the same job, and for the forecast, which takes its
+   place. On the way out it fades on the last unit it showed rather than
+   going blank first. */
 
 import { useState } from "react";
 import { wep, wepBonus } from "../core/combat.js";
@@ -25,13 +26,15 @@ import { playDrag } from "../view/audio.js";
 import { C, MONO, DISPLAY, rgba } from "./theme.js";
 import WeaponIcon from "./WeaponIcon.jsx";
 
-const TOP = 8;          // px from the map's top edge, level with the Menu button
-const LEFT = 8;         // px from the map's left edge, the Menu button's own inset mirrored
-const MENU_CLEAR = 92;  // px kept free at the right for the Menu button: its 76 width (75.1 in Cinzel), its 8 inset and 8 between
-const WIDTH = 224;      // px, fixed, so the panel keeps its size from one unit to the next; fits "Mercenary" in capitals
-const FACE = 56;        // px, the portrait's side; portrait.js renders at twice this
-const FADE_MS = 160;    // the fade and slide, in and out, and the chevron's turn
-const SLIDE = 8;        // px the panel travels in from the left
+/* the slot, the face and the motion are shared with the forecast
+   (Forecast.jsx), which takes this panel's place while it is up */
+export const TOP = 8;          // px from the map's top edge, level with the Menu button
+export const LEFT = 8;         // px from the map's left edge, the Menu button's own inset mirrored
+export const MENU_CLEAR = 92;  // px kept free at the right for the Menu button: its 76 width (75.1 in Cinzel), its 8 inset and 8 between
+const WIDTH = 224;             // px, fixed, so the panel keeps its size from one unit to the next; fits "Mercenary" in capitals
+export const FACE = 56;        // px, the portrait's side; portrait.js renders at twice this
+export const FADE_MS = 160;    // the fade and slide, in and out, and the chevron's turn
+export const SLIDE = 8;        // px the panel travels in from the left
 
 const LABEL = { fontFamily: MONO, fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: C.rule };
 const SMALL = { ...LABEL, fontSize: 9, letterSpacing: "0.14em" };
@@ -91,7 +94,21 @@ function Line({ k, v }) {
   );
 }
 
-function Rule({ faint }) {
+/* the unit's portrait, with the team's colour behind the face, the way a
+   portrait window says whose side a unit is on before the name does */
+export function Face({ u }) {
+  const src = portraitOf(u);
+  return (
+    <div style={{
+      width: FACE, height: FACE, flex: "0 0 auto", background: u.team === "player" ? C.blue : C.red,
+      border: "1px solid rgba(0,0,0,0.7)", boxSizing: "content-box", overflow: "hidden",
+    }}>
+      {src && <img src={src} alt="" width={FACE} height={FACE} style={{ display: "block" }} draggable={false} />}
+    </div>
+  );
+}
+
+export function Rule({ faint }) {
   return <div style={faint
     ? { height: 1, margin: "6px 0", background: C.rule, opacity: 0.25 }
     : { height: 1, margin: "9px 0 7px", background: C.gold, opacity: 0.85 }} />;
@@ -145,7 +162,6 @@ export default function UnitHud({ u }) {
   const w = wep(shown);
   const ally = shown.team === "player";
   const hp = Math.max(0, shown.hp);
-  const src = portraitOf(shown);
   return (
     <div className={"uhud" + (u ? "" : " off") + (open ? " open" : "")}
       role="button" tabIndex={u ? 0 : -1} aria-expanded={open} aria-hidden={u ? undefined : true}
@@ -156,14 +172,7 @@ export default function UnitHud({ u }) {
         if (!e.repeat) toggle();
       }}>
       <div className="flex items-center" style={{ gap: 10 }}>
-        {/* the team's colour behind the face, the way a portrait window
-            says whose side a unit is on before the name does */}
-        <div style={{
-          width: FACE, height: FACE, flex: "0 0 auto", background: ally ? C.blue : C.red,
-          border: "1px solid rgba(0,0,0,0.7)", boxSizing: "content-box", overflow: "hidden",
-        }}>
-          {src && <img src={src} alt="" width={FACE} height={FACE} style={{ display: "block" }} draggable={false} />}
-        </div>
+        <Face u={shown} />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">

@@ -13,7 +13,7 @@ import { C, MONO, SERIF, DISPLAY, PHASE_BANNER_MS } from "./theme.js";
 import { Card, Eyebrow, Pill, Btn } from "./primitives.jsx";
 import UnitHud, { UNIT_HUD_CSS } from "./UnitHud.jsx";
 import ZoomButtons, { ZOOM_CSS } from "./ZoomButtons.jsx";
-import Forecast from "./Forecast.jsx";
+import Forecast, { FORECAST_CSS } from "./Forecast.jsx";
 import BattleHud from "./BattleHud.jsx";
 import ActionMenu from "./ActionMenu.jsx";
 import OnboardingCard from "./OnboardingCard.jsx";
@@ -45,7 +45,6 @@ if (import.meta.env.DEV) {
 export default function App() {
   const mountRef = useRef(null);
   const menuRef = useRef(null);
-  const forecastRef = useRef(null);
   const apiRef = useRef({});
   const gs = useRef(null);
   if (!gs.current) gs.current = newGame();
@@ -83,7 +82,7 @@ export default function App() {
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
-    return mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, setFloats, tick, apiRef });
+    return mountScene({ mount, menuRef, g, camRef, setCam, setFloats, tick, apiRef });
   }, [resetKey]);
 
   /* every way into and out of the manual routes through these two, so the
@@ -232,10 +231,6 @@ export default function App() {
   const sel = g.sel;
   const selUnit = sel ? g.units.find((u) => u.id === sel.id) : null;
   const inspected = g.inspect ? g.units.find((u) => u.id === g.inspect) : null;
-  /* the unit panel's unit, while the map is the thing being looked at: not
-     through a cut-in (the battle HUD has it), the menu or the end screen */
-  const hudUnit = began && !paused && !g.cutIn && g.status === "playing" && inspected && inspected.hp > 0
-    ? inspected : null;
   const fc = g.forecast
     ? (() => {
         const a = g.units.find((u) => u.id === g.forecast.attackerId);
@@ -243,6 +238,11 @@ export default function App() {
         return a && d ? { a, d, f: forecastOf(a, d) } : null;
       })()
     : null;
+  /* the unit panel's unit, while the map is the thing being looked at: not
+     through a cut-in (the battle HUD has it), the forecast (which takes
+     the panel's place), the menu or the end screen */
+  const hudUnit = began && !paused && !g.cutIn && !fc && g.status === "playing" && inspected && inspected.hp > 0
+    ? inspected : null;
   const foesLeft = g.units.filter((u) => u.team === "enemy" && u.hp > 0).length;
   const hint = hintFor(g);
   const nudge = g.tutorial && g.phase === "player" && g.status === "playing";
@@ -296,6 +296,7 @@ export default function App() {
         }
         ${MENU_CSS}
         ${UNIT_HUD_CSS}
+        ${FORECAST_CSS}
         ${ZOOM_CSS}
       `}</style>
 
@@ -361,12 +362,8 @@ export default function App() {
 
             <ActionMenu menuRef={menuRef} sel={sel} selUnit={selUnit} api={api} />
 
-            {/* battle forecast, overlaid on the map itself near the units involved,
-                so finishing an attack never requires looking away from the board */}
-            <div ref={forecastRef} className="absolute"
-              style={{ display: fc ? "block" : "none", width: 260, zIndex: 22 }}>
-              {fc && <Forecast fc={fc} onAttack={api.confirmAttack} onCancel={api.cancelForecast} />}
-            </div>
+            {/* battle forecast, in the unit panel's place, see Forecast.jsx */}
+            <Forecast fc={fc} onAttack={api.confirmAttack} onCancel={api.cancelForecast} />
 
             {/* battle HUD: sits along the bottom edge of the canvas for the
                 length of a cut-in. Above the damage numbers, below the
