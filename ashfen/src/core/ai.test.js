@@ -82,6 +82,24 @@ describe("planAuto", () => {
     expect(man(plan.x, plan.y, e.x, e.y)).toBeLessThan(man(0, 5, e.x, e.y));
   });
 
+  test("the lord drinks his vulnerary sooner than the others, at 60 percent", () => {
+    // 12 of 20: a fighter would fight on here, the lord heals first
+    const lord = unit({ id: "k", lord: true, x: 0, y: 5, hp: 12 });
+    const fighter = unit({ id: "f", x: 0, y: 7, hp: 12 });
+    const e = unit({ id: "e", team: "enemy", x: 3, y: 5 });
+    expect(planAuto(lord, [lord, fighter, e])).toEqual({ kind: "item", x: 0, y: 5 });
+    expect(planAuto(fighter, [lord, fighter, e]).kind).toBe("attack");
+  });
+
+  test("the lord takes a fight a lethal counter would come in, when his first blow ends it", () => {
+    // his 5 damage finishes a 4 HP enemy before its 20 damage counter can land
+    const lord = unit({ id: "k", lord: true, x: 0, y: 5, hp: 8, vulnerary: 0 });
+    const e = unit({ id: "e", team: "enemy", x: 3, y: 5, str: 25, hp: 4 });
+    const plan = planAuto(lord, [lord, e]);
+    expect(plan.kind).toBe("attack");
+    expect(plan.target).toBe("e");
+  });
+
   test("the lord takes a fight whose counter cannot hurt him", () => {
     // counter: 5 str + 5 mt - 10 def = 0
     const lord = unit({ id: "k", lord: true, x: 0, y: 5 });
