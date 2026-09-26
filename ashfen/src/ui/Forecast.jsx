@@ -38,6 +38,7 @@ import { handOff } from "./morph.js";
 const WIDTH = 256;     // px; two faces with the numbers between, and "Mercenary" in capitals over one side
 const ROW = FACE / 4;  // px per stat row, so the four rows stand exactly as tall as a face
 const RISE = 6;        // px it rises as it fades in, and sinks as it fades out
+const AFTER_H = 12;     // px, the row under a forecast bar that holds the HP the pulse ends on
 const PULSE_MS = 650;  // one swing of the at-risk and to-be-healed parts of a bar, dim to bright or back
 const LABELS = ["Dmg", "Hit", "Crit", "Atks"]; // four letters at most: a 360px phone leaves the middle column about 27px
 
@@ -143,26 +144,53 @@ export function Numbers({ l, r, heal, style }) {
    The forecast adds `loss`, HP the action could take, which pulses at the
    fill's inner end, or `gain`, HP a heal would restore, which pulses green
    past it; both stop at the bar's ends. The HUD, mid-exchange, passes
-   neither. */
-export function Hp({ u, right, drain, loss = 0, gain = 0 }) {
+   neither. When either is passed, a row under the bar holds the HP the
+   pulse ends on, under that point: what is left if every swing lands, or
+   what the heal brings it to. Its own copy of the HP count, hidden, keeps
+   that row exactly as wide as the bar above it, so the number lands under
+   the right spot on both sides. */
+export function Hp({ u, right, drain, loss, gain }) {
   const hp = Math.max(0, u.hp);
-  const lost = Math.min(hp, loss), gained = Math.min(u.maxHp - hp, gain);
+  const lost = Math.min(hp, loss || 0), gained = Math.min(u.maxHp - hp, gain || 0);
+  const after = lost > 0 ? hp - lost : gained > 0 ? hp + gained : null;
   const pct = (n) => (n / u.maxHp) * 100 + "%";
   const color = u.team === "player" ? C.blueLite : C.redLite;
   const kept = <div key="kept" className={drain ? "bhud-fill" : undefined} style={{ width: pct(hp - lost), background: color }} />;
   const pulse = lost > 0 ? <div key="pulse" className="hp-risk" style={{ width: pct(lost), background: color }} />
     : gained > 0 ? <div key="pulse" className="hp-mend" style={{ width: pct(gained), background: C.mend }} />
       : null;
+  const row = { flexDirection: right ? "row-reverse" : "row" };
+  const count = { fontFamily: SERIF, fontSize: 11, lineHeight: "14px", color: C.parch };
+  /* centred under its point, but held inside the bar near either end */
+  const frac = after == null ? 0 : after / u.maxHp;
+  const shift = frac < 0.12 ? 0 : frac > 0.88 ? 100 : 50;
   return (
-    <div className="flex items-center gap-1.5 min-w-0" style={{ flexDirection: right ? "row-reverse" : "row" }}>
-      <div className="flex-1 flex" style={{
-        height: 6, background: C.table, border: "1px solid " + rgba(C.rule, 0.55),
-        justifyContent: right ? "flex-end" : "flex-start",
-      }}>
-        {/* the pulsing part always sits on the side toward the middle */}
-        {right ? [pulse, kept] : [kept, pulse]}
+    <div className="min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0" style={row}>
+        <div className="flex-1 flex" style={{
+          height: 6, background: C.table, border: "1px solid " + rgba(C.rule, 0.55),
+          justifyContent: right ? "flex-end" : "flex-start",
+        }}>
+          {/* the pulsing part always sits on the side toward the middle */}
+          {right ? [pulse, kept] : [kept, pulse]}
+        </div>
+        <span style={count}>{hp}/{u.maxHp}</span>
       </div>
-      <span style={{ fontFamily: SERIF, fontSize: 11, lineHeight: "14px", color: C.parch }}>{hp}/{u.maxHp}</span>
+      {(loss != null || gain != null) && (
+        <div className="flex gap-1.5 min-w-0" style={{ ...row, height: AFTER_H, marginTop: 2 }}>
+          <div className="flex-1" style={{ position: "relative" }}>
+            {after != null && (
+              <span aria-label={lost > 0 ? "at worst " + after : "healed to " + after} style={{
+                position: "absolute", top: 0, [right ? "right" : "left"]: pct(after),
+                transform: `translateX(${right ? shift : -shift}%)`,
+                fontFamily: SERIF, fontSize: 10, lineHeight: AFTER_H + "px",
+                color: lost > 0 ? color : C.mend,
+              }}>{after}</span>
+            )}
+          </div>
+          <span aria-hidden="true" style={{ ...count, lineHeight: AFTER_H + "px", visibility: "hidden" }}>{hp}/{u.maxHp}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -203,7 +231,9 @@ export default function Forecast({ fc, boxRef, into, onAttack, onHeal, onCancel 
         <Face u={d} />
       </div>
 
-      <div className="grid items-center" style={{ gridTemplateColumns: "1fr auto 1fr", columnGap: 6, marginTop: 7 }}>
+      {/* top-aligned, so the HP label sits level with the bars and not
+          halfway down to the numbers under them */}
+      <div className="grid items-start" style={{ gridTemplateColumns: "1fr auto 1fr", columnGap: 6, marginTop: 7 }}>
         <Hp u={a} loss={healing ? 0 : reach(f.counters ? f.d : null)} />
         <div style={{ ...SMALL, lineHeight: "14px", paddingLeft: "0.14em" }}>HP</div>
         <Hp u={d} right loss={healing ? 0 : reach(f.a)} gain={healing ? heal : 0} />
