@@ -7,7 +7,7 @@ import {
   setMusicVolume, setSfxVolume, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME,
   playActionSelect, playMenu,
 } from "../view/audio.js";
-import { forecastOf } from "../core/combat.js";
+import { forecastOf, healAmount } from "../core/combat.js";
 import { LEVEL_NAME } from "../core/map.js";
 import { C, SERIF, PHASE_BANNER_MS } from "./theme.js";
 import { Card, Eyebrow, Pill, Btn, RuleBtn, RULE_BTN_CSS } from "./primitives.jsx";
@@ -241,7 +241,8 @@ export default function App() {
     ? (() => {
         const a = g.units.find((u) => u.id === g.forecast.attackerId);
         const d = g.units.find((u) => u.id === g.forecast.targetId);
-        return a && d ? { a, d, f: forecastOf(a, d) } : null;
+        if (!a || !d) return null;
+        return g.forecast.heal ? { a, d, heal: healAmount(a, d) } : { a, d, f: forecastOf(a, d) };
       })()
     : null;
   /* the unit panel's unit, while the map is the thing being looked at: not
@@ -358,7 +359,7 @@ export default function App() {
             {/* battle forecast, over the enemy it is about (scene.js places
                 it), and the battle HUD's starting box on Attack. See Forecast.jsx */}
             <Forecast fc={fc} boxRef={forecastRef} into={!!g.cutIn}
-              onAttack={api.confirmAttack} onCancel={api.cancelForecast} />
+              onAttack={api.confirmAttack} onHeal={api.confirmHeal} onCancel={api.cancelForecast} />
 
             {/* battle HUD: sits along the bottom edge of the canvas for the
                 length of a cut-in. Above the damage numbers, below the

@@ -14,7 +14,14 @@
    weapon triangle is an arrow after each weapon: up for the side it
    favours, down for the other.
 
-   Attack turns it into the battle HUD: it hands its box to morph.js and
+   Each health bar pulses over the part the exchange could take from it:
+   the other side's damage times its attacks, crits aside, so a bar that
+   pulses to its end is a unit that could fall. A staff user's heal gets
+   the same panel, with the amount it restores in place of the numbers
+   and the target's bar pulsing green over what it would fill, and Heal
+   in place of Attack.
+
+   Attack or Heal turns it into the battle HUD: it hands its box to morph.js and
    drops out at once, and the HUD grows its frame out of that box
    (BattleHud.jsx), which shares Numbers and Tri from here. Back, or an
    Attack with the cut-in off, fades it out on the last pair it showed,
@@ -31,6 +38,7 @@ import { handOff } from "./morph.js";
 const WIDTH = 256;     // px; two faces with the numbers between, and "Mercenary" in capitals over one side
 const ROW = FACE / 4;  // px per stat row, so the four rows stand exactly as tall as a face
 const RISE = 6;        // px it rises as it fades in, and sinks as it fades out
+const PULSE_MS = 650;  // one swing of the at-risk and to-be-healed parts of a bar, dim to bright or back
 const LABELS = ["Dmg", "Hit", "Crit", "Atks"]; // four letters at most: a 360px phone leaves the middle column about 27px
 
 /* the unit panel's small label */
@@ -55,9 +63,12 @@ export const FORECAST_CSS = `
   @keyframes fcastIn { from { opacity: 0; transform: translateY(${RISE}px); } }
   @keyframes fcastFade { from { opacity: 0; } }
   .fcast .rbtn { flex: 1 1 0; }
+  .hp-risk, .hp-mend { animation: hpPulse ${PULSE_MS}ms ease-in-out infinite alternate; }
+  @keyframes hpPulse { from { opacity: 1; } to { opacity: 0.2; } }
   @media (prefers-reduced-motion: reduce) {
     .fcast { animation-name: fcastFade; }
     .fcast, .fcast.off { transform: none; }
+    .hp-risk, .hp-mend { animation: none; opacity: 0.5; }
   }
 `;
 
@@ -128,28 +139,44 @@ export function Numbers({ l, r, heal, style }) {
 
 /* one side's health, the bar in a bordered track draining toward the middle
    of the panel, so how much is left reads against the whole. Shared with
-   the battle HUD, where `drain` lets the fill slide as each strike lands. */
-export function Hp({ u, right, drain }) {
+   the battle HUD, where `drain` lets the fill slide as each strike lands.
+   The forecast adds `loss`, HP the action could take, which pulses at the
+   fill's inner end, or `gain`, HP a heal would restore, which pulses green
+   past it; both stop at the bar's ends. The HUD, mid-exchange, passes
+   neither. */
+export function Hp({ u, right, drain, loss = 0, gain = 0 }) {
   const hp = Math.max(0, u.hp);
+  const lost = Math.min(hp, loss), gained = Math.min(u.maxHp - hp, gain);
+  const pct = (n) => (n / u.maxHp) * 100 + "%";
+  const color = u.team === "player" ? C.blueLite : C.redLite;
+  const kept = <div key="kept" className={drain ? "bhud-fill" : undefined} style={{ width: pct(hp - lost), background: color }} />;
+  const pulse = lost > 0 ? <div key="pulse" className="hp-risk" style={{ width: pct(lost), background: color }} />
+    : gained > 0 ? <div key="pulse" className="hp-mend" style={{ width: pct(gained), background: C.mend }} />
+      : null;
   return (
     <div className="flex items-center gap-1.5 min-w-0" style={{ flexDirection: right ? "row-reverse" : "row" }}>
       <div className="flex-1 flex" style={{
         height: 6, background: C.table, border: "1px solid " + rgba(C.rule, 0.55),
         justifyContent: right ? "flex-end" : "flex-start",
       }}>
-        <div className={drain ? "bhud-fill" : undefined}
-          style={{ width: (hp / u.maxHp) * 100 + "%", background: u.team === "player" ? C.blueLite : C.redLite }} />
+        {/* the pulsing part always sits on the side toward the middle */}
+        {right ? [pulse, kept] : [kept, pulse]}
       </div>
       <span style={{ fontFamily: SERIF, fontSize: 11, lineHeight: "14px", color: C.parch }}>{hp}/{u.maxHp}</span>
     </div>
   );
 }
 
-/* `fc` is { a, d, f }: attacker, defender and forecastOf(a, d), or null
-   to go. `boxRef` is the ref scene.js places. `into` is true while a
-   cut-in is up, which is how a null `fc` after Attack knows the HUD has
+/* HP a strikeCalc side could take over the exchange if every swing
+   landed, crits aside; 0 for a side that does not swing */
+const reach = (s) => (s ? s.dmg * (s.doubles ? 2 : 1) : 0);
+
+/* `fc` is { a, d, f }: attacker, defender and forecastOf(a, d), or for a
+   heal { a, d, heal }: healer, target and the amount; null to go.
+   `boxRef` is the ref scene.js places. `into` is true while a cut-in is
+   up, which is how a null `fc` after Attack or Heal knows the HUD has
    taken over and it should drop out rather than fade. */
-export default function Forecast({ fc, boxRef, into, onAttack, onCancel }) {
+export default function Forecast({ fc, boxRef, into, onAttack, onHeal, onCancel }) {
   /* the last pair shown, kept so the fade out has faces to fade. Units
      are stable objects, so a new pair is a new attacker or defender. */
   const [last, setLast] = useState(fc);
@@ -157,33 +184,37 @@ export default function Forecast({ fc, boxRef, into, onAttack, onCancel }) {
   const shown = fc || last;
   if (!shown) return null;
 
-  const { a, d, f } = shown;
+  const { a, d, f, heal } = shown;
+  const healing = heal != null;
+  const tri = healing ? 0 : f.a.tri;
   return (
     <div ref={boxRef} className={"fcast" + (fc ? "" : into ? " off gone" : " off")} role="group"
-      aria-label="Battle forecast" aria-hidden={fc ? undefined : true}>
+      aria-label={healing ? "Heal forecast" : "Battle forecast"} aria-hidden={fc ? undefined : true}>
       <div className="flex" style={{ gap: 10 }}>
-        <Head u={a} tri={f.a.tri} />
-        <Head u={d} tri={-f.a.tri} right />
+        <Head u={a} tri={tri} />
+        <Head u={d} tri={-tri} right />
       </div>
 
       <div className="flex items-center" style={{ gap: 8, marginTop: 7 }}>
         <Face u={a} />
-        <Numbers l={f.a} r={f.counters ? f.d : null} style={{ flex: "1 1 0", minWidth: 0 }} />
+        {healing
+          ? <Numbers heal={heal} style={{ flex: "1 1 0", minWidth: 0 }} />
+          : <Numbers l={f.a} r={f.counters ? f.d : null} style={{ flex: "1 1 0", minWidth: 0 }} />}
         <Face u={d} />
       </div>
 
       <div className="grid items-center" style={{ gridTemplateColumns: "1fr auto 1fr", columnGap: 6, marginTop: 7 }}>
-        <Hp u={a} />
+        <Hp u={a} loss={healing ? 0 : reach(f.counters ? f.d : null)} />
         <div style={{ ...SMALL, lineHeight: "14px", paddingLeft: "0.14em" }}>HP</div>
-        <Hp u={d} right />
+        <Hp u={d} right loss={healing ? 0 : reach(f.a)} gain={healing ? heal : 0} />
       </div>
 
       <Rule />
       <div className="flex" style={{ gap: 8 }}>
         <RuleBtn strong tabIndex={fc ? 0 : -1} on={() => {
           if (boxRef.current) handOff(boxRef.current.getBoundingClientRect());
-          onAttack(d.id);
-        }}>Attack</RuleBtn>
+          if (healing) onHeal(d.id); else onAttack(d.id);
+        }}>{healing ? "Heal" : "Attack"}</RuleBtn>
         <RuleBtn tabIndex={fc ? 0 : -1} on={onCancel}>Back</RuleBtn>
       </div>
     </div>

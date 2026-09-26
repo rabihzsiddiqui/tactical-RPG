@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
 import { ROSTER, makeUnit } from "./data.js";
-import { strikeCalc, canCounter, triBonus, simulateCombat } from "./combat.js";
+import { strikeCalc, canCounter, triBonus, simulateCombat, healAmount } from "./combat.js";
 import { makeRng } from "./rng.js";
 
 /* minimal synthetic units for isolating one formula at a time. The
@@ -106,6 +106,20 @@ describe("formula: speed and crit", () => {
     expect(strikes).toHaveLength(1);
     expect(strikes[0].crit).toBe(true);
     expect(strikes[0].dmg).toBe(base.dmg * 3);
+  });
+});
+
+describe("formula: healing", () => {
+  test("a heal restores the staff's power plus the healer's Mag", () => {
+    const healer = unit({ weaponKey: "heal", mag: 4 });
+    const hurt = unit({ hp: 2, maxHp: 30 });
+    expect(healAmount(healer, hurt)).toBe(14);
+  });
+
+  test("a heal never restores past the target's missing HP", () => {
+    const healer = unit({ weaponKey: "heal", mag: 4 });
+    const scratched = unit({ hp: 27, maxHp: 30 });
+    expect(healAmount(healer, scratched)).toBe(3);
   });
 });
 

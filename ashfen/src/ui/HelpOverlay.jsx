@@ -253,6 +253,12 @@ function Combat() {
           right mean that enemy cannot strike back. Press Attack and it drops to the bottom of the
           view, where the same numbers stay up while the exchange plays out.
         </P>
+        <P>
+          The end of each health bar pulses over the HP that side could lose if every one of the
+          other side&rsquo;s attacks landed. A bar that pulses all the way down is a unit that
+          could fall. Mira&rsquo;s staff gets a forecast too: pick Heal and tap an ally to see how
+          much it restores, pulsing green on their bar, then press Heal to commit.
+        </P>
         <Term k="Dmg">Damage per hit, after their defence and terrain. 0 means you cannot hurt them.</Term>
         <Term k="Hit">Percent chance each strike lands.</Term>
         <Term k="Crit">
@@ -469,7 +475,7 @@ function Glossary() {
       </Section>
 
       <Section title="Combat terms">
-        <Term k="Forecast">The preview of an attack&rsquo;s outcome, shown before you commit.</Term>
+        <Term k="Forecast">The preview of an attack or a heal, shown before you commit.</Term>
         <Term k="Counterattack">
           The defender&rsquo;s answering strike, which happens only if the attacker is inside the
           defender&rsquo;s weapon range.

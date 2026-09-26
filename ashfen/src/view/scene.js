@@ -1139,15 +1139,17 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     tick();
   }
 
+  /* the heal's click-to-engage: walk into reach, then open the heal
+     forecast, as engageAttack opens the battle one */
   async function engageHeal(u, tile, target) {
     playActionSelect();
     const nu = await moveUnitTo(u, tile.x, tile.y);
     setReady(nu);
     g.sel.mode = "targetHeal";
     g.sel.targets = validTargets(nu);
+    g.forecast = { attackerId: nu.id, targetId: target.id, heal: true };
     paintSel();
     tick();
-    await doHeal(target.id);
   }
 
   function finishGlue() {
@@ -1183,7 +1185,9 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
   }
 
   async function doHeal(targetId) {
+    playActionSelect();
     const healerId = g.sel.id;
+    g.forecast = null;
     g.inspect = null;
     busy = true;
     tick();
@@ -1513,7 +1517,8 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     }
     if (s.mode === "targetHeal" && here && s.targets.includes(here.id)) {
       playActionSelect();
-      doHeal(here.id);
+      g.forecast = { attackerId: u.id, targetId: here.id, heal: true };
+      tick();
     }
   }
 
@@ -1537,6 +1542,7 @@ export function mountScene({ mount, menuRef, forecastRef, g, camRef, setCam, set
     wait: doWait,
     back: backToMove,
     confirmAttack: (id) => doAttack(id),
+    confirmHeal: (id) => doHeal(id),
     cancelForecast: backToMove,
     isBusy: () => busy,
     // the map's zoom buttons; they voice themselves, see ZoomButtons.jsx

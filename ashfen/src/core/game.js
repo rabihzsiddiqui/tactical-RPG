@@ -5,8 +5,7 @@
    See applyResolve/playEvents in scene.js for the playback side. */
 
 import { cell } from "./map.js";
-import { WEAPONS } from "./data.js";
-import { simulateCombat, expFor, levelUp } from "./combat.js";
+import { simulateCombat, expFor, levelUp, healAmount } from "./combat.js";
 import { moveField, routeTo } from "./path.js";
 import { planFor } from "./ai.js";
 
@@ -104,7 +103,7 @@ export function resolveAttack(state, attackerId, targetId, rng = Math.random) {
 export function resolveHeal(state, healerId, targetId) {
   const units = cloneUnits(state.units);
   const u = find(units, healerId), t = find(units, targetId);
-  const amt = Math.min(t.maxHp - t.hp, WEAPONS.heal.power + u.mag);
+  const amt = healAmount(u, t);
   t.hp += amt;
   const dir = faceDir(u, t);
   const events = [

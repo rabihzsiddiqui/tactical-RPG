@@ -54,6 +54,13 @@ export function forecastOf(att, def) {
   return { a, d: counters ? strikeCalc(def, att) : null, counters };
 }
 
+/* what a staff heal would restore: the staff's power plus the healer's
+   Mag, never past the target's missing HP. resolveHeal applies it, and the
+   heal forecast shows it before the player commits. */
+export function healAmount(healer, target) {
+  return Math.min(target.maxHp - target.hp, WEAPONS.heal.power + healer.mag);
+}
+
 export function simulateCombat(att, def, rng = Math.random) {
   const { a, d, counters } = forecastOf(att, def);
   const order = ["a"];

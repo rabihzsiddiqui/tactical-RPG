@@ -9,10 +9,12 @@ export function hintFor(g) {
   }
   if (g.phase === "enemy") return "Enemy phase.";
   if (g.auto) return "Auto battle is playing your turn.";
-  if (g.forecast) return "Attack to commit, or Back to reconsider.";
+  if (g.forecast) {
+    return g.forecast.heal ? "Heal to commit, or Back to reconsider." : "Attack to commit, or Back to reconsider.";
+  }
   if (g.sel) {
     if (g.sel.mode === "target") return "Tap a red enemy to see the forecast.";
-    if (g.sel.mode === "targetHeal") return "Tap an ally to heal them.";
+    if (g.sel.mode === "targetHeal") return "Tap a green ally to see the heal.";
     if (g.sel.mode === "action") return "Choose an action.";
     return "Tap a blue tile to move there.";
   }
