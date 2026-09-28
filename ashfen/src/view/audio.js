@@ -2,8 +2,10 @@
    Lives in view/, not core/: it's presentation, same as scene.js's
    walkPath/lunge/flash. core/game.js never imports this.
 
-   Music: two selectable tracks (MUSIC_TRACKS), switched from the pause
-   menu. prelude.mp3 plays start-to-finish once (0:00-4:51), then loops the
+   Music: three selectable tracks (MUSIC_TRACKS), cycled from the pause
+   menu, raven first and by default. raven.mp3 plays 0:00-3:15 once, then
+   loops 0:09-3:15; the file runs past 3:15 but loopEnd means that tail is
+   never heard. prelude.mp3 plays start-to-finish once (0:00-4:51), then loops the
    2:39-4:51 section forever. That is native AudioBufferSourceNode behavior:
    loop=true with loopStart/loopEnd only kicks in once playback first
    reaches loopEnd, so a start offset before loopStart plays through as an
@@ -13,7 +15,7 @@
    loop points aren't sample-accurate and would click at the seam. Music
    stops outright on the "end" event (win or lose; see stopMusic and
    scene.js's playEvents) and restartAudio puts it back at the exact state
-   unlockAudio starts it in (track forced back to prelude, stinger, then
+   unlockAudio starts it in (track forced back to the default, stinger, then
    the same delayed start), so a restarted run sounds like a fresh one.
 
    SFX: unit selection plays a sourced stinger (unit.wav), not the earlier
@@ -53,9 +55,15 @@ import { clamp } from "../core/util.js";
 import { PHASE_BANNER_MS } from "../ui/theme.js";
 
 const MUSIC_TRACKS = {
+  raven: { url: "/audio/raven.mp3", loopStart: 9, loopEnd: 195 }, // 0:09-3:15
   prelude: { url: "/audio/prelude.mp3", loopStart: 159, loopEnd: 291 }, // 2:39-4:51
   conquest: { url: "/audio/conquest.mp3", loopStart: 0, loopEnd: 122 }, // 0:00-2:02
 };
+// the pause menu's Track option cycles these in order. The key doubles as
+// its label there, uppercased by the menu's own styling.
+export const MUSIC_TRACK_NAMES = Object.keys(MUSIC_TRACKS);
+// the track a fresh session and every restart begin on
+export const DEFAULT_MUSIC_TRACK = "raven";
 /* where the pause menu's two sliders start. They are the defaults, not the
    current level: musicVolume/sfxVolume below hold that, and the sliders
    move them. */
@@ -101,7 +109,7 @@ const sfxBuffers = {};
 let sfxReady = null;
 const musicBuffers = {}; // keyed by MUSIC_TRACKS name
 let musicSource = null; // the currently-playing BufferSourceNode, if any
-let musicTrack = "prelude";
+let musicTrack = DEFAULT_MUSIC_TRACK;
 let musicVolume = DEFAULT_MUSIC_VOLUME;
 let sfxVolume = DEFAULT_SFX_VOLUME;
 let musicEnabled = true;
@@ -293,12 +301,12 @@ export function unlockAudio() {
    game state. The audio context is already unlocked and sfx already
    loaded by the time Restart is reachable (it only appears once the game
    has ended), so this skips straight to unlockAudio's tail: force the
-   track back to prelude (the actual "beginning", regardless of whatever
+   track back to the default (the actual "beginning", regardless of whatever
    was selected mid-run) and replay the same stinger-then-music sequence
    as the very first game start. musicEnabled is left as the player set
    it, since restarting the run isn't the same as un-muting it. */
 export function restartAudio() {
-  musicTrack = "prelude";
+  musicTrack = DEFAULT_MUSIC_TRACK;
   playPlayerPhase();
   setTimeout(() => { musicStarted = true; playCurrentTrack(); }, PHASE_BANNER_MS);
 }

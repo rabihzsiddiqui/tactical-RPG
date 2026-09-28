@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LEVEL_NAME } from "../core/map.js";
-import { playActionSelect, playBack, playDrag } from "../view/audio.js";
+import { playActionSelect, playBack, playDrag, MUSIC_TRACK_NAMES } from "../view/audio.js";
 import { C, SERIF, DISPLAY, SCRIM_RGB, SCRIM_RAMP as RAMP, rgba } from "./theme.js";
 import { Slider } from "./primitives.jsx";
 
@@ -417,7 +417,7 @@ export default function PauseMenu({
               <Opt id="music" half lit={lit("opts", "music")} label="Music" value={onOff(musicOn)} valueOn={musicOn}
                 on={() => { playActionSelect(); onToggleMusic(); }} />
               <Opt id="track" half lit={lit("opts", "track")} label="Track" value={track} valueOn
-                on={() => { playActionSelect(); onSetTrack(track === "prelude" ? "conquest" : "prelude"); }} />
+                on={() => { playActionSelect(); onSetTrack(MUSIC_TRACK_NAMES[(MUSIC_TRACK_NAMES.indexOf(track) + 1) % MUSIC_TRACK_NAMES.length]); }} />
             </div>
             {/* side by side, which is what lets Options fit a phone and an
                 upright iPad without scrolling. The music slider stays usable

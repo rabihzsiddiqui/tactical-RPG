@@ -4,7 +4,7 @@ import { useRef, useEffect, useReducer, useState, useCallback } from "react";
 import { mountScene, newGame, RES } from "../view/scene.js";
 import {
   unlockAudio, setMusicEnabled, setMusicTrack, restartAudio, playHelpOpen, playHelp,
-  setMusicVolume, setSfxVolume, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME,
+  setMusicVolume, setSfxVolume, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME, DEFAULT_MUSIC_TRACK,
   playActionSelect, playMenu,
 } from "../view/audio.js";
 import { forecastOf, healAmount } from "../core/combat.js";
@@ -73,7 +73,7 @@ export default function App() {
   const [bannerCleared, setBannerCleared] = useState(false);
   const [paused, setPaused] = useState(false);
   const [musicOn, setMusicOn] = useState(true);
-  const [track, setTrack] = useState("prelude");
+  const [track, setTrack] = useState(DEFAULT_MUSIC_TRACK);
   /* mirrors of the two gain buses in audio.js, kept here only so the sliders
      have something to render. audio.js stays the source of truth for the
      level itself. */
@@ -158,7 +158,7 @@ export default function App() {
   /* mirrors onBegin below: same manual first "Player Phase" banner (the
      event stream itself only emits that banner when returning from an
      enemy phase, not for a turn-1 start), same audio reset. restartAudio
-     forces the track back to prelude and replays the unlock sequence, so
+     forces the track back to the default and replays the unlock sequence, so
      a restarted run sounds exactly like a fresh one. */
   function restart() {
     playActionSelect();
@@ -170,7 +170,7 @@ export default function App() {
        plays on behind it, and it would reopen over the new board */
     setPaused(false);
     restartAudio();
-    setTrack("prelude");
+    setTrack(DEFAULT_MUSIC_TRACK);
   }
   function dismissOnboarding() {
     playActionSelect();

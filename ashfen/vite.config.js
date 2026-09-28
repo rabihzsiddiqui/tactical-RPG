@@ -27,7 +27,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // the prelude track is large (~5.5MB); cache it at runtime on first
+        // the music tracks are large (up to ~7.8MB); cache them at runtime on first
         // play rather than blocking install on precaching it
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         runtimeCaching: [
