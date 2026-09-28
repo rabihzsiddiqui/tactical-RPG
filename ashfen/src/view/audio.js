@@ -4,8 +4,8 @@
 
    Music: three selectable tracks (MUSIC_TRACKS), cycled from the pause
    menu, raven first and by default. raven.mp3 plays 0:00-3:15 once, then
-   loops 0:09-3:15; the file runs past 3:15 but loopEnd means that tail is
-   never heard. prelude.mp3 plays start-to-finish once (0:00-4:51), then loops the
+   loops 0:09-3:15. The file is cut to end at 3:15 exactly, so it decodes
+   no more than it plays. prelude.mp3 plays start-to-finish once (0:00-4:51), then loops the
    2:39-4:51 section forever. That is native AudioBufferSourceNode behavior:
    loop=true with loopStart/loopEnd only kicks in once playback first
    reaches loopEnd, so a start offset before loopStart plays through as an
