@@ -66,8 +66,8 @@ export const MUSIC_TRACK_NAMES = Object.keys(MUSIC_TRACKS);
 export const DEFAULT_MUSIC_TRACK = "raven";
 /* where the pause menu's two sliders start. They are the defaults, not the
    current level: musicVolume/sfxVolume below hold that, and the sliders
-   move them. */
-export const DEFAULT_MUSIC_VOLUME = 0.5;
+   move them. Music starts at 0.3, set for raven, the default track. */
+export const DEFAULT_MUSIC_VOLUME = 0.3;
 export const DEFAULT_SFX_VOLUME = 0.7;
 
 const SFX_FILES = {
