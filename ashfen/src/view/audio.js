@@ -15,8 +15,9 @@
    loop points aren't sample-accurate and would click at the seam. Music
    stops outright on the "end" event (win or lose; see stopMusic and
    scene.js's playEvents) and restartAudio puts it back at the exact state
-   unlockAudio starts it in (track forced back to the default, stinger, then
-   the same delayed start), so a restarted run sounds like a fresh one.
+   unlockAudio starts it in (track forced back to the default, music and
+   stinger together, the music fading in), so a restarted run sounds like a
+   fresh one.
 
    SFX: unit selection plays a sourced stinger (unit.wav), not the earlier
    synthesized "sheath" sound (filtered noise "shing" + inharmonic metallic
@@ -52,7 +53,6 @@
    persisted between sessions yet. */
 
 import { clamp } from "../core/util.js";
-import { PHASE_BANNER_MS } from "../ui/theme.js";
 
 const MUSIC_TRACKS = {
   raven: { url: "/audio/raven.mp3", loopStart: 9, loopEnd: 195 }, // 0:09-3:15
@@ -64,6 +64,9 @@ const MUSIC_TRACKS = {
 export const MUSIC_TRACK_NAMES = Object.keys(MUSIC_TRACKS);
 // the track a fresh session and every restart begin on
 export const DEFAULT_MUSIC_TRACK = "raven";
+// seconds the music takes to rise from silence when a run starts, so raven's
+// first hit (about 0.45s in) doesn't land at full level on the Begin click
+const MUSIC_FADE_IN_S = 2;
 /* where the pause menu's two sliders start. They are the defaults, not the
    current level: musicVolume/sfxVolume below hold that, and the sliders
    move them. Music starts at 0.3, set for raven, the default track. */
@@ -107,13 +110,16 @@ let musicGain = null;
 let sfxGain = null;
 const sfxBuffers = {};
 let sfxReady = null;
-const musicBuffers = {}; // keyed by MUSIC_TRACKS name
+const musicBuffers = {}; // keyed by MUSIC_TRACKS name, each a decode promise
 let musicSource = null; // the currently-playing BufferSourceNode, if any
 let musicTrack = DEFAULT_MUSIC_TRACK;
 let musicVolume = DEFAULT_MUSIC_VOLUME;
 let sfxVolume = DEFAULT_SFX_VOLUME;
 let musicEnabled = true;
-let musicStarted = false; // true once unlockAudio's post-banner start has fired
+let musicStarted = false; // true once unlockAudio has started the first track
+/* sits between the music source and musicGain. Only the fade-in moves it,
+   so a fade never fights the slider, which moves musicGain. */
+let musicFade = null;
 
 function getContext() {
   if (!ctx) {
@@ -121,6 +127,8 @@ function getContext() {
     musicGain = ctx.createGain();
     musicGain.gain.value = musicVolume;
     musicGain.connect(ctx.destination);
+    musicFade = ctx.createGain();
+    musicFade.connect(musicGain);
     sfxGain = ctx.createGain();
     sfxGain.gain.value = sfxVolume;
     sfxGain.connect(ctx.destination);
@@ -210,11 +218,16 @@ export function setSfxVolume(v) {
   rampGain(sfxGain, sfxVolume);
 }
 
-async function loadMusicBuffer(c, name) {
+/* caches the promise, not the decoded buffer, so a Begin click landing
+   while preloadAudio's decode is still running waits on that decode
+   instead of starting a second one. A failed load is dropped from the
+   cache so the next play can retry it. */
+function loadMusicBuffer(c, name) {
   if (!musicBuffers[name]) {
-    const res = await fetch(MUSIC_TRACKS[name].url);
-    const bytes = await res.arrayBuffer();
-    musicBuffers[name] = await c.decodeAudioData(bytes);
+    musicBuffers[name] = fetch(MUSIC_TRACKS[name].url)
+      .then((res) => res.arrayBuffer())
+      .then((bytes) => c.decodeAudioData(bytes))
+      .catch((err) => { delete musicBuffers[name]; throw err; });
   }
   return musicBuffers[name];
 }
@@ -232,9 +245,11 @@ function stopMusicSource() {
    overlapping. No-ops if music is toggled off; the pause menu's "on" click
    calls this again to actually start it. musicPlayToken guards against two
    overlapping calls (e.g. a quick track switch before the first track's
-   fetch/decode resolves) racing to decide which one actually starts. */
+   fetch/decode resolves) racing to decide which one actually starts.
+   fadeIn is in seconds; 0 starts at full level, which is what a track
+   switch or the music toggle wants. */
 let musicPlayToken = 0;
-async function playCurrentTrack() {
+async function playCurrentTrack(fadeIn = 0) {
   if (!musicEnabled) return;
   const token = ++musicPlayToken;
   const c = getContext();
@@ -248,14 +263,18 @@ async function playCurrentTrack() {
   src.loop = true;
   src.loopStart = loopStart;
   src.loopEnd = loopEnd;
-  src.connect(musicGain);
-  src.start(0, 0);
+  src.connect(musicFade);
+  const now = c.currentTime;
+  musicFade.gain.cancelScheduledValues(now);
+  musicFade.gain.setValueAtTime(fadeIn > 0 ? 0 : 1, now);
+  if (fadeIn > 0) musicFade.gain.linearRampToValueAtTime(1, now + fadeIn);
+  src.start(now, 0);
   musicSource = src;
 }
 
-/* pause menu calls, safe before unlockAudio's delayed first start has
-   fired: they just record the preference, and playCurrentTrack (invoked
-   from that delayed start) reads musicEnabled/musicTrack when it runs. */
+/* pause menu calls, safe before unlockAudio's first start has fired:
+   they just record the preference, and playCurrentTrack (invoked from
+   that start) reads musicEnabled/musicTrack when it runs. */
 export function setMusicEnabled(on) {
   musicEnabled = on;
   if (!musicStarted) return;
@@ -277,23 +296,35 @@ export function stopMusic() {
   stopMusicSource();
 }
 
+/* called once while the title card is up (App.jsx), so the default track
+   and the SFX are fetched and decoded before Begin is pressed. Decoding
+   needs a context, and a context made outside a user gesture starts
+   suspended, which is fine: nothing plays until unlockAudio resumes it.
+   Without this, the music's start would wait on decoding a multi-minute
+   mp3 after the click. */
+export function preloadAudio() {
+  const c = getContext();
+  loadSfx(c);
+  loadMusicBuffer(c, musicTrack).catch(() => {});
+}
+
 /* browsers won't run audio before a user gesture, so this is called from
    the title card's Begin button (App.jsx), the page's first and only click
    before that point, so this always runs inside a real user gesture. That
    same click also sets the first "Player Phase" banner, so the stinger
    here is timed to land right as it appears (sfxReady is awaited first
    since decoding is async, but these are small local files so the wait is
-   negligible). Music starts once the banner's own on-screen lifetime
-   (PHASE_BANNER_MS, see ui/theme.js) has fully played out, not just once
-   the sting's own short tail has decayed. Otherwise music would start
-   while the banner is still animating. */
+   negligible). Music starts on the click too, not after the banner, and
+   fades in over MUSIC_FADE_IN_S so the sting sits on top of it. It no
+   longer waits on the SFX, so a slow SFX decode can't hold it back. */
 export function unlockAudio() {
   const c = getContext();
   const ready = loadSfx(c);
   c.resume().then(async () => {
+    musicStarted = true;
+    playCurrentTrack(MUSIC_FADE_IN_S);
     await ready;
     playPlayerPhase();
-    setTimeout(() => { musicStarted = true; playCurrentTrack(); }, PHASE_BANNER_MS);
   }).catch(() => {});
 }
 
@@ -302,11 +333,12 @@ export function unlockAudio() {
    loaded by the time Restart is reachable (it only appears once the game
    has ended), so this skips straight to unlockAudio's tail: force the
    track back to the default (the actual "beginning", regardless of whatever
-   was selected mid-run) and replay the same stinger-then-music sequence
-   as the very first game start. musicEnabled is left as the player set
+   was selected mid-run) and replay the same faded music and stinger as
+   the very first game start. musicEnabled is left as the player set
    it, since restarting the run isn't the same as un-muting it. */
 export function restartAudio() {
   musicTrack = DEFAULT_MUSIC_TRACK;
+  musicStarted = true;
+  playCurrentTrack(MUSIC_FADE_IN_S);
   playPlayerPhase();
-  setTimeout(() => { musicStarted = true; playCurrentTrack(); }, PHASE_BANNER_MS);
 }

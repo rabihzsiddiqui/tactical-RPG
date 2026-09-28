@@ -3,7 +3,7 @@
 import { useRef, useEffect, useReducer, useState, useCallback } from "react";
 import { mountScene, newGame, RES } from "../view/scene.js";
 import {
-  unlockAudio, setMusicEnabled, setMusicTrack, restartAudio, playHelpOpen, playHelp,
+  unlockAudio, preloadAudio, setMusicEnabled, setMusicTrack, restartAudio, playHelpOpen, playHelp,
   setMusicVolume, setSfxVolume, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME, DEFAULT_MUSIC_TRACK,
   playActionSelect, playMenu,
 } from "../view/audio.js";
@@ -84,6 +84,10 @@ export default function App() {
   const [help, setHelp] = useState(null);
   /* the open menu's key handler, see the keydown effect below */
   const menuKeys = useRef(null);
+
+  /* fetch and decode the music and SFX behind the title card, so Begin
+     can start the track the instant it's pressed */
+  useEffect(() => { preloadAudio(); }, []);
 
   useEffect(() => {
     const mount = mountRef.current;
