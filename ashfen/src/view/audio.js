@@ -69,8 +69,9 @@ export const DEFAULT_MUSIC_TRACK = "raven";
 const MUSIC_FADE_IN_S = 2;
 /* where the pause menu's two sliders start. They are the defaults, not the
    current level: musicVolume/sfxVolume below hold that, and the sliders
-   move them. Music starts at 0.3, set for raven, the default track. */
-export const DEFAULT_MUSIC_VOLUME = 0.3;
+   move them. Music went down to 0.3 for raven's loud opening and back to
+   0.5 once the fade-in (MUSIC_FADE_IN_S) took the edge off it. */
+export const DEFAULT_MUSIC_VOLUME = 0.5;
 export const DEFAULT_SFX_VOLUME = 0.7;
 
 const SFX_FILES = {
